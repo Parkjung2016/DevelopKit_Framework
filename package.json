@@ -4,9 +4,10 @@
   "version": "1.0.0",
   "unity": "2021.0",
   "unityRelease": "1f1",
-  "description": "StatSystem, AbilitySystem \ub4f1\uc758 \ud504\ub808\uc784\uc6cc\ud06c\ub4e4\uc744 \uc81c\uacf5\ud569\ub2c8\ub2e4.",
+  "description": "Provides frameworks such as StatSystem and AbilitySystem.",
   "author": {
     "name": "Parkjung2016",
     "email": "bagj21563@gmail.com"
-  }
+  },
+  "_fingerprint": "22bdea4fd75b94c42aa86380cbadda21e61a8e93"
 }
