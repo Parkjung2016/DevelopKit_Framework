@@ -1,0 +1,16 @@
+{
+    "name": "Skddkkkk.DevelopKit.Framework.GamePlayTagSystem.Editor",
+    "rootNamespace": "Skddkkkk.DevelopKit.Framework.GamePlayTagSystem.Editor",
+    "references": [],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

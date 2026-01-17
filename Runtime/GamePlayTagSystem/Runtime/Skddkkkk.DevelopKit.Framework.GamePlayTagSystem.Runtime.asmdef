@@ -1,0 +1,14 @@
+{
+    "name": "Skddkkkk.DevelopKit.Framework.GamePlayTagSystem.Runtime",
+    "rootNamespace": "Skddkkkk.DevelopKit.Framework.GamePlayTagSystem.Runtime",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
