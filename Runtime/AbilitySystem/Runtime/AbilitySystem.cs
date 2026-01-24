@@ -1,11 +1,11 @@
 using Skddkkkk.DevelopKit.Framework.GamePlayTagSystem.Runtime;
 using System.Collections.Generic;
+using Skddkkkk.DevelopKit.BasicTemplate.Runtime;
 #if ODIN_INSPECTOR
 using Sirenix.OdinInspector;
 #endif
 using UnityEngine;
 using UnityEngine.InputSystem;
-using Skddkkkk.DevelopKit.BasicTemplate.Runtime;
 
 namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
 {
@@ -17,14 +17,16 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
 #else
         [Header("InputSystem 연동이 필요한 경우에만 사용")]
 #endif
-        [SerializeField] private AbilityInputBridgeSO abilityInputBridge;
+        [SerializeField]
+        private AbilityInputBridgeSO abilityInputBridge;
 
 #if ODIN_INSPECTOR
         [InfoBox("초기 Ability 등록이 필요한 경우에만 사용")]
 #else
         [Header("초기 Ability 등록이 필요한 경우에만 사용")]
 #endif
-        [SerializeField] private AbilitySetupSO abilitySetup;
+        [SerializeField]
+        private AbilitySetupSO abilitySetup;
 
         private Dictionary<GamePlayTagEnum, AbilitySO> abilitieDic;
         private GamePlayTagManager gamePlayTagManagerCompo;
