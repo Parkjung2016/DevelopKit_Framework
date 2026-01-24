@@ -225,7 +225,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
             if (gamePlayTagManagerCompo.HasGamePlayTag(ability.BlockedGamePlayTags))
             {
 #if ENABLE_LOG
-                SkddkkkkDebug.LogWarning($"{ability.grantedGamePlayTag} tag could not be found.");
+                SkddkkkkDebug.LogWarning($"{ability.GrantedGamePlayTag} tag could not be found.");
 #else
                 Debug.LogWarning($"{ability.GrantedGamePlayTag} tag could not be found.");
 #endif
