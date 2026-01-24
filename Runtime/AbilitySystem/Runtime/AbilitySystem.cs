@@ -5,6 +5,7 @@ using Sirenix.OdinInspector;
 #endif
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Skddkkkk.DevelopKit.BasicTemplate.Runtime;
 
 namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
 {
