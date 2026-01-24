@@ -139,7 +139,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
             if (!TryGetAbility(ability, out AbilitySO foundAbility))
             {
 #if ENABLE_LOG
-                PJHDebug.LogWarning($"Can't find {ability} in registered abilities");
+                SkddkkkkDebug.LogWarning($"Can't find {ability} in registered abilities");
 #else
                 Debug.LogWarning($"Can't find {ability} in registered abilities");
 #endif
@@ -222,7 +222,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
             if (gamePlayTagManagerCompo.HasGamePlayTag(ability.BlockedGamePlayTags))
             {
 #if ENABLE_LOG
-                PJHDebug.LogWarning($"{ability.grantedGamePlayTag} tag could not be found.");
+                SkddkkkkDebug.LogWarning($"{ability.grantedGamePlayTag} tag could not be found.");
 #else
                 Debug.LogWarning($"{ability.GrantedGamePlayTag} tag could not be found.");
 #endif
