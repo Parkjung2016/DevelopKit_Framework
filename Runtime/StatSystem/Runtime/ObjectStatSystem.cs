@@ -11,7 +11,7 @@ namespace Skddkkkk.DevelopKit.Framework.StatSystem.Runtime
 
         private Dictionary<string, StatSO> statDic;
 
-        private void Awake()
+        public void Init()
         {
             statDic = statOverrideListSO.statOverrides.Select(stat => stat.CreateStat())
                 .ToDictionary(stat => stat.StatName, stat => stat);
