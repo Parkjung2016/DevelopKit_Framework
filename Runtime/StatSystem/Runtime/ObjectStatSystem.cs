@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Skddkkkk.DevelopKit.Framework.StatSystem.Runtime
 {
-    public class ObjectStat : MonoBehaviour
+    public class ObjectStatSystem : MonoBehaviour
     {
         [SerializeField] private StatOverrideListSO statOverrideListSO;
 
@@ -19,12 +19,12 @@ namespace Skddkkkk.DevelopKit.Framework.StatSystem.Runtime
 
         #region Get Stat
 
-        private StatSO GetStat(string statName)
+        public StatSO GetStat(string statName)
         {
             return statDic[statName];
         }
 
-        private StatSO GetStat(StatSO stat)
+        public StatSO GetStat(StatSO stat)
         {
             SkddkkkkDebug.Assert(stat != null, "Stats : GetStat - stat cannot be null");
             return statDic[stat.StatName];
