@@ -5,7 +5,7 @@ using UnityEditor;
 #endif
 using UnityEngine;
 
-namespace Code.Runtime.Core.StatSystem
+namespace Skddkkkk.DevelopKit.Framework.StatSystem.Runtime
 {
     [CreateAssetMenu(fileName = "SO_Stat", menuName = "SO/StatSystem/Stat")]
     public class StatSO : ScriptableObject
@@ -179,7 +179,7 @@ namespace Code.Runtime.Core.StatSystem
             if (this == null)
                 return;
             
-            string assetName = $"SO_{StatName} Stat";
+            string assetName = $"SO_{StatName}_Stat";
             AssetDatabase.RenameAsset(AssetDatabase.GetAssetPath(this), assetName);
         }
 #endif

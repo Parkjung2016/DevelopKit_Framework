@@ -3,7 +3,7 @@ using System.Linq;
 using Skddkkkk.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
 
-namespace Code.Runtime.Core.StatSystem
+namespace Skddkkkk.DevelopKit.Framework.StatSystem.Runtime
 {
     public class ObjectStat : MonoBehaviour
     {
