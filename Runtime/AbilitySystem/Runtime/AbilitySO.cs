@@ -1,6 +1,6 @@
 ﻿using Skddkkkk.DevelopKit.BasicTemplate.Runtime;
-using Skddkkkk.DevelopKit.Framework.GamePlayTagSystem.Runtime;
 using System;
+using BandoWare.GameplayTags;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -10,11 +10,11 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
     {
         public event Action OnAbilityActivated;
         public event Action OnAbilityEnded;
-        [field: SerializeField] public GamePlayTagEnum GrantedGamePlayTag { get; private set; }
-        [field: SerializeField] public GamePlayTagEnum BlockedGamePlayTags { get; private set; }
+        [field: SerializeField] public GameplayTag GrantedGamePlayTag { get; private set; }
+        [field: SerializeField] public GameplayTag BlockedGamePlayTags { get; private set; }
         [field: SerializeField] public bool ActivateAbilityWhenRegistered { get; private set; }
 
-        [field: ReadOnly()] public bool IsActivating { get; private set; }
+        [field: ReadOnly] public bool IsActivating { get; private set; }
 
         protected IAbilitySystemOwner owner;
 

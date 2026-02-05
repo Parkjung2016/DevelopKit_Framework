@@ -1,35 +1,21 @@
-using Skddkkkk.DevelopKit.Framework.GamePlayTagSystem.Runtime;
 using System.Collections.Generic;
-using Skddkkkk.DevelopKit.BasicTemplate.Runtime;
-#if ODIN_INSPECTOR
-using Sirenix.OdinInspector;
-#endif
+using BandoWare.GameplayTags;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
 {
     [DefaultExecutionOrder(-10000)]
-    public class AbilitySystem : MonoBehaviour, IGamePlayTagManagerInstaller
+    public class AbilitySystem : MonoBehaviour
     {
-#if ODIN_INSPECTOR
-        [InfoBox("InputSystem 연동이 필요한 경우에만 사용")]
-#else
-        [Header("InputSystem 연동이 필요한 경우에만 사용")]
-#endif
-        [SerializeField]
+        [Header("InputSystem 연동이 필요한 경우에만 사용")] [SerializeField]
         private AbilityInputBridgeSO abilityInputBridge;
 
-#if ODIN_INSPECTOR
-        [InfoBox("초기 Ability 등록이 필요한 경우에만 사용")]
-#else
-        [Header("초기 Ability 등록이 필요한 경우에만 사용")]
-#endif
-        [SerializeField]
+        [Header("초기 Ability 등록이 필요한 경우에만 사용")] [SerializeField]
         private AbilitySetupSO abilitySetup;
 
-        private Dictionary<GamePlayTagEnum, AbilitySO> abilitieDic;
-        private GamePlayTagManager gamePlayTagManagerCompo;
+        private Dictionary<GameplayTag, AbilitySO> abilitieDic;
+        private GameObjectGameplayTagContainer gamePlayTagContainerCompo;
 
         private IAbilitySystemOwner owner;
 
@@ -37,16 +23,16 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         {
             Transform targetTrm = transform.parent;
             if (targetTrm == null) targetTrm = transform;
-            if (targetTrm.GetComponentInChildren<GamePlayTagManager>() == null)
+            if (targetTrm.GetComponentInChildren<GameObjectGameplayTagContainer>() == null)
             {
-                new GameObject("GamePlayTagManager", typeof(GamePlayTagManager)).transform
+                new GameObject("GamePlayTagManager", typeof(GameObjectGameplayTagContainer)).transform
                     .SetParent(targetTrm);
             }
         }
 
-        public void InitGamePlayTagManger(GamePlayTagManager gamePlayTagManager)
+        public void InitGamePlayTagManger(GameObjectGameplayTagContainer gamePlayTagContainer)
         {
-            gamePlayTagManagerCompo = gamePlayTagManager;
+            gamePlayTagContainerCompo = gamePlayTagContainer;
         }
 
         private void Awake()
@@ -104,11 +90,11 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         /// </summary>
         /// <param name="abilityTag">제거할 Ability의 GamePlayTag입니다.</param>
         /// <param name="destroyAfterRemoved">Ability 제거 후 해당 객체를 파괴할지 여부입니다.</param>
-        public bool TryRemoveAbility(GamePlayTagEnum abilityTag, bool destroyAfterRemoved = true)
+        public bool TryRemoveAbility(GameplayTag abilityTag, bool destroyAfterRemoved = true)
         {
             if (abilitieDic.Remove(abilityTag, out AbilitySO removedAbility))
             {
-                gamePlayTagManagerCompo.RemoveGamePlayTag(removedAbility.GrantedGamePlayTag);
+                gamePlayTagContainerCompo.GameplayTagContainer.RemoveTag(removedAbility.GrantedGamePlayTag);
                 removedAbility.UnRegisteredAbility();
                 if (destroyAfterRemoved)
                     Destroy(removedAbility);
@@ -127,7 +113,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         {
             if (abilitieDic.Remove(ability.GrantedGamePlayTag, out AbilitySO removedAbility))
             {
-                gamePlayTagManagerCompo.RemoveGamePlayTag(removedAbility.GrantedGamePlayTag);
+                gamePlayTagContainerCompo.GameplayTagContainer.RemoveTag(removedAbility.GrantedGamePlayTag);
                 removedAbility.UnRegisteredAbility();
                 if (destroyAfterRemoved)
                     Destroy(removedAbility);
@@ -154,7 +140,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
                 return false;
             }
 
-            gamePlayTagManagerCompo.GrantGamePlayTag(ability.GrantedGamePlayTag);
+            gamePlayTagContainerCompo.GameplayTagContainer.AddTag(ability.GrantedGamePlayTag);
 
             if (context.HasValue)
                 foundAbility.ActivateAbility(context.Value);
@@ -163,7 +149,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
 
             void OnEnded()
             {
-                gamePlayTagManagerCompo.RemoveGamePlayTag(ability.GrantedGamePlayTag);
+                gamePlayTagContainerCompo.GameplayTagContainer.RemoveTag(ability.GrantedGamePlayTag);
                 foundAbility.OnAbilityEnded -= OnEnded;
             }
 
@@ -202,7 +188,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         /// </summary>
         /// <param name="abilityTag">활성화하려는 Ability의 GamePlayTag입니다.</param>
         /// <returns>성공적으로 활성화되면 true, 그렇지 않으면 false를 반환합니다.</returns>
-        public bool TryActivateAbility(GamePlayTagEnum abilityTag)
+        public bool TryActivateAbility(GameplayTag abilityTag)
         {
             if (!TryGetAbility(abilityTag, out AbilitySO foundAbility)) return false;
             if (!CanActivateAbility(foundAbility))
@@ -222,7 +208,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         {
             if (ability.IsActivating) return false;
 
-            if (gamePlayTagManagerCompo.HasGamePlayTag(ability.BlockedGamePlayTags))
+            if (gamePlayTagContainerCompo.GameplayTagContainer.HasTag(ability.BlockedGamePlayTags))
             {
 #if ENABLE_LOG
                 SkddkkkkDebug.LogWarning($"{ability.GrantedGamePlayTag} tag could not be found.");
@@ -254,17 +240,9 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         /// <summary>
         /// GamePlayTag 기준으로 Ability 보유 여부를 확인합니다.
         /// </summary>
-        public bool HasAbility(GamePlayTagEnum abilityTag)
+        public bool HasAbility(GameplayTag abilityTag)
         {
-            foreach (var pair in abilitieDic)
-            {
-                if ((pair.Value.GrantedGamePlayTag & abilityTag) != 0)
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return gamePlayTagContainerCompo.GameplayTagContainer.HasTag(abilityTag);
         }
 
         /// <summary>
@@ -273,7 +251,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         /// <param name="abilityTag">찾고자 하는 Ability의 GamePlayTag입니다.</param>
         /// <param name="foundAbility">검색에 성공한 경우, 해당 AbilitySO가 할당됩니다.</param>
         /// <returns>해당 GamePlayTag를 가진 Ability가 존재하면 true, 그렇지 않으면 false를 반환합니다.</returns>
-        public bool TryGetAbility(GamePlayTagEnum abilityTag, out AbilitySO foundAbility)
+        public bool TryGetAbility(GameplayTag abilityTag, out AbilitySO foundAbility)
         {
             return abilitieDic.TryGetValue(abilityTag, out foundAbility);
         }
@@ -285,7 +263,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         /// <param name="abilityTag">찾고자 하는 Ability의 GamePlayTag입니다.</param>
         /// <param name="foundAbility">검색에 성공한 경우, 해당 AbilitySO가 할당됩니다.</param>
         /// <returns>해당 GamePlayTag를 가진 Ability가 존재하면 true, 그렇지 않으면 false를 반환합니다.</returns>
-        public bool TryGetAbility<T>(GamePlayTagEnum abilityTag, out T foundAbility) where T : AbilitySO
+        public bool TryGetAbility<T>(GameplayTag abilityTag, out T foundAbility) where T : AbilitySO
         {
             if (abilitieDic.TryGetValue(abilityTag, out AbilitySO ability))
             {
