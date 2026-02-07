@@ -16,11 +16,9 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
 
         [field: ReadOnly] public bool IsActivating { get; private set; }
 
-        protected IAbilitySystemOwner owner;
 
         public virtual void RegisteredAbility(IAbilitySystemOwner owner)
         {
-            this.owner = owner;
             OnAbilityActivated = null;
             OnAbilityEnded = null;
         }

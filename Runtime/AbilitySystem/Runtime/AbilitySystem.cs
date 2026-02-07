@@ -43,7 +43,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
 
         public void RegisterOwner(IAbilitySystemOwner owner)
         {
-            owner = owner;
+            this.owner = owner;
         }
 
         /// <summary>
