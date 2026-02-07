@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using BandoWare.GameplayTags;
+using Skddkkkk.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using Skddkkkk.DevelopKit.BasicTemplate.Runtime;
 
 namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
 {
@@ -15,39 +15,14 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         [Header("초기 Ability 등록이 필요한 경우에만 사용")] [SerializeField]
         private AbilitySetupSO abilitySetup;
 
-        private Dictionary<GameplayTag, AbilitySO> abilitieDic;
-        private GameObjectGameplayTagContainer gamePlayTagContainerCompo;
+        private Dictionary<GameplayTag, AbilitySO> abilitiyDic = new();
+        [SerializeField] private GameObjectGameplayTagContainer gamePlayTagContainerCompo;
 
         private IAbilitySystemOwner owner;
 
-        private void Reset()
-        {
-            Transform targetTrm = transform.parent;
-            if (targetTrm == null) targetTrm = transform;
-            if (targetTrm.GetComponentInChildren<GameObjectGameplayTagContainer>() == null)
-            {
-                new GameObject("GamePlayTagManager", typeof(GameObjectGameplayTagContainer)).transform
-                    .SetParent(targetTrm);
-            }
-        }
-
-        public void InitGamePlayTagManger(GameObjectGameplayTagContainer gamePlayTagContainer)
-        {
-            gamePlayTagContainerCompo = gamePlayTagContainer;
-        }
-
         private void Awake()
         {
-            IAbilitySystemInstaller[] installers =
-                transform.root.GetComponentsInChildren<IAbilitySystemInstaller>();
-            for (int i = 0; i < installers.Length; i++)
-            {
-                installers[i].InitAbilitySystem(this);
-            }
-
-            abilitieDic = new();
             CheckAbilitySetup();
-            // AttributeInjector.Inject(_abilityInputBridge, SceneManager.GetActiveScene().GetSceneContainer());
             abilityInputBridge?.Init(this);
         }
 
@@ -77,9 +52,9 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         /// <param name="ability">추가할 Ability 객체입니다.</param>
         public bool TryGiveAbility(AbilitySO ability)
         {
-            if (abilitieDic.ContainsKey(ability.GrantedGamePlayTag)) return false;
+            if (abilitiyDic.ContainsKey(ability.GrantedGamePlayTag)) return false;
             AbilitySO clonedAbility = ability.Clone();
-            abilitieDic.Add(ability.GrantedGamePlayTag, clonedAbility);
+            abilitiyDic.Add(ability.GrantedGamePlayTag, clonedAbility);
             clonedAbility.RegisteredAbility(owner);
             if (clonedAbility.ActivateAbilityWhenRegistered)
                 TryActivateAbility(clonedAbility);
@@ -93,7 +68,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         /// <param name="destroyAfterRemoved">Ability 제거 후 해당 객체를 파괴할지 여부입니다.</param>
         public bool TryRemoveAbility(GameplayTag abilityTag, bool destroyAfterRemoved = true)
         {
-            if (abilitieDic.Remove(abilityTag, out AbilitySO removedAbility))
+            if (abilitiyDic.Remove(abilityTag, out AbilitySO removedAbility))
             {
                 gamePlayTagContainerCompo.GameplayTagContainer.RemoveTag(removedAbility.GrantedGamePlayTag);
                 removedAbility.UnRegisteredAbility();
@@ -112,7 +87,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         /// <param name="destroyAfterRemoved">Ability 제거 후 해당 객체를 파괴할지 여부입니다.</param>
         public bool TryRemoveAbility(AbilitySO ability, bool destroyAfterRemoved = true)
         {
-            if (abilitieDic.Remove(ability.GrantedGamePlayTag, out AbilitySO removedAbility))
+            if (abilitiyDic.Remove(ability.GrantedGamePlayTag, out AbilitySO removedAbility))
             {
                 gamePlayTagContainerCompo.GameplayTagContainer.RemoveTag(removedAbility.GrantedGamePlayTag);
                 removedAbility.UnRegisteredAbility();
@@ -128,11 +103,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         {
             if (!TryGetAbility(ability, out AbilitySO foundAbility))
             {
-#if ENABLE_LOG
-                SkddkkkkDebug.LogWarning($"Can't find {ability} in registered abilities");
-#else
-                Debug.LogWarning($"Can't find {ability} in registered abilities");
-#endif
+                CDebug.LogWarning($"Can't find {ability} in registered abilities");
                 return false;
             }
 
@@ -211,11 +182,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
 
             if (gamePlayTagContainerCompo.GameplayTagContainer.HasTag(ability.BlockedGamePlayTags))
             {
-#if ENABLE_LOG
-                SkddkkkkDebug.LogWarning($"{ability.GrantedGamePlayTag} tag could not be found.");
-#else
-                Debug.LogWarning($"{ability.GrantedGamePlayTag} tag could not be found.");
-#endif
+                CDebug.LogWarning($"{ability.GrantedGamePlayTag} tag could not be found.");
                 return false;
             }
 
@@ -227,7 +194,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         /// </summary>
         public bool HasAbility(AbilitySO ability)
         {
-            foreach (var pair in abilitieDic)
+            foreach (var pair in abilitiyDic)
             {
                 if (pair.Value.name == ability.name)
                 {
@@ -254,7 +221,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         /// <returns>해당 GamePlayTag를 가진 Ability가 존재하면 true, 그렇지 않으면 false를 반환합니다.</returns>
         public bool TryGetAbility(GameplayTag abilityTag, out AbilitySO foundAbility)
         {
-            return abilitieDic.TryGetValue(abilityTag, out foundAbility);
+            return abilitiyDic.TryGetValue(abilityTag, out foundAbility);
         }
 
 
@@ -266,7 +233,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         /// <returns>해당 GamePlayTag를 가진 Ability가 존재하면 true, 그렇지 않으면 false를 반환합니다.</returns>
         public bool TryGetAbility<T>(GameplayTag abilityTag, out T foundAbility) where T : AbilitySO
         {
-            if (abilitieDic.TryGetValue(abilityTag, out AbilitySO ability))
+            if (abilitiyDic.TryGetValue(abilityTag, out AbilitySO ability))
             {
                 foundAbility = ability as T;
                 return true;
@@ -285,7 +252,7 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
         public bool TryGetAbility(AbilitySO ability, out AbilitySO foundAbility)
         {
             foundAbility = null;
-            foreach (var storedAbility in abilitieDic.Values)
+            foreach (var storedAbility in abilitiyDic.Values)
             {
                 if (storedAbility.name == ability.name)
                 {

@@ -26,7 +26,7 @@ namespace Skddkkkk.DevelopKit.Framework.StatSystem.Runtime
 
         public StatSO GetStat(StatSO stat)
         {
-            SkddkkkkDebug.Assert(stat != null, "Stats : GetStat - stat cannot be null");
+            CDebug.Assert(stat != null, "Stats : GetStat - stat cannot be null");
             return statDic[stat.StatName];
         }
 
@@ -38,7 +38,7 @@ namespace Skddkkkk.DevelopKit.Framework.StatSystem.Runtime
 
         public bool HasStat(StatSO stat)
         {
-            SkddkkkkDebug.Assert(stat != null, "Stats : GetStat - stat cannot be null");
+            CDebug.Assert(stat != null, "Stats : GetStat - stat cannot be null");
             return statDic.ContainsKey(stat.StatName);
         }
 

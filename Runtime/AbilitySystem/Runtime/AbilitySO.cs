@@ -18,7 +18,6 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
 
         protected IAbilitySystemOwner owner;
 
-
         public virtual void RegisteredAbility(IAbilitySystemOwner owner)
         {
             this.owner = owner;

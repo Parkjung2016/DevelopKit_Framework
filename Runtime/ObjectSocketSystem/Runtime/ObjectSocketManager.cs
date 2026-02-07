@@ -11,12 +11,6 @@ namespace Skddkkkk.DevelopKit.Framework.ObjectSocketSystem.Runtime
         private void Awake()
         {
             InitializeSocketCache();
-            IObjectSocketManagerInstaller[] installers =
-                transform.root.GetComponentsInChildren<IObjectSocketManagerInstaller>();
-            for (int i = 0; i < installers.Length; i++)
-            {
-                installers[i].InitObjectSocketManager(this);
-            }
         }
 
         private void InitializeSocketCache()
