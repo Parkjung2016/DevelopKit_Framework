@@ -20,8 +20,9 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
 
         private IAbilitySystemOwner owner;
 
-        private void Awake()
+        public void Init(IAbilitySystemOwner owner)
         {
+            this.owner = owner;
             CheckAbilitySetup();
             abilityInputBridge?.Init(this);
         }
@@ -39,11 +40,6 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
             {
                 TryGiveAbility(ability);
             }
-        }
-
-        public void RegisterOwner(IAbilitySystemOwner owner)
-        {
-            this.owner = owner;
         }
 
         /// <summary>
