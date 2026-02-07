@@ -41,9 +41,9 @@ namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
             }
         }
 
-        public void RegisterAbilitySystemOwner(IAbilitySystemOwner abilitySystemOwner)
+        public void RegisterOwner(IAbilitySystemOwner owner)
         {
-            owner = abilitySystemOwner;
+            owner = owner;
         }
 
         /// <summary>
