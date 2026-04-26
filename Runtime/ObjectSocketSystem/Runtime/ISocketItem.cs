@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-namespace Skddkkkk.DevelopKit.Framework.ObjectSocketSystem.Runtime
+namespace PJDev.DevelopKit.Framework.ObjectSocketSystem.Runtime
 {
     public interface ISocketItem
     {

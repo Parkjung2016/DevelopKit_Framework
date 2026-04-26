@@ -1,7 +1,7 @@
 using System.Collections;
 using UnityEngine;
 
-namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
+namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 {
     [CreateAssetMenu(fileName = "SO_AbilitySetup", menuName = "SO/GameAbility/Config/Setup")]
     public class AbilitySetupSO : ScriptableObject, IEnumerable

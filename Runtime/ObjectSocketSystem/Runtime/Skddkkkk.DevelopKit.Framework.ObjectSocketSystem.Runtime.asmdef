@@ -1,6 +1,6 @@
 {
-    "name": "Skddkkkk.DevelopKit.Framework.ObjectSocketSystem.Runtime",
-    "rootNamespace": "Skddkkkk.DevelopKit.Framework.ObjectSocketSystem.Runtime",
+    "name": "PJDev.DevelopKit.Framework.ObjectSocketSystem.Runtime",
+    "rootNamespace": "PJDev.DevelopKit.Framework.ObjectSocketSystem.Runtime",
     "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],

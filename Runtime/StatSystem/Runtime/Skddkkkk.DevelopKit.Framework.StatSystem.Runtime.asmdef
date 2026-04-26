@@ -1,6 +1,6 @@
 {
-    "name": "Skddkkkk.DevelopKit.Framework.StatSystem.Runtime",
-    "rootNamespace": "Skddkkkk.DevelopKit.Framework.StatSystem.Runtime",
+    "name": "PJDev.DevelopKit.Framework.StatSystem.Runtime",
+    "rootNamespace": "PJDev.DevelopKit.Framework.StatSystem.Runtime",
     "references": ["GUID:406d82ec2f4cd104699d60414ec8fcdb"],
     "includePlatforms": [],
     "excludePlatforms": [],

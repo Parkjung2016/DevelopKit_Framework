@@ -1,7 +1,7 @@
-using Skddkkkk.DevelopKit.Editors;
+using PJDev.DevelopKit.Editors;
 using UnityEditor;
 
-namespace Skddkkkk.DevelopKit.Framework.Editors
+namespace PJDev.DevelopKit.Framework.Editors
 {
     [InitializeOnLoad]
     public class Extender : Editor

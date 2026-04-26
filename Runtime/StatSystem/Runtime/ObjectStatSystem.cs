@@ -1,9 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using Skddkkkk.DevelopKit.BasicTemplate.Runtime;
+using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
 
-namespace Skddkkkk.DevelopKit.Framework.StatSystem.Runtime
+namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
     public class ObjectStatSystem : MonoBehaviour
     {

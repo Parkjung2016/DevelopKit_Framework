@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace Skddkkkk.DevelopKit.Framework.StatSystem.Runtime
+namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
     [Serializable]
     public class StatOverride

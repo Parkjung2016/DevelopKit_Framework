@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
+namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 {
     [Serializable]
     public class AbilityInputBridgeInfo

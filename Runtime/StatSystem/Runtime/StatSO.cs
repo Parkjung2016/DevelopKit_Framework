@@ -5,7 +5,7 @@ using UnityEditor;
 #endif
 using UnityEngine;
 
-namespace Skddkkkk.DevelopKit.Framework.StatSystem.Runtime
+namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
     [CreateAssetMenu(fileName = "SO_Stat", menuName = "SO/StatSystem/Stat")]
     public class StatSO : ScriptableObject

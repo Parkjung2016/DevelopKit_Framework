@@ -1,10 +1,10 @@
-﻿using Skddkkkk.DevelopKit.BasicTemplate.Runtime;
+﻿using PJDev.DevelopKit.BasicTemplate.Runtime;
 using System;
 using BandoWare.GameplayTags;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
+namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 {
     public abstract class AbilitySO : ScriptableObject
     {

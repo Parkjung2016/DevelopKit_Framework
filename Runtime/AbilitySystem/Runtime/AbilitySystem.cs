@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using BandoWare.GameplayTags;
-using Skddkkkk.DevelopKit.BasicTemplate.Runtime;
+using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace Skddkkkk.DevelopKit.Framework.AbilitySystem.Runtime
+namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 {
     [DefaultExecutionOrder(-10000)]
     public class AbilitySystem : MonoBehaviour

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Skddkkkk.DevelopKit.Framework.ObjectSocketSystem.Runtime
+namespace PJDev.DevelopKit.Framework.ObjectSocketSystem.Runtime
 {
     [DefaultExecutionOrder(-10000)]
     public class ObjectSocketManager : MonoBehaviour
