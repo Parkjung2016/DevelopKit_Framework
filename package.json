@@ -1,12 +1,12 @@
 {
-  "name": "com.skddkkkk.developkit.framework",
+  "name": "com.pjdev.developkit.framework",
   "displayName": "DevelopKit Framework",
   "version": "1.0.0",
   "unity": "2021.0",
   "unityRelease": "1f1",
   "description": "Provides frameworks such as StatSystem and AbilitySystem.",
   "author": {
-    "name": "Parkjung2016",
+    "name": "PJDev",
     "email": "bagj21563@gmail.com"
   },
   "_fingerprint": "11e892c21745ed80ec46ebf57105d44b5c69d306"
