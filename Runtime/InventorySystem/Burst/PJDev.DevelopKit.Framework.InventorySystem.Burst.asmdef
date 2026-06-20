@@ -1,13 +1,11 @@
 {
-    "name": "PJDev.DevelopKit.Framework.Editors",
-    "rootNamespace": "PJDev.DevelopKit.Framework.Editors",
+    "name": "PJDev.DevelopKit.Framework.InventorySystem.Burst",
+    "rootNamespace": "PJDev.DevelopKit.Framework.InventorySystem.Burst",
     "references": [
-        "GUID:cb245d9e3f5b39946b271b70d3e6cced",
-        "GUID:7f4a2b8c9d1e3f5a6b7c8d9e0f1a2b3c"
+        "GUID:2665a8d13d1b3f18800f46e256720795",
+        "GUID:e0cd26848372d4e5c891c569017e11f1"
     ],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

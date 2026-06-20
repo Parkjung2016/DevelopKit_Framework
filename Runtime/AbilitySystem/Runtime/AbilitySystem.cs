@@ -6,7 +6,6 @@ using UnityEngine.InputSystem;
 
 namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 {
-    [DefaultExecutionOrder(-10000)]
     public class AbilitySystem : MonoBehaviour
     {
         [Header("InputSystem 연동이 필요한 경우에만 사용")] [SerializeField]

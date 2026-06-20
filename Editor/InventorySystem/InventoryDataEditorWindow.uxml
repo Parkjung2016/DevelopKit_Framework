@@ -1,0 +1,16 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <Style src="InventoryDataEditorStyles.uss" />
+    <ui:VisualElement class="inv-root">
+        <ui:VisualElement name="toolbar" class="inv-top-toolbar">
+            <uie:ObjectField name="setup-field" label="Setup" type="PJDev.DevelopKit.Framework.InventorySystem.Runtime.InventorySetupSO, PJDev.DevelopKit.Framework.InventorySystem.Runtime" allow-scene-objects="false" />
+            <ui:Button name="create-setup-btn" text="New Setup" class="inv-btn" />
+            <ui:Button name="create-all-btn" text="Create All" class="inv-btn" />
+            <ui:Button name="save-btn" text="Save" class="inv-btn inv-btn-primary" />
+            <ui:Button name="refresh-btn" text="Refresh" class="inv-btn" />
+        </ui:VisualElement>
+        <ui:VisualElement class="inv-body">
+            <ui:VisualElement name="nav-host" class="inv-sidebar" />
+            <ui:VisualElement name="content-host" class="inv-content" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

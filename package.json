@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "unity": "2021.0",
   "unityRelease": "1f1",
-  "description": "Provides frameworks such as StatSystem and AbilitySystem.",
+  "description": "Provides frameworks such as StatSystem, AbilitySystem, and InventorySystem.",
   "author": {
     "name": "PJDev",
     "email": "bagj21563@gmail.com"
