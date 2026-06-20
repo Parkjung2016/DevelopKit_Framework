@@ -75,7 +75,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             InventoryChangeResult result = container.TryAddItem(4000, 3);
 
             Assert.IsFalse(result.Success);
-            Assert.AreEqual(InventoryFailReason.NoSpace, result.Reason);
+            Assert.AreEqual(InventoryFailReason.WeightLimitExceeded, result.Reason);
         }
 
         [Test]

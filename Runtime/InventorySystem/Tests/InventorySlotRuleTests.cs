@@ -42,7 +42,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             InventoryChangeResult result = container.TryAddItemToSlot(0, InventoryTestItemDatabase.GeneralItemId, 1);
 
             Assert.IsFalse(result.Success);
-            Assert.AreEqual(InventoryFailReason.SlotRuleDenied, result.Reason);
+            Assert.AreEqual(InventoryFailReason.ItemTypeNotAllowed, result.Reason);
         }
     }
 }

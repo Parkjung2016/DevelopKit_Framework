@@ -316,7 +316,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 Commit();
                 textField.Blur();
                 evt.StopImmediatePropagation();
-                evt.PreventDefault();
+                textField.panel?.focusController?.IgnoreEvent(evt);
             }, TrickleDown.TrickleDown);
 
             row.Add(label);

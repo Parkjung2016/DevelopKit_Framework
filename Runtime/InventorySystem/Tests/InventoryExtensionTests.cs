@@ -60,7 +60,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
                 out InventoryFailReason reason);
 
             Assert.IsFalse(canRemove);
-            Assert.AreEqual(InventoryFailReason.NoChange, reason);
+            Assert.AreEqual(InventoryFailReason.InsufficientItemCount, reason);
         }
 
         [Test]

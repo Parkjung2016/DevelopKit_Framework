@@ -8,17 +8,25 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
     {
         [SerializeField] private StatSO stat;
         [SerializeField] private bool isUseOverride;
-
         [SerializeField] private float overrideValue;
-        
+
         public StatOverride(StatSO stat) => this.stat = stat;
 
-        public StatSO CreateStat()
+        public Stat CreateStat()
         {
-            StatSO newStat = stat.Clone();
+            if (stat == null)
+                return null;
+
+            Stat newStat = stat.CreateRuntime();
             if (isUseOverride)
                 newStat.BaseValue = overrideValue;
+
             return newStat;
         }
+
+        public StatOverrideEntry ToEntry() =>
+            stat == null
+                ? default
+                : new StatOverrideEntry(stat.ToDefinition(), isUseOverride, overrideValue);
     }
 }

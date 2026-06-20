@@ -162,7 +162,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             InventoryChangeResult result = container.TryAddItem(InventoryTestItemDatabase.GeneralItemId, 1);
 
             Assert.IsFalse(result.Success);
-            Assert.AreEqual(InventoryFailReason.NoSpace, result.Reason);
+            Assert.AreEqual(InventoryFailReason.ItemTypeNotAllowed, result.Reason);
         }
 
         [Test]
