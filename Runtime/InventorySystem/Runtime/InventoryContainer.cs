@@ -10,13 +10,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
     public sealed partial class InventoryContainer : IDisposable, IInventoryContainer
     {
         private NativeArray<SlotData> slots;
-        private NativeArray<SlotData> slotSnapshot;
+        private NativeList<SlotData> slotSnapshotsBefore;
         private NativeList<int> changedSlots;
         private readonly IItemDatabase itemDatabase;
         private readonly InventoryContainerDescriptor descriptor;
         private readonly ISlotRule slotRule;
         private readonly IContainerCapacityRule capacityRule;
         private readonly bool usesCustomSlotRule;
+        private readonly bool usesItemTypeSlotRule;
         private IItemInstanceIdGenerator instanceIdGenerator = DefaultItemInstanceIdGenerator.Instance;
         private bool isDisposed;
         private int revision;
@@ -46,8 +47,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             slotRule = this.descriptor.SlotRule ?? AnySlotRule.Instance;
             capacityRule = this.descriptor.CapacityRule;
             usesCustomSlotRule = slotRule is not AnySlotRule;
+            usesItemTypeSlotRule = slotRule is ItemTypeSlotRule;
             slots = new NativeArray<SlotData>(slotCount, Allocator.Persistent);
-            slotSnapshot = new NativeArray<SlotData>(slotCount, Allocator.Persistent);
+            slotSnapshotsBefore = new NativeList<SlotData>(slotCount, Allocator.Persistent);
             changedSlots = new NativeList<int>(slotCount, Allocator.Persistent);
         }
 
@@ -66,8 +68,19 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             NativeArray<SlotData>.Copy(snapshot, slots);
         }
 
-        public bool CanAcceptSlot(int slotIndex, in ItemDefinition definition) =>
-            slotIndex >= 0 && slotIndex < SlotCount && slotRule.CanAccept(slotIndex, definition);
+        public bool CanAcceptSlot(int slotIndex, in ItemDefinition definition)
+        {
+            if (slotIndex < 0 || slotIndex >= SlotCount)
+                return false;
+
+            if (!usesCustomSlotRule)
+                return true;
+
+            if (usesItemTypeSlotRule)
+                return slotRule.CanAccept(0, definition);
+
+            return slotRule.CanAccept(slotIndex, definition);
+        }
 
         private bool UsesCustomSlotRule => usesCustomSlotRule;
 
@@ -93,8 +106,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (!PassesCapacityRule(definition, count, out InventoryFailReason capacityReason))
                 return Fail(InventoryChangeType.Add, capacityReason, itemId, count);
 
-            CaptureSnapshot();
-
             if (!definition.IsStackable)
                 return TryAddUniqueItems(itemId, count, definition);
 
@@ -111,6 +122,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 definition.MaxStackSize,
                 definition.IsStackable,
                 ref changedSlots,
+                ref slotSnapshotsBefore,
                 out int addedTotal,
                 out int remainder,
                 out int totalBefore);
@@ -163,7 +175,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
             int totalBefore = GetItemCount(itemId);
             bool hadItemBefore = totalBefore > 0;
-            CaptureSnapshot();
 
             if (!definition.IsStackable)
             {
@@ -171,14 +182,18 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                     return Fail(InventoryChangeType.Add, InventoryFailReason.NoSpace, itemId, count, totalBefore, slotIndex);
 
                 long instanceId = GenerateInstanceId(itemId);
+                changedSlots.Clear();
+                slotSnapshotsBefore.Clear();
                 bool placed = InventoryBurstOperations.TryPlaceItemInEmptySlot(
-                    ref slots, slotIndex, itemId, 1, instanceId, ref changedSlots, true);
+                    ref slots, slotIndex, itemId, 1, instanceId, ref changedSlots, ref slotSnapshotsBefore, true);
                 if (!placed)
                     return Fail(InventoryChangeType.Add, InventoryFailReason.NoSpace, itemId, count, totalBefore, slotIndex);
 
                 return CreateSuccess(InventoryChangeType.Add, itemId, count, 1, 0, totalBefore, !hadItemBefore, false, slotIndex, knownDefinition: definition);
             }
 
+            changedSlots.Clear();
+            slotSnapshotsBefore.Clear();
             bool added = InventoryBurstOperations.TryAddItemToSlot(
                 ref slots,
                 slotIndex,
@@ -187,6 +202,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 definition.MaxStackSize,
                 definition.IsStackable,
                 ref changedSlots,
+                ref slotSnapshotsBefore,
                 true,
                 out int addedTotal,
                 out int remainder);
@@ -222,20 +238,20 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (count <= 0)
                 return Fail(InventoryChangeType.Remove, InventoryFailReason.InvalidCount, itemId, count);
 
-            int totalBefore;
-            CaptureSnapshot();
+            int totalBefore = GetItemCount(itemId);
+            if (totalBefore <= 0)
+                return Fail(InventoryChangeType.Remove, InventoryFailReason.ItemNotFound, itemId, count, totalBefore);
 
             InventoryBurstOperations.TryRemoveItem(
                 ref slots,
                 itemId,
                 count,
                 ref changedSlots,
+                ref slotSnapshotsBefore,
+                totalBefore,
                 out int removedCount,
                 out int remainder,
-                out totalBefore);
-
-            if (totalBefore <= 0)
-                return Fail(InventoryChangeType.Remove, InventoryFailReason.ItemNotFound, itemId, count, totalBefore);
+                out _);
 
             if (removedCount <= 0)
                 return Fail(InventoryChangeType.Remove, InventoryFailReason.InsufficientItemCount, itemId, count, totalBefore);
@@ -267,13 +283,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
             int itemId = slots[slotIndex].ItemId;
             int totalBefore = GetItemCount(itemId);
-            CaptureSnapshot();
 
             bool removed = InventoryBurstOperations.TryRemoveItemFromSlot(
                 ref slots,
                 slotIndex,
                 count,
                 ref changedSlots,
+                ref slotSnapshotsBefore,
+                true,
                 out int removedCount,
                 out int remainder);
 
@@ -327,7 +344,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 : InventoryChangeType.Move;
 
             int requestedCount = slots[fromSlotIndex].Count;
-            CaptureSnapshot();
 
             bool moved = InventoryBurstOperations.TryMoveSlot(
                 ref slots,
@@ -336,6 +352,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 definition.MaxStackSize,
                 definition.IsStackable,
                 ref changedSlots,
+                ref slotSnapshotsBefore,
                 out int processedCount,
                 out int remainder);
 
@@ -370,9 +387,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
             int itemId = slots[slotIndexA].ItemId;
             int totalBefore = itemId > 0 ? GetItemCount(itemId) : 0;
-            CaptureSnapshot();
 
-            bool swapped = InventoryBurstOperations.TrySwapSlots(ref slots, slotIndexA, slotIndexB, ref changedSlots);
+            bool swapped = InventoryBurstOperations.TrySwapSlots(
+                ref slots, slotIndexA, slotIndexB, ref changedSlots, ref slotSnapshotsBefore);
             if (!swapped)
                 return Fail(InventoryChangeType.Swap, InventoryFailReason.NoChange, itemId, primarySlotIndex: slotIndexA, secondarySlotIndex: slotIndexB, totalItemCountBefore: totalBefore);
 
@@ -403,9 +420,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             int itemId = slots[slotIndex].ItemId;
             int totalBefore = GetItemCount(itemId);
             int requestedCount = slots[slotIndex].Count;
-            CaptureSnapshot();
 
-            bool cleared = InventoryBurstOperations.ClearSlot(ref slots, slotIndex, ref changedSlots, out int clearedCount);
+            bool cleared = InventoryBurstOperations.ClearSlot(
+                ref slots, slotIndex, ref changedSlots, ref slotSnapshotsBefore, out int clearedCount);
             if (!cleared)
                 return Fail(InventoryChangeType.Clear, InventoryFailReason.NoChange, itemId, requestedCount, totalBefore, slotIndex);
 
@@ -426,9 +443,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (isDisposed)
                 return Fail(InventoryChangeType.Clear, InventoryFailReason.DatabaseNotReady);
 
-            CaptureSnapshot();
-
-            int clearedCount = InventoryBurstOperations.ClearAll(ref slots, ref changedSlots);
+            int clearedCount = InventoryBurstOperations.ClearAll(ref slots, ref changedSlots, ref slotSnapshotsBefore);
             if (clearedCount <= 0)
                 return Fail(InventoryChangeType.Clear, InventoryFailReason.NoChange);
 
@@ -453,6 +468,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             bool hadItemBefore)
         {
             changedSlots.Clear();
+            slotSnapshotsBefore.Clear();
             int remainder = count;
             int addedTotal = 0;
 
@@ -513,6 +529,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 definition.MaxStackSize,
                 definition.IsStackable,
                 ref changedSlots,
+                ref slotSnapshotsBefore,
                 resetChangedSlots,
                 out added,
                 out remainder);
@@ -636,8 +653,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (changedSlots.IsCreated)
                 changedSlots.Dispose();
 
-            if (slotSnapshot.IsCreated)
-                slotSnapshot.Dispose();
+            if (slotSnapshotsBefore.IsCreated)
+                slotSnapshotsBefore.Dispose();
 
             if (slots.IsCreated)
                 slots.Dispose();
@@ -655,19 +672,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             return false;
         }
 
-        private void CaptureSnapshot()
-        {
-            if (!slotSnapshot.IsCreated || slotSnapshot.Length != slots.Length)
-            {
-                if (slotSnapshot.IsCreated)
-                    slotSnapshot.Dispose();
-
-                slotSnapshot = new NativeArray<SlotData>(slots.Length, Allocator.Persistent);
-            }
-
-            NativeArray<SlotData>.Copy(slots, slotSnapshot);
-        }
-
         private ItemDefinition ResolveDefinition(int itemId)
         {
             if (itemId <= 0 || itemDatabase == null)
@@ -679,8 +683,19 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         private int GetSlotItemId(int slotIndex) =>
             slotIndex >= 0 && slotIndex < SlotCount ? slots[slotIndex].ItemId : 0;
 
-        private int GetSnapshotItemId(int slotIndex) =>
-            slotIndex >= 0 && slotIndex < SlotCount && slotSnapshot.IsCreated ? slotSnapshot[slotIndex].ItemId : 0;
+        private int GetSnapshotItemId(int slotIndex)
+        {
+            if (slotIndex < 0 || slotIndex >= SlotCount || !changedSlots.IsCreated)
+                return 0;
+
+            for (int i = 0; i < changedSlots.Length; i++)
+            {
+                if (changedSlots[i] == slotIndex)
+                    return slotSnapshotsBefore[i].ItemId;
+            }
+
+            return 0;
+        }
 
         private InventoryChangeResult Fail(
             InventoryChangeType changeType,
@@ -785,7 +800,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             {
                 int index = changedSlots[i];
                 changedSlotIndices[i] = index;
-                slotChanges[i] = InventorySlotChange.From(index, slotSnapshot[index], slots[index]);
+                slotChanges[i] = InventorySlotChange.From(index, slotSnapshotsBefore[i], slots[index]);
             }
         }
     }

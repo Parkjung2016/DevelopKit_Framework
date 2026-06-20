@@ -247,7 +247,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
             int itemId = slots[slotIndex].ItemId;
             int totalBefore = GetItemCount(itemId);
-            CaptureSnapshot();
 
             bool split = InventoryBurstOperations.TrySplitStack(
                 ref slots,
@@ -255,6 +254,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 targetSlotIndex,
                 splitCount,
                 ref changedSlots,
+                ref slotSnapshotsBefore,
                 out int processedCount);
 
             if (!split)
@@ -286,13 +286,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 return Fail(InventoryChangeType.Drop, InventoryFailReason.ItemActionDenied, itemId, count, primarySlotIndex: slotIndex);
 
             int totalBefore = GetItemCount(itemId);
-            CaptureSnapshot();
 
             bool removed = InventoryBurstOperations.TryRemoveItemFromSlot(
                 ref slots,
                 slotIndex,
                 count,
                 ref changedSlots,
+                ref slotSnapshotsBefore,
+                true,
                 out int removedCount,
                 out int remainder);
 
@@ -324,13 +325,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 return Fail(InventoryChangeType.Trade, InventoryFailReason.ItemActionDenied, itemId, count, primarySlotIndex: slotIndex);
 
             int totalBefore = GetItemCount(itemId);
-            CaptureSnapshot();
 
             bool removed = InventoryBurstOperations.TryRemoveItemFromSlot(
                 ref slots,
                 slotIndex,
                 count,
                 ref changedSlots,
+                ref slotSnapshotsBefore,
+                true,
                 out int removedCount,
                 out int remainder);
 
@@ -388,10 +390,11 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 return Fail(InventoryChangeType.Add, ResolveSlotRuleDeniedReason(definition), itemId, count, primarySlotIndex: slotIndex);
 
             int totalBefore = GetItemCount(itemId);
-            CaptureSnapshot();
+            changedSlots.Clear();
+            slotSnapshotsBefore.Clear();
 
             bool placed = InventoryBurstOperations.TryPlaceItemInEmptySlot(
-                ref slots, slotIndex, itemId, 1, instanceId, ref changedSlots, true);
+                ref slots, slotIndex, itemId, 1, instanceId, ref changedSlots, ref slotSnapshotsBefore, true);
 
             if (!placed)
                 return Fail(InventoryChangeType.Add, InventoryFailReason.NoSpace, itemId, count, totalBefore, slotIndex);
@@ -416,6 +419,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         private InventoryChangeResult TryAddUniqueItems(int itemId, int count, ItemDefinition definition)
         {
             changedSlots.Clear();
+            slotSnapshotsBefore.Clear();
             int remainder = count;
             int addedTotal = 0;
             int totalBefore = GetItemCount(itemId);
@@ -428,7 +432,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
                 long instanceId = GenerateInstanceId(itemId);
                 if (!InventoryBurstOperations.TryPlaceItemInEmptySlot(
-                        ref slots, i, itemId, 1, instanceId, ref changedSlots, false))
+                        ref slots, i, itemId, 1, instanceId, ref changedSlots, ref slotSnapshotsBefore, false))
                     continue;
 
                 addedTotal++;
@@ -528,7 +532,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 return false;
             }
 
-            if (capacityRule.CanAdd(definition, count, GetItemCount(definition.ItemId), GetOccupiedSlotCount()))
+            GetItemAndOccupiedCount(definition.ItemId, out int itemCount, out int occupiedCount);
+            if (capacityRule.CanAdd(definition, count, itemCount, occupiedCount))
             {
                 reason = InventoryFailReason.None;
                 return true;
@@ -540,10 +545,42 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         private InventoryFailReason ResolveSlotRuleDeniedReason(in ItemDefinition definition)
         {
-            if (slotRule is ItemTypeSlotRule)
+            if (usesItemTypeSlotRule)
                 return InventoryFailReason.ItemTypeNotAllowed;
 
             return InventoryFailReason.SlotRuleDenied;
+        }
+
+        internal int SimulateAddWithoutCapacityCheck(in ItemDefinition definition, int count)
+        {
+            if (count <= 0)
+                return 0;
+
+            return UsesCustomSlotRule
+                ? SimulateAddWithSlotRule(definition.ItemId, count, definition)
+                : InventoryBurstOperations.SimulateAddItem(
+                    ref slots,
+                    definition.ItemId,
+                    count,
+                    definition.MaxStackSize,
+                    definition.IsStackable);
+        }
+
+        private void GetItemAndOccupiedCount(int itemId, out int itemCount, out int occupiedCount)
+        {
+            itemCount = 0;
+            occupiedCount = 0;
+
+            for (int i = 0; i < slots.Length; i++)
+            {
+                SlotData slot = slots[i];
+                if (slot.IsEmpty)
+                    continue;
+
+                occupiedCount++;
+                if (slot.ItemId == itemId)
+                    itemCount += slot.Count;
+            }
         }
 
         private InventoryFailReason ResolveCapacityDeniedReason()

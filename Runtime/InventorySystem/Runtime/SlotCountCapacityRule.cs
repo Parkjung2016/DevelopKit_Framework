@@ -16,7 +16,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (container.GetOccupiedSlotCount() < maxOccupiedSlots)
                 return true;
 
-            return container.CanAddItem(definition.ItemId, count, out _, out _);
+            return container.GetItemCount(definition.ItemId) > 0
+                && container.SimulateAddWithoutCapacityCheck(definition, count) > 0;
         }
 
         public bool CanAdd(in ItemDefinition definition, int count, int currentItemCount, int occupiedSlotCount) =>

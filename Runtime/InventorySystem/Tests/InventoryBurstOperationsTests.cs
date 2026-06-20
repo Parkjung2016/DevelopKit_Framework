@@ -9,17 +9,22 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
     {
         private NativeArray<SlotData> slots;
         private NativeList<int> changedSlots;
+        private NativeList<SlotData> slotStatesBefore;
 
         [SetUp]
         public void SetUp()
         {
             slots = new NativeArray<SlotData>(5, Allocator.Persistent);
             changedSlots = new NativeList<int>(5, Allocator.Persistent);
+            slotStatesBefore = new NativeList<SlotData>(5, Allocator.Persistent);
         }
 
         [TearDown]
         public void TearDown()
         {
+            if (slotStatesBefore.IsCreated)
+                slotStatesBefore.Dispose();
+
             if (changedSlots.IsCreated)
                 changedSlots.Dispose();
 
@@ -39,6 +44,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
                 maxStackSize: 5,
                 isStackable: true,
                 ref changedSlots,
+                ref slotStatesBefore,
                 out int addedTotal,
                 out int remainder,
                 out int totalBefore);
@@ -71,6 +77,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
                 1000,
                 4,
                 ref changedSlots,
+                ref slotStatesBefore,
+                knownTotalBefore: 5,
                 out int removedCount,
                 out int remainder,
                 out int totalBefore);
@@ -94,6 +102,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
                 maxStackSize: 5,
                 isStackable: true,
                 ref changedSlots,
+                ref slotStatesBefore,
                 out int processedCount,
                 out int remainder);
 

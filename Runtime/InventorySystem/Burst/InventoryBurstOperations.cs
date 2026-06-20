@@ -55,11 +55,13 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             int maxStackSize,
             bool isStackable,
             ref NativeList<int> changedSlots,
+            ref NativeList<SlotData> slotStatesBefore,
             out int addedTotal,
             out int remainder,
             out int totalItemCountBefore)
         {
             changedSlots.Clear();
+            slotStatesBefore.Clear();
             addedTotal = 0;
             remainder = count;
             totalItemCountBefore = 0;
@@ -88,9 +90,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
                     if (before == remainder)
                         continue;
 
+                    RecordSlotChange(ref slots, i, ref changedSlots, ref slotStatesBefore);
                     slots[i] = slot;
                     addedTotal += before - remainder;
-                    changedSlots.Add(i);
                 }
             }
 
@@ -105,9 +107,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
                 if (before == remainder)
                     continue;
 
+                RecordSlotChange(ref slots, i, ref changedSlots, ref slotStatesBefore);
                 slots[i] = slot;
                 addedTotal += before - remainder;
-                changedSlots.Add(i);
             }
         }
 
@@ -120,12 +122,16 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             int maxStackSize,
             bool isStackable,
             ref NativeList<int> changedSlots,
+            ref NativeList<SlotData> slotStatesBefore,
             bool resetChangedSlots,
             out int addedTotal,
             out int remainder)
         {
             if (resetChangedSlots)
+            {
                 changedSlots.Clear();
+                slotStatesBefore.Clear();
+            }
             addedTotal = 0;
             remainder = count;
 
@@ -148,9 +154,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             if (before == remainder)
                 return false;
 
+            RecordSlotChange(ref slots, slotIndex, ref changedSlots, ref slotStatesBefore);
             slots[slotIndex] = slot;
             addedTotal = before - remainder;
-            changedSlots.Add(slotIndex);
             return true;
         }
 
@@ -160,23 +166,29 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             int itemId,
             int count,
             ref NativeList<int> changedSlots,
+            ref NativeList<SlotData> slotStatesBefore,
+            int knownTotalBefore,
             out int removedCount,
             out int remainder,
             out int totalItemCountBefore)
         {
             changedSlots.Clear();
+            slotStatesBefore.Clear();
             removedCount = 0;
             remainder = count;
-            totalItemCountBefore = 0;
+            totalItemCountBefore = knownTotalBefore;
 
             if (itemId <= 0 || count <= 0)
                 return;
 
-            for (int i = 0; i < slots.Length; i++)
+            if (totalItemCountBefore < 0)
             {
-                SlotData slot = slots[i];
-                if (slot.ItemId == itemId)
-                    totalItemCountBefore += slot.Count;
+                for (int i = 0; i < slots.Length; i++)
+                {
+                    SlotData slot = slots[i];
+                    if (slot.ItemId == itemId)
+                        totalItemCountBefore += slot.Count;
+                }
             }
 
             if (totalItemCountBefore <= 0)
@@ -192,9 +204,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
                 if (removed <= 0)
                     continue;
 
+                RecordSlotChange(ref slots, i, ref changedSlots, ref slotStatesBefore);
                 slots[i] = slot;
                 removedCount += removed;
-                changedSlots.Add(i);
             }
 
             remainder = count - removedCount;
@@ -206,10 +218,16 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             int slotIndex,
             int count,
             ref NativeList<int> changedSlots,
+            ref NativeList<SlotData> slotStatesBefore,
+            bool resetChangedSlots,
             out int removedCount,
             out int remainder)
         {
-            changedSlots.Clear();
+            if (resetChangedSlots)
+            {
+                changedSlots.Clear();
+                slotStatesBefore.Clear();
+            }
             removedCount = 0;
             remainder = count;
 
@@ -224,9 +242,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             if (removedCount <= 0)
                 return false;
 
+            RecordSlotChange(ref slots, slotIndex, ref changedSlots, ref slotStatesBefore);
             slots[slotIndex] = slot;
             remainder = count - removedCount;
-            changedSlots.Add(slotIndex);
             return true;
         }
 
@@ -238,10 +256,12 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             int maxStackSize,
             bool isStackable,
             ref NativeList<int> changedSlots,
+            ref NativeList<SlotData> slotStatesBefore,
             out int processedCount,
             out int remainder)
         {
             changedSlots.Clear();
+            slotStatesBefore.Clear();
             processedCount = 0;
             remainder = 0;
 
@@ -268,12 +288,12 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
                 toSlot.InstanceId = fromSlot.InstanceId;
                 TryRemoveFromSlot(ref fromSlot, moveCount);
 
+                RecordSlotChange(ref slots, toSlotIndex, ref changedSlots, ref slotStatesBefore);
+                RecordSlotChange(ref slots, fromSlotIndex, ref changedSlots, ref slotStatesBefore);
                 slots[toSlotIndex] = toSlot;
                 slots[fromSlotIndex] = fromSlot;
                 processedCount = moveCount;
                 remainder = isStackable ? 0 : fromSlot.Count;
-                changedSlots.Add(fromSlotIndex);
-                changedSlots.Add(toSlotIndex);
                 return processedCount > 0;
             }
 
@@ -284,17 +304,17 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
                 remainder = TryAddToSlot(ref toSlot, fromSlot.ItemId, fromCount, effectiveMaxStackSize);
                 processedCount = before - remainder;
                 TryRemoveFromSlot(ref fromSlot, processedCount);
+                RecordSlotChange(ref slots, toSlotIndex, ref changedSlots, ref slotStatesBefore);
+                RecordSlotChange(ref slots, fromSlotIndex, ref changedSlots, ref slotStatesBefore);
                 slots[toSlotIndex] = toSlot;
                 slots[fromSlotIndex] = fromSlot;
-                changedSlots.Add(fromSlotIndex);
-                changedSlots.Add(toSlotIndex);
                 return processedCount > 0;
             }
 
+            RecordSlotChange(ref slots, fromSlotIndex, ref changedSlots, ref slotStatesBefore);
+            RecordSlotChange(ref slots, toSlotIndex, ref changedSlots, ref slotStatesBefore);
             slots[fromSlotIndex] = toSlot;
             slots[toSlotIndex] = fromSlot;
-            changedSlots.Add(fromSlotIndex);
-            changedSlots.Add(toSlotIndex);
             return true;
         }
 
@@ -303,9 +323,11 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             ref NativeArray<SlotData> slots,
             int slotIndexA,
             int slotIndexB,
-            ref NativeList<int> changedSlots)
+            ref NativeList<int> changedSlots,
+            ref NativeList<SlotData> slotStatesBefore)
         {
             changedSlots.Clear();
+            slotStatesBefore.Clear();
 
             if (slotIndexA < 0 || slotIndexA >= slots.Length ||
                 slotIndexB < 0 || slotIndexB >= slots.Length ||
@@ -317,10 +339,10 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             if (slotA.IsEmpty && slotB.IsEmpty)
                 return false;
 
+            RecordSlotChange(ref slots, slotIndexA, ref changedSlots, ref slotStatesBefore);
+            RecordSlotChange(ref slots, slotIndexB, ref changedSlots, ref slotStatesBefore);
             slots[slotIndexA] = slotB;
             slots[slotIndexB] = slotA;
-            changedSlots.Add(slotIndexA);
-            changedSlots.Add(slotIndexB);
             return true;
         }
 
@@ -329,9 +351,11 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             ref NativeArray<SlotData> slots,
             int slotIndex,
             ref NativeList<int> changedSlots,
+            ref NativeList<SlotData> slotStatesBefore,
             out int clearedCount)
         {
             changedSlots.Clear();
+            slotStatesBefore.Clear();
             clearedCount = 0;
 
             if (slotIndex < 0 || slotIndex >= slots.Length)
@@ -342,15 +366,16 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
                 return false;
 
             clearedCount = slot.Count;
+            RecordSlotChange(ref slots, slotIndex, ref changedSlots, ref slotStatesBefore);
             slots[slotIndex] = SlotData.Empty;
-            changedSlots.Add(slotIndex);
             return true;
         }
 
         [BurstCompile]
-        public static int ClearAll(ref NativeArray<SlotData> slots, ref NativeList<int> changedSlots)
+        public static int ClearAll(ref NativeArray<SlotData> slots, ref NativeList<int> changedSlots, ref NativeList<SlotData> slotStatesBefore)
         {
             changedSlots.Clear();
+            slotStatesBefore.Clear();
             int clearedCount = 0;
 
             for (int i = 0; i < slots.Length; i++)
@@ -358,8 +383,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
                 if (slots[i].IsEmpty)
                     continue;
 
+                RecordSlotChange(ref slots, i, ref changedSlots, ref slotStatesBefore);
                 slots[i] = SlotData.Empty;
-                changedSlots.Add(i);
                 clearedCount++;
             }
 
@@ -397,14 +422,13 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             else
             {
                 int uniqueSlots = 0;
-                for (int i = 0; i < slots.Length; i++)
+                for (int i = 0; i < slots.Length && uniqueSlots < remainder; i++)
                 {
                     if (slots[i].IsEmpty)
                         uniqueSlots++;
                 }
 
-                int addable = uniqueSlots < remainder ? uniqueSlots : remainder;
-                return addable;
+                return uniqueSlots < remainder ? uniqueSlots : remainder;
             }
 
             for (int i = 0; i < slots.Length && remainder > 0; i++)
@@ -427,10 +451,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             int count,
             long instanceId,
             ref NativeList<int> changedSlots,
+            ref NativeList<SlotData> slotStatesBefore,
             bool resetChangedSlots)
         {
             if (resetChangedSlots)
+            {
                 changedSlots.Clear();
+                slotStatesBefore.Clear();
+            }
 
             if (slotIndex < 0 || slotIndex >= slots.Length || itemId <= 0 || count <= 0)
                 return false;
@@ -441,8 +469,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             if (instanceId != 0 && count != 1)
                 return false;
 
+            RecordSlotChange(ref slots, slotIndex, ref changedSlots, ref slotStatesBefore);
             slots[slotIndex] = SlotData.Create(itemId, count, instanceId);
-            changedSlots.Add(slotIndex);
             return true;
         }
 
@@ -453,9 +481,11 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             int toSlotIndex,
             int splitCount,
             ref NativeList<int> changedSlots,
+            ref NativeList<SlotData> slotStatesBefore,
             out int processedCount)
         {
             changedSlots.Clear();
+            slotStatesBefore.Clear();
             processedCount = 0;
 
             if (fromSlotIndex < 0 || fromSlotIndex >= slots.Length ||
@@ -471,12 +501,12 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             if (!slots[toSlotIndex].IsEmpty)
                 return false;
 
+            RecordSlotChange(ref slots, toSlotIndex, ref changedSlots, ref slotStatesBefore);
+            RecordSlotChange(ref slots, fromSlotIndex, ref changedSlots, ref slotStatesBefore);
             slots[toSlotIndex] = SlotData.Create(fromSlot.ItemId, splitCount, 0);
             fromSlot.Count -= splitCount;
             slots[fromSlotIndex] = fromSlot;
             processedCount = splitCount;
-            changedSlots.Add(fromSlotIndex);
-            changedSlots.Add(toSlotIndex);
             return true;
         }
 
@@ -512,6 +542,17 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             }
 
             return count;
+        }
+
+        [BurstCompile]
+        private static void RecordSlotChange(
+            ref NativeArray<SlotData> slots,
+            int slotIndex,
+            ref NativeList<int> changedSlots,
+            ref NativeList<SlotData> slotStatesBefore)
+        {
+            slotStatesBefore.Add(slots[slotIndex]);
+            changedSlots.Add(slotIndex);
         }
 
         [BurstCompile]
