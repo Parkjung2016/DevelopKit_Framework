@@ -101,15 +101,12 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         public void CreateGUI()
         {
-            var styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(InventoryEditorStyles.StylesUssPath);
-            if (styleSheet != null)
-                rootVisualElement.styleSheets.Add(styleSheet);
+            rootVisualElement.style.flexGrow = 1;
+            InventoryEditorStyleSheet.Apply(rootVisualElement);
 
-            var uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(InventoryEditorStyles.WindowUxmlPath);
-            VisualElement root = uxml != null ? uxml.Instantiate() : BuildFallbackLayout();
+            VisualElement root = InventoryEditorWindowBuilder.Build(out setupField, out navHost, out contentHost);
             rootVisualElement.Add(root);
 
-            setupField = root.Q<ObjectField>("setup-field");
             setupField.objectType = typeof(InventorySetupSO);
             setupField.allowSceneObjects = false;
             setupField.RegisterValueChangedCallback(evt =>
@@ -130,9 +127,6 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 RefreshActivePanel();
             });
             root.Q<Button>("refresh-btn")?.RegisterCallback<ClickEvent>(_ => RefreshActivePanel());
-
-            navHost = root.Q<VisualElement>("nav-host");
-            contentHost = root.Q<VisualElement>("content-host");
 
             panels.Clear();
             panels.Add(new InventoryOverviewPanel(context));
@@ -173,41 +167,6 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             context.StandaloneLootDatabase != null;
 
         private void OnDisable() => context.Changed -= RefreshActivePanel;
-
-        private VisualElement BuildFallbackLayout()
-        {
-            var root = new VisualElement();
-            root.style.flexGrow = 1;
-
-            var toolbar = new VisualElement { name = "toolbar" };
-            toolbar.AddToClassList("inv-top-toolbar");
-            toolbar.style.flexDirection = FlexDirection.Row;
-            toolbar.style.alignItems = Align.Center;
-
-            setupField = new ObjectField("Setup") { name = "setup-field" };
-            setupField.style.flexGrow = 1;
-            toolbar.Add(setupField);
-            toolbar.Add(new Button { name = "create-setup-btn", text = "New Setup" });
-            toolbar.Add(new Button { name = "create-all-btn", text = "Create All" });
-            toolbar.Add(new Button { name = "save-btn", text = "Save" });
-            toolbar.Add(new Button { name = "refresh-btn", text = "Refresh" });
-            root.Add(toolbar);
-
-            var body = new VisualElement();
-            body.style.flexDirection = FlexDirection.Row;
-            body.style.flexGrow = 1;
-
-            navHost = new VisualElement { name = "nav-host" };
-            navHost.AddToClassList("inv-sidebar");
-            contentHost = new VisualElement { name = "content-host" };
-            contentHost.AddToClassList("inv-content");
-            contentHost.style.flexGrow = 1;
-
-            body.Add(navHost);
-            body.Add(contentHost);
-            root.Add(body);
-            return root;
-        }
 
         private void BuildNavigation()
         {

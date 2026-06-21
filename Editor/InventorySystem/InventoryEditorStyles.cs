@@ -2,11 +2,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 {
     internal static class InventoryEditorStyles
     {
-        public const string WindowUxmlPath =
-            "Assets/Framework/Editor/InventorySystem/InventoryDataEditorWindow.uxml";
-
-        public const string StylesUssPath =
-            "Assets/Framework/Editor/InventorySystem/InventoryDataEditorStyles.uss";
+        public const string StylesAssetPath = "Assets/Framework/Editor/InventorySystem/InventoryDataEditorStyles.uss";
 
         public const string NavButtonClass = "inv-nav-btn";
         public const string NavButtonActiveClass = "inv-nav-btn-active";
