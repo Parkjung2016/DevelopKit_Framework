@@ -12,7 +12,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         public AbilitySO abilityToActivate;
     }
 
-    [CreateAssetMenu(fileName = "SO_AbilityInputBridge", menuName = "SO/GameAbility/Config/InputBridge")]
+    [CreateAssetMenu(fileName = "SO_AbilityInputBridge", menuName = "PJDev/SO/GameAbility/Config/InputBridge")]
     public class AbilityInputBridgeSO : ScriptableObject
     {
         [Header("외부 주입이 없을 경우 사용할 InputActionAsset")] [SerializeField]

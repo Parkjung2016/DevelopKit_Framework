@@ -12,7 +12,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
     public sealed class GameplayTagManagerWindow : EditorWindow
     {
         private GameplayTagSplitView splitView;
-        private GameplayTagTreeViewUi treeView;
+        private GameplayTagTreeViewUI treeView;
         private ScrollView detailScroll;
         private VisualElement detailHost;
         private ToolbarSearchField searchField;
@@ -72,7 +72,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             };
             splitView.LeftPane.Add(sourceFilePanel);
 
-            treeView = new GameplayTagTreeViewUi(GameplayTagTreeSelectionMode.Manager);
+            treeView = new GameplayTagTreeViewUI(GameplayTagTreeSelectionMode.Manager);
             treeView.AddToClassList(GameplayTagEditorStyles.TreePaneClass);
             treeView.SelectionChanged += tags =>
             {

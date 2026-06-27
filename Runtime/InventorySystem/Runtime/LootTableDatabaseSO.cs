@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
-    [CreateAssetMenu(fileName = "SO_LootTableDatabase", menuName = "SO/InventorySystem/LootTableDatabase")]
+    [CreateAssetMenu(fileName = "SO_LootTableDatabase", menuName = "PJDev/SO/InventorySystem/LootTableDatabase")]
     public class LootTableDatabaseSO : ScriptableObject, ILootTableDatabase
     {
         [field: SerializeField] public LootTableSO[] Tables { get; set; } = System.Array.Empty<LootTableSO>();

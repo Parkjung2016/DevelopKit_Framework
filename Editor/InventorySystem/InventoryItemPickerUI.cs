@@ -102,7 +102,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         public void RefreshStructure()
         {
-            InventoryEditorUiFactory.RunPreserveScroll(DetailScroll, () =>
+            InventoryEditorUIFactory.RunPreserveScroll(DetailScroll, () =>
             {
                 RefreshDetailChrome?.Invoke();
                 RefreshPickerVisuals?.Invoke();
@@ -114,7 +114,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         public void RefreshActiveRecipeArray(string arrayKey)
         {
-            InventoryEditorUiFactory.RunPreserveScroll(DetailScroll, () =>
+            InventoryEditorUIFactory.RunPreserveScroll(DetailScroll, () =>
             {
                 if (arrayKey == InventoryItemPickerSession.RewardsKey)
                     RefreshRewards?.Invoke();
@@ -125,7 +125,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         public void RefreshLootEntries()
         {
-            InventoryEditorUiFactory.RunPreserveScroll(DetailScroll, () =>
+            InventoryEditorUIFactory.RunPreserveScroll(DetailScroll, () =>
             {
                 RefreshEntries?.Invoke();
             });
@@ -133,11 +133,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         public void RefreshPickerOnly()
         {
-            InventoryEditorUiFactory.RunPreserveScroll(DetailScroll, RefreshPickerGrid);
+            InventoryEditorUIFactory.RunPreserveScroll(DetailScroll, RefreshPickerGrid);
         }
     }
 
-    internal static class InventoryItemPickerUi
+    internal static class InventoryItemPickerUI
     {
         public const string DragItemKey = "InventoryEditor.DragItem";
         public const string DragItemsKey = "InventoryEditor.DragItems";
@@ -152,7 +152,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             public string[] AssignTargets = { InventoryItemPickerSession.CostsKey, InventoryItemPickerSession.RewardsKey };
         }
 
-        public sealed class PickerUiHandle
+        public sealed class PickerUIHandle
         {
             public VisualElement Root;
             public Options Options;
@@ -162,11 +162,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             public void RebuildGrid()
             {
                 if (GridHost != null)
-                    InventoryItemPickerUi.RebuildGrid(GridHost, Options);
+                    InventoryItemPickerUI.RebuildGrid(GridHost, Options);
             }
 
             public void RebuildToolbar() =>
-                InventoryItemPickerUi.BuildToolbar(ToolbarHost, Options, RebuildPickerVisuals);
+                InventoryItemPickerUI.BuildToolbar(ToolbarHost, Options, RebuildPickerVisuals);
 
             public void RebuildPickerVisuals()
             {
@@ -175,10 +175,10 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             }
         }
 
-        public static PickerUiHandle BuildPicker(Options options)
+        public static PickerUIHandle BuildPicker(Options options)
         {
-            var handle = new PickerUiHandle { Options = options };
-            var section = InventoryEditorUiFactory.CreateSection("Item Palette");
+            var handle = new PickerUIHandle { Options = options };
+            var section = InventoryEditorUIFactory.CreateSection("Item Palette");
             handle.Root = section;
 
             if (options.ItemDatabase == null)
@@ -227,7 +227,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         {
             toolbar.Clear();
 
-            toolbar.Add(InventoryEditorUiFactory.CreateSearchField("Search items", value =>
+            toolbar.Add(InventoryEditorUIFactory.CreateSearchField("Search items", value =>
             {
                 options.Session.Search = value;
                 options.OnRefreshPicker?.Invoke();
@@ -249,7 +249,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 for (int i = 0; i < options.AssignTargets.Length; i++)
                 {
                     string target = options.AssignTargets[i];
-                    toolbar.Add(InventoryEditorUiFactory.CreateToolbarButton(
+                    toolbar.Add(InventoryEditorUIFactory.CreateToolbarButton(
                         $"→ {target} ({options.Session.ToggleSelection.Count})",
                         () =>
                         {
@@ -258,7 +258,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                         }));
                 }
 
-                toolbar.Add(InventoryEditorUiFactory.CreateToolbarButton("Clear", () =>
+                toolbar.Add(InventoryEditorUIFactory.CreateToolbarButton("Clear", () =>
                 {
                     options.Session.ClearToggleSelection();
                     rebuildPickerVisuals?.Invoke();
@@ -548,7 +548,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             serializedObject.Update();
 
             var scalarRoot = new VisualElement();
-            InventoryEditorUiFactory.BindPropertyFields(
+            InventoryEditorUIFactory.BindPropertyFields(
                 scalarRoot,
                 serializedObject,
                 onChanged,
@@ -572,7 +572,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 return root;
             }
 
-            var pickerOptions = new InventoryItemPickerUi.Options
+            var pickerOptions = new InventoryItemPickerUI.Options
             {
                 ItemDatabase = itemDatabase,
                 Session = session,
@@ -587,7 +587,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 OnRefreshPicker = () => binding.RefreshPickerOnly()
             };
 
-            InventoryItemPickerUi.PickerUiHandle picker = InventoryItemPickerUi.BuildPicker(pickerOptions);
+            InventoryItemPickerUI.PickerUIHandle picker = InventoryItemPickerUI.BuildPicker(pickerOptions);
             picker.Options.OnToggleSelectionChanged = picker.RebuildPickerVisuals;
             binding.RefreshPickerGrid = picker.RebuildGrid;
             binding.RefreshPickerVisuals = picker.RebuildPickerVisuals;
@@ -620,11 +620,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             ItemDatabaseSO itemDatabase,
             InventoryItemPickerSession session,
             Action onChanged,
-            Action refreshUi,
+            Action refreshUI,
             out RecipeWorkbenchBinding binding)
         {
             binding = new RecipeWorkbenchBinding();
-            var section = InventoryEditorUiFactory.CreateSection("제작");
+            var section = InventoryEditorUIFactory.CreateSection("제작");
             section.AddToClassList(InventoryEditorStyles.CraftingSectionClass);
 
             var row = new VisualElement();
@@ -656,7 +656,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                         index,
                         entries[i],
                         onChanged,
-                        refreshUi));
+                        refreshUI));
                 }
 
                 costsList.Add(CreateEmptyRecipeSlot(
@@ -664,7 +664,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     session,
                     InventoryItemPickerSession.CostsKey,
                     onChanged,
-                    refreshUi));
+                    refreshUI));
             }
 
             void RebuildRewards()
@@ -683,7 +683,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                         index,
                         entries[i],
                         onChanged,
-                        refreshUi));
+                        refreshUI));
                 }
 
                 rewardsList.Add(CreateEmptyRecipeSlot(
@@ -691,7 +691,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     session,
                     InventoryItemPickerSession.RewardsKey,
                     onChanged,
-                    refreshUi));
+                    refreshUI));
             }
 
             binding.RefreshCosts = RebuildCosts;
@@ -730,7 +730,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             int index,
             InventoryRecipeEntry entry,
             Action onChanged,
-            Action refreshUi)
+            Action refreshUI)
         {
             itemDatabase.TryGetItem(entry.ItemId, out ItemDefinitionSO item);
             var row = CreateEntryRowShell(session, arrayKey, index);
@@ -745,14 +745,14 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     () =>
                     {
                         RemoveRecipeEntry(recipe, arrayKey, index, onChanged);
-                        refreshUi?.Invoke();
+                        refreshUI?.Invoke();
                     })));
 
-            InventoryItemPickerUi.RegisterDropTarget(row, dropped =>
+            InventoryItemPickerUI.RegisterDropTarget(row, dropped =>
             {
                 session.SetActiveSlot(arrayKey, index);
                 ApplyRecipeItem(recipe, arrayKey, index, dropped.ItemId, onChanged);
-                refreshUi?.Invoke();
+                refreshUI?.Invoke();
             });
 
             return row;
@@ -763,7 +763,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             InventoryItemPickerSession session,
             string arrayKey,
             Action onChanged,
-            Action refreshUi)
+            Action refreshUI)
         {
             var row = CreateEntryRowShell(session, arrayKey, -1);
             row.AddToClassList(InventoryEditorStyles.EntrySlotEmptyClass);
@@ -778,11 +778,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             body.Add(hint);
             row.Add(body);
 
-            InventoryItemPickerUi.RegisterDropTarget(row, dropped =>
+            InventoryItemPickerUI.RegisterDropTarget(row, dropped =>
             {
                 session.SetActiveSlot(arrayKey, -1);
                 ApplyRecipeItem(recipe, arrayKey, -1, dropped.ItemId, onChanged);
-                refreshUi?.Invoke();
+                refreshUI?.Invoke();
             });
 
             return row;
@@ -802,7 +802,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             serializedObject.Update();
 
             var scalarRoot = new VisualElement();
-            InventoryEditorUiFactory.BindPropertyFields(
+            InventoryEditorUIFactory.BindPropertyFields(
                 scalarRoot,
                 serializedObject,
                 onChanged,
@@ -836,17 +836,17 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
             session.SetActiveSlot(InventoryItemPickerSession.EntriesKey, -1);
 
-            Action refreshEntriesUi = null;
+            Action refreshEntriesUI = null;
             VisualElement entriesSection = BuildLootEntriesSection(
                 table,
                 itemDatabase,
                 session,
                 onChanged,
-                () => refreshEntriesUi?.Invoke());
+                () => refreshEntriesUI?.Invoke());
             binding.RefreshEntries = () => ((Action)entriesSection.userData)?.Invoke();
-            refreshEntriesUi = binding.RefreshLootEntries;
+            refreshEntriesUI = binding.RefreshLootEntries;
 
-            var pickerOptions = new InventoryItemPickerUi.Options
+            var pickerOptions = new InventoryItemPickerUI.Options
             {
                 ItemDatabase = itemDatabase,
                 Session = session,
@@ -862,7 +862,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 OnRefreshPicker = () => binding.RefreshPickerOnly()
             };
 
-            InventoryItemPickerUi.PickerUiHandle picker = InventoryItemPickerUi.BuildPicker(pickerOptions);
+            InventoryItemPickerUI.PickerUIHandle picker = InventoryItemPickerUI.BuildPicker(pickerOptions);
             picker.Options.OnToggleSelectionChanged = picker.RebuildPickerVisuals;
             binding.RefreshPickerGrid = picker.RebuildGrid;
             binding.RefreshPickerVisuals = picker.RebuildPickerVisuals;
@@ -878,9 +878,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             ItemDatabaseSO itemDatabase,
             InventoryItemPickerSession session,
             Action onChanged,
-            Action refreshUi)
+            Action refreshUI)
         {
-            var section = InventoryEditorUiFactory.CreateSection("드롭 항목 (Entries)");
+            var section = InventoryEditorUIFactory.CreateSection("드롭 항목 (Entries)");
             section.AddToClassList(InventoryEditorStyles.CraftingSectionClass);
             section.Add(new Label("가중치 = 상대 확률(합 100일 필요 없음, 옆 % 참고) · 최소~최대 = 드롭 개수(아이템 스택 상한 적용)")
             {
@@ -905,10 +905,10 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                         index,
                         entries[i],
                         onChanged,
-                        refreshUi));
+                        refreshUI));
                 }
 
-                listHost.Add(CreateEmptyLootSlot(table, itemDatabase, session, onChanged, refreshUi));
+                listHost.Add(CreateEmptyLootSlot(table, itemDatabase, session, onChanged, refreshUI));
             }
 
             RebuildList();
@@ -923,7 +923,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             int index,
             LootEntry entry,
             Action onChanged,
-            Action refreshUi)
+            Action refreshUI)
         {
             itemDatabase.TryGetItem(entry.ItemId, out ItemDefinitionSO item);
             var row = CreateEntryRowShell(session, InventoryItemPickerSession.EntriesKey, index);
@@ -947,7 +947,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
                 apply(entries[index]);
                 onChanged?.Invoke();
-                refreshUi?.Invoke();
+                refreshUI?.Invoke();
             }
 
             controls.Add(CreateSteppedIntControl("최소", entry.MinCount, 1, stackCap, value =>
@@ -969,17 +969,17 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             });
 
             row.Add(InventoryEditorVisuals.CreateEntryBody(item, entry.ItemId, 0, controls));
-            row.Add(InventoryEditorUiFactory.CreateToolbarButton("X", () =>
+            row.Add(InventoryEditorUIFactory.CreateToolbarButton("X", () =>
             {
                 RemoveLootEntry(table, index, onChanged);
-                refreshUi?.Invoke();
+                refreshUI?.Invoke();
             }));
 
-            InventoryItemPickerUi.RegisterDropTarget(row, dropped =>
+            InventoryItemPickerUI.RegisterDropTarget(row, dropped =>
             {
                 session.SetActiveSlot(InventoryItemPickerSession.EntriesKey, index);
                 ApplyLootItem(table, index, dropped.ItemId, onChanged);
-                refreshUi?.Invoke();
+                refreshUI?.Invoke();
             });
 
             return row;
@@ -1046,8 +1046,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 onCommit?.Invoke(next);
             }
 
-            var minus = InventoryEditorUiFactory.CreateToolbarButton("-", () => Commit(field.value - 1));
-            var plus = InventoryEditorUiFactory.CreateToolbarButton("+", () => Commit(field.value + 1));
+            var minus = InventoryEditorUIFactory.CreateToolbarButton("-", () => Commit(field.value - 1));
+            var plus = InventoryEditorUIFactory.CreateToolbarButton("+", () => Commit(field.value + 1));
             StopRowPointerPropagation(minus);
             StopRowPointerPropagation(plus);
             StopRowPointerPropagation(field);
@@ -1110,8 +1110,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 onCommit?.Invoke(next);
             }
 
-            var minus = InventoryEditorUiFactory.CreateToolbarButton("-", () => Commit(field.value - 1f));
-            var plus = InventoryEditorUiFactory.CreateToolbarButton("+", () => Commit(field.value + 1f));
+            var minus = InventoryEditorUIFactory.CreateToolbarButton("-", () => Commit(field.value - 1f));
+            var plus = InventoryEditorUIFactory.CreateToolbarButton("+", () => Commit(field.value + 1f));
             StopRowPointerPropagation(minus);
             StopRowPointerPropagation(plus);
             StopRowPointerPropagation(field);
@@ -1140,7 +1140,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             ItemDatabaseSO itemDatabase,
             InventoryItemPickerSession session,
             Action onChanged,
-            Action refreshUi)
+            Action refreshUI)
         {
             var row = CreateEntryRowShell(session, InventoryItemPickerSession.EntriesKey, -1);
             row.AddToClassList(InventoryEditorStyles.EntrySlotEmptyClass);
@@ -1155,11 +1155,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             body.Add(hint);
             row.Add(body);
 
-            InventoryItemPickerUi.RegisterDropTarget(row, dropped =>
+            InventoryItemPickerUI.RegisterDropTarget(row, dropped =>
             {
                 session.SetActiveSlot(InventoryItemPickerSession.EntriesKey, -1);
                 ApplyLootItem(table, -1, dropped.ItemId, onChanged);
-                refreshUi?.Invoke();
+                refreshUI?.Invoke();
             });
 
             return row;
@@ -1246,9 +1246,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 onCommit?.Invoke(value);
             }
 
-            var minus = InventoryEditorUiFactory.CreateToolbarButton("-", () => Commit(field.value - 1));
-            var plus = InventoryEditorUiFactory.CreateToolbarButton("+", () => Commit(field.value + 1));
-            var remove = InventoryEditorUiFactory.CreateToolbarButton("X", onRemove);
+            var minus = InventoryEditorUIFactory.CreateToolbarButton("-", () => Commit(field.value - 1));
+            var plus = InventoryEditorUIFactory.CreateToolbarButton("+", () => Commit(field.value + 1));
+            var remove = InventoryEditorUIFactory.CreateToolbarButton("X", onRemove);
             StopRowPointerPropagation(minus);
             StopRowPointerPropagation(plus);
             StopRowPointerPropagation(remove);
@@ -1605,11 +1605,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         private static VisualElement BuildImGuiArrayFallback(SerializedObject serializedObject, string propertyName, Action onChanged)
         {
-            var section = InventoryEditorUiFactory.CreateSection(propertyName);
+            var section = InventoryEditorUIFactory.CreateSection(propertyName);
             var imgui = new IMGUIContainer(() =>
             {
                 serializedObject.Update();
-                SerializedProperty property = InventoryEditorUiFactory.FindSerializedProperty(serializedObject, propertyName);
+                SerializedProperty property = InventoryEditorUIFactory.FindSerializedProperty(serializedObject, propertyName);
                 if (property == null)
                     return;
 

@@ -7,7 +7,7 @@ using UnityEngine.UIElements;
 namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
 {
     /// <summary>게임플레이 태그 계층을 표시·선택하는 UIElements 트리 뷰입니다.</summary>
-    internal sealed class GameplayTagTreeViewUi : VisualElement
+    internal sealed class GameplayTagTreeViewUI : VisualElement
     {
         public event Action<GameplayTag> TagSelected;
         public event Action<GameplayTag> TagInspected;
@@ -35,7 +35,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
 
         public IReadOnlyCollection<string> SelectedTagNames => selectedTagNames;
 
-        public GameplayTagTreeViewUi(GameplayTagTreeSelectionMode mode)
+        public GameplayTagTreeViewUI(GameplayTagTreeSelectionMode mode)
         {
             selectionMode = mode;
             style.flexGrow = 1;

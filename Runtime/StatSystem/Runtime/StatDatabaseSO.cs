@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
-    [CreateAssetMenu(fileName = "SO_StatDatabase", menuName = "SO/StatSystem/StatDatabase")]
+    [CreateAssetMenu(fileName = "SO_StatDatabase", menuName = "PJDev/SO/StatSystem/StatDatabase")]
     public class StatDatabaseSO : ScriptableObject, IStatCatalog
     {
         [field: SerializeField] public StatSO[] Stats { get; set; } = System.Array.Empty<StatSO>();

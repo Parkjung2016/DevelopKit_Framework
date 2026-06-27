@@ -8,12 +8,12 @@ using UnityEngine.UIElements;
 
 namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 {
-    internal sealed class ContainerRulesUiBinding
+    internal sealed class ContainerRulesUIBinding
     {
         public Action RefreshCapacitySection;
     }
 
-    internal static class InventoryContainerRulesUi
+    internal static class InventoryContainerRulesUI
     {
         public static string DescribeSlotRule(InventoryConfigSO config)
         {
@@ -43,11 +43,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             SerializedObject serializedObject,
             Action onChanged,
             Action onRebuildDetail = null,
-            ContainerRulesUiBinding binding = null)
+            ContainerRulesUIBinding binding = null)
         {
             var root = new VisualElement();
             serializedObject.Update();
-            binding ??= new ContainerRulesUiBinding();
+            binding ??= new ContainerRulesUIBinding();
 
             var capacityHost = new VisualElement { name = "inv-capacity-section-host" };
 
@@ -68,8 +68,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 onChanged?.Invoke();
             }
 
-            var basics = InventoryEditorUiFactory.CreateSection("기본 설정");
-            InventoryEditorUiFactory.BindPropertyFields(
+            var basics = InventoryEditorUIFactory.CreateSection("기본 설정");
+            InventoryEditorUIFactory.BindPropertyFields(
                 basics,
                 serializedObject,
                 NotifyChanged,
@@ -91,7 +91,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             Action onChanged,
             Action onRebuildDetail)
         {
-            var section = InventoryEditorUiFactory.CreateSection("슬롯 규칙 (Slot Rule)");
+            var section = InventoryEditorUIFactory.CreateSection("슬롯 규칙 (Slot Rule)");
             section.Add(new Label(DescribeSlotRule(config))
             {
                 tooltip = "이 컨테이너 슬롯에 들어갈 수 있는 아이템 종류",
@@ -135,7 +135,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             Action onChanged,
             Action onRebuildDetail)
         {
-            var section = InventoryEditorUiFactory.CreateSection("용량 규칙 (Capacity Rule)");
+            var section = InventoryEditorUIFactory.CreateSection("용량 규칙 (Capacity Rule)");
             section.Add(new Label(DescribeCapacityRule(config))
             {
                 tooltip = "추가 가능 여부를 제한하는 규칙 (무게 또는 점유 슬롯 수)",
@@ -287,8 +287,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 onCommit?.Invoke(next);
             }
 
-            var minus = InventoryEditorUiFactory.CreateToolbarButton("-", () => Commit(field.value - 1));
-            var plus = InventoryEditorUiFactory.CreateToolbarButton("+", () => Commit(field.value + 1));
+            var minus = InventoryEditorUIFactory.CreateToolbarButton("-", () => Commit(field.value - 1));
+            var plus = InventoryEditorUIFactory.CreateToolbarButton("+", () => Commit(field.value + 1));
             field.RegisterCallback<FocusOutEvent>(_ => Commit(field.value));
             field.RegisterCallback<KeyDownEvent>(evt =>
             {
@@ -325,8 +325,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 onCommit?.Invoke(next);
             }
 
-            var minus = InventoryEditorUiFactory.CreateToolbarButton("-", () => Commit(field.value - step));
-            var plus = InventoryEditorUiFactory.CreateToolbarButton("+", () => Commit(field.value + step));
+            var minus = InventoryEditorUIFactory.CreateToolbarButton("-", () => Commit(field.value - step));
+            var plus = InventoryEditorUIFactory.CreateToolbarButton("+", () => Commit(field.value + step));
             field.RegisterCallback<FocusOutEvent>(_ => Commit(field.value));
             field.RegisterCallback<KeyDownEvent>(evt =>
             {

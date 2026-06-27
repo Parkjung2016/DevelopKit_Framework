@@ -18,7 +18,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         public void Build(VisualElement host)
         {
             Root = host;
-            InventoryEditorUiFactory.ConfigurePanelRoot(host);
+            InventoryEditorUIFactory.ConfigurePanelRoot(host);
             Refresh();
         }
 

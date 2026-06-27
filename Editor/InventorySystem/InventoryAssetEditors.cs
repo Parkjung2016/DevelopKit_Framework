@@ -15,12 +15,12 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             var root = new VisualElement();
             var setup = (InventorySetupSO)target;
 
-            root.Add(InventoryInspectorUi.BuildHeader(
+            root.Add(InventoryInspectorUI.BuildHeader(
                 "Inventory Setup",
                 () => InventoryDataEditorWindow.Open(setup)));
 
-            root.Add(InventoryInspectorUi.BuildFullInspector(serializedObject));
-            root.Add(InventoryEditorUiFactory.CreateToolbarButton("Open Full Editor", () => InventoryDataEditorWindow.Open(setup)));
+            root.Add(InventoryInspectorUI.BuildFullInspector(serializedObject));
+            root.Add(InventoryEditorUIFactory.CreateToolbarButton("Open Full Editor", () => InventoryDataEditorWindow.Open(setup)));
             return root;
         }
     }
@@ -37,11 +37,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             var root = new VisualElement();
             var database = (ItemDatabaseSO)target;
 
-            root.Add(InventoryInspectorUi.BuildHeader(
+            root.Add(InventoryInspectorUI.BuildHeader(
                 "Item Database",
                 () => InventoryDataEditorWindow.OpenItemDatabase(database)));
 
-            root.Add(InventoryEditorUiFactory.CreateToolbarButton("Rebuild Cache", () =>
+            root.Add(InventoryEditorUIFactory.CreateToolbarButton("Rebuild Cache", () =>
             {
                 database.RebuildCache();
                 EditorUtility.SetDirty(database);
@@ -55,7 +55,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             root.Add(panelHost);
             RebuildPanel();
 
-            root.TrackPropertyValue(InventoryEditorUiFactory.FindSerializedProperty(serializedObject, "Items"), _ => RebuildPanel());
+            root.TrackPropertyValue(InventoryEditorUIFactory.FindSerializedProperty(serializedObject, "Items"), _ => RebuildPanel());
             return root;
         }
 
@@ -74,12 +74,12 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             var root = new VisualElement();
             var item = (ItemDefinitionSO)target;
 
-            root.Add(InventoryInspectorUi.BuildHeader("Item Definition", () => InventoryDataEditorNavigation.OpenAsset(item)));
+            root.Add(InventoryInspectorUI.BuildHeader("Item Definition", () => InventoryDataEditorNavigation.OpenAsset(item)));
             root.Add(InventoryCollectionToolbar.BuildDetailActions(
                 item,
                 () => Duplicate(item),
                 () => Delete(item)));
-            root.Add(InventoryInspectorUi.BuildItemDefinitionInspector(serializedObject, () =>
+            root.Add(InventoryInspectorUI.BuildItemDefinitionInspector(serializedObject, () =>
             {
                 serializedObject.ApplyModifiedProperties();
                 EditorUtility.SetDirty(target);
@@ -119,11 +119,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             var root = new VisualElement();
             var database = (RecipeDatabaseSO)target;
 
-            root.Add(InventoryInspectorUi.BuildHeader(
+            root.Add(InventoryInspectorUI.BuildHeader(
                 "Recipe Database",
                 () => InventoryDataEditorWindow.OpenRecipeDatabase(database)));
 
-            root.Add(InventoryEditorUiFactory.CreateToolbarButton("Rebuild Cache", () =>
+            root.Add(InventoryEditorUIFactory.CreateToolbarButton("Rebuild Cache", () =>
             {
                 database.RebuildCache();
                 EditorUtility.SetDirty(database);
@@ -137,7 +137,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             root.Add(panelHost);
             RebuildPanel();
 
-            root.TrackPropertyValue(InventoryEditorUiFactory.FindSerializedProperty(serializedObject, "Recipes"), _ => RebuildPanel());
+            root.TrackPropertyValue(InventoryEditorUIFactory.FindSerializedProperty(serializedObject, "Recipes"), _ => RebuildPanel());
             return root;
         }
 
@@ -162,7 +162,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             var root = new VisualElement();
             var recipe = (RecipeSO)target;
 
-            root.Add(InventoryInspectorUi.BuildHeader("Recipe", () => InventoryDataEditorNavigation.OpenAsset(recipe)));
+            root.Add(InventoryInspectorUI.BuildHeader("Recipe", () => InventoryDataEditorNavigation.OpenAsset(recipe)));
             root.Add(InventoryCollectionToolbar.BuildDetailActions(
                 recipe,
                 () => Duplicate(recipe),
@@ -198,7 +198,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             var recipe = (RecipeSO)target;
             SerializedObject serializedObject = new SerializedObject(recipe);
 
-            VisualElement scroll = InventoryEditorUiFactory.BeginDetailPanel(detailHost);
+            VisualElement scroll = InventoryEditorUIFactory.BeginDetailPanel(detailHost);
             detailScroll = scroll as ScrollView;
 
             scroll.Add(InventoryItemEntryEditors.BuildRecipeDetail(
@@ -250,11 +250,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             var root = new VisualElement();
             var database = (LootTableDatabaseSO)target;
 
-            root.Add(InventoryInspectorUi.BuildHeader(
+            root.Add(InventoryInspectorUI.BuildHeader(
                 "Loot Table Database",
                 () => InventoryDataEditorWindow.OpenLootDatabase(database)));
 
-            root.Add(InventoryEditorUiFactory.CreateToolbarButton("Rebuild Cache", () =>
+            root.Add(InventoryEditorUIFactory.CreateToolbarButton("Rebuild Cache", () =>
             {
                 database.RebuildCache();
                 EditorUtility.SetDirty(database);
@@ -268,7 +268,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             root.Add(panelHost);
             RebuildPanel();
 
-            root.TrackPropertyValue(InventoryEditorUiFactory.FindSerializedProperty(serializedObject, "Tables"), _ => RebuildPanel());
+            root.TrackPropertyValue(InventoryEditorUIFactory.FindSerializedProperty(serializedObject, "Tables"), _ => RebuildPanel());
             return root;
         }
 
@@ -293,7 +293,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             var root = new VisualElement();
             var table = (LootTableSO)target;
 
-            root.Add(InventoryInspectorUi.BuildHeader("Loot Table", () => InventoryDataEditorNavigation.OpenAsset(table)));
+            root.Add(InventoryInspectorUI.BuildHeader("Loot Table", () => InventoryDataEditorNavigation.OpenAsset(table)));
             root.Add(InventoryCollectionToolbar.BuildDetailActions(
                 table,
                 () => Duplicate(table),
@@ -329,7 +329,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             var table = (LootTableSO)target;
             SerializedObject serializedObject = new SerializedObject(table);
 
-            VisualElement scroll = InventoryEditorUiFactory.BeginDetailPanel(detailHost);
+            VisualElement scroll = InventoryEditorUIFactory.BeginDetailPanel(detailHost);
             detailScroll = scroll as ScrollView;
 
             scroll.Add(InventoryItemEntryEditors.BuildLootDetail(
@@ -384,14 +384,14 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             root.Clear();
             var config = (InventoryConfigSO)target;
 
-            root.Add(InventoryInspectorUi.BuildHeader("Container Config", () => InventoryDataEditorNavigation.OpenAsset(config)));
+            root.Add(InventoryInspectorUI.BuildHeader("Container Config", () => InventoryDataEditorNavigation.OpenAsset(config)));
             root.Add(InventoryCollectionToolbar.BuildDetailActions(
                 config,
                 () => Duplicate(config),
                 () => Delete(config)));
 
             SerializedObject so = serializedObject;
-            root.Add(InventoryContainerRulesUi.Build(
+            root.Add(InventoryContainerRulesUI.Build(
                 config,
                 so,
                 Apply,

@@ -13,7 +13,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
     {
         private static GameplayTagPickerWindow instance;
 
-        private GameplayTagTreeViewUi treeView;
+        private GameplayTagTreeViewUI treeView;
         private GameplayTagSourceFilePanel sourceFilePanel;
         private ToolbarSearchField searchField;
         private Label descriptionLabel;
@@ -104,7 +104,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             sourceFilePanel.style.flexShrink = 0;
             root.Add(sourceFilePanel);
 
-            treeView = new GameplayTagTreeViewUi(
+            treeView = new GameplayTagTreeViewUI(
                 multiSelect ? GameplayTagTreeSelectionMode.PickerMulti : GameplayTagTreeSelectionMode.PickerSingle);
             treeView.AddToClassList(GameplayTagEditorStyles.TreePaneClass);
             treeView.style.flexGrow = 1;

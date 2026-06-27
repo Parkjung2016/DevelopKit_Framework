@@ -22,12 +22,12 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 return;
             }
 
-            Root.Add(InventoryInspectorUi.BuildHeader(
+            Root.Add(InventoryInspectorUI.BuildHeader(
                 Context.Setup.name,
                 () => InventoryDataEditorWindow.Open(Context.Setup)));
 
             SerializedObject setupObject = new SerializedObject(Context.Setup);
-            Root.Add(InventoryInspectorUi.BuildPropertyInspector(
+            Root.Add(InventoryInspectorUI.BuildPropertyInspector(
                 setupObject,
                 () => Context.MarkDirty(Context.Setup),
                 "ContainerConfigs"));
@@ -78,13 +78,13 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             actions.style.flexWrap = Wrap.Wrap;
             actions.style.marginTop = 12;
 
-            actions.Add(InventoryEditorUiFactory.CreateToolbarButton("Create All DBs", () =>
+            actions.Add(InventoryEditorUIFactory.CreateToolbarButton("Create All DBs", () =>
             {
                 InventoryEditorAssetActions.CreateAndAssignDatabases(Context);
                 Refresh();
             }));
 
-            actions.Add(InventoryEditorUiFactory.CreateToolbarButton("Rebuild All Caches", () =>
+            actions.Add(InventoryEditorUIFactory.CreateToolbarButton("Rebuild All Caches", () =>
             {
                 Context.ItemDatabase?.RebuildCache();
                 Context.RecipeDatabase?.RebuildCache();
@@ -93,7 +93,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 Refresh();
             }));
 
-            var deleteSetup = InventoryEditorUiFactory.CreateToolbarButton("Delete Setup Asset", DeleteSetupAsset);
+            var deleteSetup = InventoryEditorUIFactory.CreateToolbarButton("Delete Setup Asset", DeleteSetupAsset);
             deleteSetup.AddToClassList("inv-btn-danger");
             actions.Add(deleteSetup);
 
@@ -143,8 +143,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             field.RegisterValueChangedCallback(evt => assign?.Invoke(evt.newValue as T));
             row.Add(field);
 
-            row.Add(InventoryEditorUiFactory.CreateToolbarButton("New", createNew));
-            row.Add(InventoryEditorUiFactory.CreateToolbarButton("Ping", () =>
+            row.Add(InventoryEditorUIFactory.CreateToolbarButton("New", createNew));
+            row.Add(InventoryEditorUIFactory.CreateToolbarButton("Ping", () =>
             {
                 if (field.value != null)
                     EditorGUIUtility.PingObject(field.value);

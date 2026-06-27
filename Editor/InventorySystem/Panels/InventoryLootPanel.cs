@@ -40,9 +40,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 return;
             }
 
-            var split = InventoryEditorUiFactory.CreateSplitView(280);
+            var split = InventoryEditorUIFactory.CreateSplitView(280);
             Root.Add(split);
-            (listHost, detailHost) = InventoryEditorUiFactory.GetSplit(split);
+            (listHost, detailHost) = InventoryEditorUIFactory.GetSplit(split);
 
             listHost.Add(BuildListToolbar());
             listHost.Add(new ScrollView { name = "loot-list-scroll", style = { flexGrow = 1 } });
@@ -79,7 +79,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 Refresh();
             });
             header.Add(dbField);
-            header.Add(InventoryEditorUiFactory.CreateSearchField("Search id / name", value =>
+            header.Add(InventoryEditorUIFactory.CreateSearchField("Search id / name", value =>
             {
                 search = value;
                 RebuildList();
@@ -134,7 +134,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             if (scroll == null)
                 return;
 
-            InventoryEditorUiFactory.RunPreserveScroll(scroll, () =>
+            InventoryEditorUIFactory.RunPreserveScroll(scroll, () =>
             {
                 scroll.Clear();
                 LootTableSO[] tables = GetTables();
@@ -184,10 +184,10 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 return;
             }
 
-            VisualElement detail = InventoryEditorUiFactory.BeginDetailPanel(detailHost);
+            VisualElement detail = InventoryEditorUIFactory.BeginDetailPanel(detailHost);
             detailScroll = detail as ScrollView;
 
-            detail.Add(InventoryInspectorUi.BuildHeader(table.TableId ?? table.name));
+            detail.Add(InventoryInspectorUI.BuildHeader(table.TableId ?? table.name));
             detail.Add(InventoryCollectionToolbar.BuildDetailActions(table, DuplicateSelectedTable, DeleteSelectedAsset));
 
             if (detailTable != table)
@@ -207,18 +207,18 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             detailBinding.DetailScroll = detailScroll;
         }
 
-        private void RefreshLootDetailUi() => detailBinding?.RefreshStructure();
+        private void RefreshLootDetailUI() => detailBinding?.RefreshStructure();
 
         private void OnTableChanged(SerializedObject serializedObject, LootTableSO table)
         {
             serializedObject.Update();
             serializedObject.ApplyModifiedProperties();
             InventoryEditorAssetNaming.SyncLootFileName(table);
-            InventoryEditorUiFactory.ApplyAssetChanges(table);
+            InventoryEditorUIFactory.ApplyAssetChanges(table);
             if (Context.LootTableDatabase != null)
             {
                 Context.LootTableDatabase.RebuildCache();
-                InventoryEditorUiFactory.ApplyAssetChanges(Context.LootTableDatabase);
+                InventoryEditorUIFactory.ApplyAssetChanges(Context.LootTableDatabase);
             }
 
             RebuildList();

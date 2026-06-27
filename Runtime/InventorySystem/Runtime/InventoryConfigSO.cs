@@ -16,7 +16,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         SlotCount = 2
     }
 
-    [CreateAssetMenu(fileName = "SO_InventoryConfig", menuName = "SO/InventorySystem/Config")]
+    [CreateAssetMenu(fileName = "SO_InventoryConfig", menuName = "PJDev/SO/InventorySystem/Config")]
     public class InventoryConfigSO : ScriptableObject
     {
         [field: SerializeField] public string ContainerId { get; set; } = "main";

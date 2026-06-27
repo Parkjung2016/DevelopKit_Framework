@@ -1,0 +1,26 @@
+{
+    "name": "PJDev.DevelopKit.Framework.UISystem.Tests",
+    "rootNamespace": "PJDev.DevelopKit.Framework.UISystem.Tests",
+    "references": [
+        "GUID:b3e4f5a6c7d8490e9f1a2b3c4d5e6f7a",
+        "GUID:406d82ec2f4cd104699d60414ec8fcdb",
+        "GUID:27619889b8ba8c24980f49ee34dbb44a",
+        "GUID:0acc523941302664db1f4e527237feb3",
+        "GUID:e0cd26848372d4e5c891c569017e11f1"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

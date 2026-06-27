@@ -28,9 +28,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 return;
             }
 
-            var split = InventoryEditorUiFactory.CreateSplitView(260);
+            var split = InventoryEditorUIFactory.CreateSplitView(260);
             Root.Add(split);
-            (listHost, detailHost) = InventoryEditorUiFactory.GetSplit(split);
+            (listHost, detailHost) = InventoryEditorUIFactory.GetSplit(split);
 
             listHost.Add(BuildListToolbar());
             listHost.Add(new ScrollView { name = "container-list-scroll", style = { flexGrow = 1 } });
@@ -118,7 +118,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 fontSize: 11));
 
             var ruleLabel = InventoryEditorVisuals.CreateEllipsisLabel(
-                $"슬롯: {InventoryContainerRulesUi.DescribeSlotRule(config)} · 용량: {InventoryContainerRulesUi.DescribeCapacityRule(config)}",
+                $"슬롯: {InventoryContainerRulesUI.DescribeSlotRule(config)} · 용량: {InventoryContainerRulesUI.DescribeCapacityRule(config)}",
                 fontSize: 10);
             ruleLabel.style.opacity = 0.72f;
             ruleLabel.style.marginTop = 1;
@@ -138,20 +138,20 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 return;
             }
 
-            VisualElement detail = InventoryEditorUiFactory.BeginDetailPanel(detailHost);
+            VisualElement detail = InventoryEditorUIFactory.BeginDetailPanel(detailHost);
             detailScroll = detail as ScrollView;
-            detail.Add(InventoryInspectorUi.BuildHeader(config.ContainerId ?? config.name));
+            detail.Add(InventoryInspectorUI.BuildHeader(config.ContainerId ?? config.name));
             detail.Add(InventoryCollectionToolbar.BuildDetailActions(config, DuplicateSelectedConfig, DeleteSelectedAsset));
 
             SerializedObject serializedObject = new SerializedObject(config);
-            detail.Add(InventoryContainerRulesUi.Build(
+            detail.Add(InventoryContainerRulesUI.Build(
                 config,
                 serializedObject,
                 () =>
                 {
                     serializedObject.ApplyModifiedProperties();
                     InventoryEditorAssetNaming.SyncContainerFileName(config);
-                    InventoryEditorUiFactory.ApplyAssetChanges(config);
+                    InventoryEditorUIFactory.ApplyAssetChanges(config);
                     RebuildList();
                     InventoryEditorVisuals.RefreshDetailHeaderTitle(detailScroll, config.ContainerId ?? config.name);
                 },

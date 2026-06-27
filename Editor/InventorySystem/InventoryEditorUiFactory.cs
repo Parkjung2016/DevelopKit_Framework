@@ -9,7 +9,7 @@ using UnityEngine.UIElements;
 
 namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 {
-    internal static class InventoryEditorUiFactory
+    internal static class InventoryEditorUIFactory
     {
         public static ToolbarSearchField CreateSearchField(string placeholder, Action<string> onChanged)
         {
@@ -504,7 +504,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         private static Button WrapButton(string text, Action onClick, Func<bool> enabled = null)
         {
-            var button = InventoryEditorUiFactory.CreateToolbarButton(text, () =>
+            var button = InventoryEditorUIFactory.CreateToolbarButton(text, () =>
             {
                 if (enabled == null || enabled())
                     onClick?.Invoke();
@@ -520,7 +520,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         }
     }
 
-    internal static class InventoryInspectorUi
+    internal static class InventoryInspectorUI
     {
         public static VisualElement BuildHeader(string title, Action openDataEditor = null)
         {
@@ -536,7 +536,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
             if (openDataEditor != null)
             {
-                var button = InventoryEditorUiFactory.CreateToolbarButton("Open Data Editor", openDataEditor);
+                var button = InventoryEditorUIFactory.CreateToolbarButton("Open Data Editor", openDataEditor);
                 row.Add(button);
             }
 
@@ -580,7 +580,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             params string[] propertyNames)
         {
             var root = new VisualElement();
-            InventoryEditorUiFactory.BindPropertyFields(root, serializedObject, onChanged, propertyNames);
+            InventoryEditorUIFactory.BindPropertyFields(root, serializedObject, onChanged, propertyNames);
             return root;
         }
 
@@ -594,7 +594,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             PropertyField maxStackField = null;
 
             void RefreshMaxStackState() =>
-                InventoryEditorUiFactory.ApplyStackableMaxStackState(maxStackField, serializedObject);
+                InventoryEditorUIFactory.ApplyStackableMaxStackState(maxStackField, serializedObject);
 
             Action notify = () =>
             {
@@ -602,17 +602,17 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 RefreshMaxStackState();
             };
 
-            InventoryEditorUiFactory.AddBoundPropertyField(root, serializedObject, "ItemId", notify);
-            InventoryEditorUiFactory.AddBoundPropertyField(root, serializedObject, "DisplayName", notify);
-            InventoryEditorUiFactory.AddBoundPropertyField(root, serializedObject, "Description", notify);
-            InventoryEditorUiFactory.AddBoundPropertyField(root, serializedObject, "Icon", notify);
-            InventoryEditorUiFactory.AddBoundPropertyField(root, serializedObject, "ItemType", notify);
-            InventoryEditorUiFactory.AddBoundPropertyField(root, serializedObject, "IsStackable", notify);
-            maxStackField = InventoryEditorUiFactory.AddBoundPropertyField(root, serializedObject, "MaxStackSize", notify);
-            InventoryEditorUiFactory.AddBoundPropertyField(root, serializedObject, "CanDrop", notify);
-            InventoryEditorUiFactory.AddBoundPropertyField(root, serializedObject, "CanTrade", notify);
-            InventoryEditorUiFactory.AddBoundPropertyField(root, serializedObject, "Weight", notify);
-            InventoryEditorUiFactory.AddBoundPropertyField(root, serializedObject, "Tags", notify);
+            InventoryEditorUIFactory.AddBoundPropertyField(root, serializedObject, "ItemId", notify);
+            InventoryEditorUIFactory.AddBoundPropertyField(root, serializedObject, "DisplayName", notify);
+            InventoryEditorUIFactory.AddBoundPropertyField(root, serializedObject, "Description", notify);
+            InventoryEditorUIFactory.AddBoundPropertyField(root, serializedObject, "Icon", notify);
+            InventoryEditorUIFactory.AddBoundPropertyField(root, serializedObject, "ItemType", notify);
+            InventoryEditorUIFactory.AddBoundPropertyField(root, serializedObject, "IsStackable", notify);
+            maxStackField = InventoryEditorUIFactory.AddBoundPropertyField(root, serializedObject, "MaxStackSize", notify);
+            InventoryEditorUIFactory.AddBoundPropertyField(root, serializedObject, "CanDrop", notify);
+            InventoryEditorUIFactory.AddBoundPropertyField(root, serializedObject, "CanTrade", notify);
+            InventoryEditorUIFactory.AddBoundPropertyField(root, serializedObject, "Weight", notify);
+            InventoryEditorUIFactory.AddBoundPropertyField(root, serializedObject, "Tags", notify);
 
             RefreshMaxStackState();
             return root;

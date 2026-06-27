@@ -38,9 +38,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 return;
             }
 
-            var split = InventoryEditorUiFactory.CreateSplitView(300);
+            var split = InventoryEditorUIFactory.CreateSplitView(300);
             Root.Add(split);
-            (listHost, detailHost) = InventoryEditorUiFactory.GetSplit(split);
+            (listHost, detailHost) = InventoryEditorUIFactory.GetSplit(split);
 
             listHost.Add(BuildListToolbar());
             listHost.Add(new ScrollView { name = "item-list-scroll", style = { flexGrow = 1 } });
@@ -77,7 +77,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 Refresh();
             });
             header.Add(dbField);
-            header.Add(InventoryEditorUiFactory.CreateSearchField("Search id / name / tag", value =>
+            header.Add(InventoryEditorUIFactory.CreateSearchField("Search id / name / tag", value =>
             {
                 search = value;
                 RebuildList();
@@ -126,7 +126,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             if (scroll == null)
                 return;
 
-            InventoryEditorUiFactory.RunPreserveScroll(scroll, () =>
+            InventoryEditorUIFactory.RunPreserveScroll(scroll, () =>
             {
                 scroll.Clear();
                 ItemDefinitionSO[] items = GetItems();
@@ -174,14 +174,14 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 return;
             }
 
-            VisualElement detail = InventoryEditorUiFactory.BeginDetailPanel(detailHost);
+            VisualElement detail = InventoryEditorUIFactory.BeginDetailPanel(detailHost);
             detailScroll = detail as ScrollView;
-            detail.Add(InventoryInspectorUi.BuildHeader(item.DisplayName ?? item.name));
+            detail.Add(InventoryInspectorUI.BuildHeader(item.DisplayName ?? item.name));
             detail.Add(InventoryEditorVisuals.CreateHeroPreview(item, item.ItemId));
             detail.Add(InventoryCollectionToolbar.BuildDetailActions(item, DuplicateSelectedItem, DeleteSelectedAsset));
 
             SerializedObject serializedObject = new SerializedObject(item);
-            detail.Add(InventoryInspectorUi.BuildItemDefinitionInspector(
+            detail.Add(InventoryInspectorUI.BuildItemDefinitionInspector(
                 serializedObject,
                 () => OnItemChanged(item, serializedObject)));
         }
@@ -190,11 +190,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
         {
             serializedObject.ApplyModifiedProperties();
             InventoryEditorAssetNaming.SyncItemFileName(item);
-            InventoryEditorUiFactory.ApplyAssetChanges(item);
+            InventoryEditorUIFactory.ApplyAssetChanges(item);
             if (Context.ItemDatabase != null)
             {
                 Context.ItemDatabase.RebuildCache();
-                InventoryEditorUiFactory.ApplyAssetChanges(Context.ItemDatabase);
+                InventoryEditorUIFactory.ApplyAssetChanges(Context.ItemDatabase);
             }
 
             RebuildList();

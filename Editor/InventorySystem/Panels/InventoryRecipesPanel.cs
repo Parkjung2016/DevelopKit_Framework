@@ -40,9 +40,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 return;
             }
 
-            var split = InventoryEditorUiFactory.CreateSplitView(280);
+            var split = InventoryEditorUIFactory.CreateSplitView(280);
             Root.Add(split);
-            (listHost, detailHost) = InventoryEditorUiFactory.GetSplit(split);
+            (listHost, detailHost) = InventoryEditorUIFactory.GetSplit(split);
 
             listHost.Add(BuildListToolbar());
             listHost.Add(new ScrollView { name = "recipe-list-scroll", style = { flexGrow = 1 } });
@@ -79,7 +79,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 Refresh();
             });
             header.Add(dbField);
-            header.Add(InventoryEditorUiFactory.CreateSearchField("Search id / name", value =>
+            header.Add(InventoryEditorUIFactory.CreateSearchField("Search id / name", value =>
             {
                 search = value;
                 RebuildList();
@@ -134,7 +134,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             if (scroll == null)
                 return;
 
-            InventoryEditorUiFactory.RunPreserveScroll(scroll, () =>
+            InventoryEditorUIFactory.RunPreserveScroll(scroll, () =>
             {
                 scroll.Clear();
                 RecipeSO[] recipes = GetRecipes();
@@ -184,10 +184,10 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 return;
             }
 
-            VisualElement detail = InventoryEditorUiFactory.BeginDetailPanel(detailHost);
+            VisualElement detail = InventoryEditorUIFactory.BeginDetailPanel(detailHost);
             detailScroll = detail as ScrollView;
 
-            detail.Add(InventoryInspectorUi.BuildHeader(recipe.DisplayName ?? recipe.name));
+            detail.Add(InventoryInspectorUI.BuildHeader(recipe.DisplayName ?? recipe.name));
             detail.Add(InventoryCollectionToolbar.BuildDetailActions(recipe, DuplicateSelectedRecipe, DeleteSelectedAsset));
 
             if (detailRecipe != recipe)
@@ -207,17 +207,17 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             detailBinding.DetailScroll = detailScroll;
         }
 
-        private void RefreshRecipeDetailUi() => detailBinding?.RefreshStructure();
+        private void RefreshRecipeDetailUI() => detailBinding?.RefreshStructure();
 
         private void OnRecipeChanged(SerializedObject serializedObject, RecipeSO recipe)
         {
             serializedObject.ApplyModifiedProperties();
             InventoryEditorAssetNaming.SyncRecipeFileName(recipe);
-            InventoryEditorUiFactory.ApplyAssetChanges(recipe);
+            InventoryEditorUIFactory.ApplyAssetChanges(recipe);
             if (Context.RecipeDatabase != null)
             {
                 Context.RecipeDatabase.RebuildCache();
-                InventoryEditorUiFactory.ApplyAssetChanges(Context.RecipeDatabase);
+                InventoryEditorUIFactory.ApplyAssetChanges(Context.RecipeDatabase);
             }
 
             RebuildList();
