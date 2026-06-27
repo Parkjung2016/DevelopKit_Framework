@@ -3,7 +3,9 @@
     "rootNamespace": "PJDev.DevelopKit.Framework.Editors",
     "references": [
         "GUID:cb245d9e3f5b39946b271b70d3e6cced",
-        "GUID:7f4a2b8c9d1e3f5a6b7c8d9e0f1a2b3c"
+        "GUID:7f4a2b8c9d1e3f5a6b7c8d9e0f1a2b3c",
+        "GUID:f4e8d2c6b0a9471e8c3d5f9a2b6e7c4d",
+        "GUID:406d82ec2f4cd104699d60414ec8fcdb"
     ],
     "includePlatforms": [
         "Editor"

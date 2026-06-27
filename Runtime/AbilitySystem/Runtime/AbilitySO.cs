@@ -1,6 +1,6 @@
-﻿using PJDev.DevelopKit.BasicTemplate.Runtime;
+using PJDev.DevelopKit.BasicTemplate.Runtime;
 using System;
-using BandoWare.GameplayTags;
+using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 using UnityEngine;
 using UnityEngine.InputSystem;
 

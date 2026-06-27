@@ -1,0 +1,16 @@
+{
+    "name": "PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime",
+    "rootNamespace": "PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime",
+    "references": [
+        "GUID:406d82ec2f4cd104699d60414ec8fcdb"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

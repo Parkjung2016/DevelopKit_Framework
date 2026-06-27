@@ -15,48 +15,79 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
     [CreateAssetMenu(fileName = "SO_AbilityInputBridge", menuName = "SO/GameAbility/Config/InputBridge")]
     public class AbilityInputBridgeSO : ScriptableObject
     {
-        [SerializeField] private InputActionAsset playerInput;
+        [Header("외부 주입이 없을 경우 사용할 InputActionAsset")] [SerializeField]
+        private InputActionAsset inputAsset;
+
         [SerializeField] private List<AbilityInputBridgeInfo> abilityInputBridgeInfoList;
 
-        private Dictionary<string, AbilityInputBridgeInfo> abilityInputBridgeInfoDictionary;
         private AbilitySystem abilitySystemCompo;
+        private IInputActionCollection2 inputActionCollection;
+
+        private readonly Dictionary<InputAction, Action<InputAction.CallbackContext>> callbackMap = new();
+
+        private bool isBound;
 
         public void Init(AbilitySystem abilitySystem)
         {
-            abilityInputBridgeInfoDictionary = new();
-            foreach (var abilityInputBridgeInfo in abilityInputBridgeInfoList)
-            {
-                abilityInputBridgeInfoDictionary.Add(abilityInputBridgeInfo.activationInput.action.name,
-                    abilityInputBridgeInfo);
-            }
-
             abilitySystemCompo = abilitySystem;
-            SubscribeEvent();
+
+            ResolveInputCollection();
+            Bind();
         }
 
-        private void HandleAbilityInputPerformed(InputAction.CallbackContext context)
+        public void SetInputActionCollection(IInputActionCollection2 collection)
         {
-            AbilityInputBridgeInfo inputBridgeInfo = abilityInputBridgeInfoDictionary[context.action.name];
-            abilitySystemCompo.TryActivateAbility(inputBridgeInfo.abilityToActivate, context);
+            inputActionCollection = collection;
         }
 
-
-        public void SubscribeEvent()
+        private void ResolveInputCollection()
         {
+            inputActionCollection ??= inputAsset;
+        }
+
+        public void Bind()
+        {
+            if (isBound)
+                return;
+
             foreach (var info in abilityInputBridgeInfoList)
             {
-                playerInput.FindAction(info.activationInput.action.name).performed +=
-                    HandleAbilityInputPerformed;
+                var action = info.activationInput?.action;
+                if (action == null)
+                    continue;
+
+                action.Enable();
+
+                var callback = CreateCallback(info);
+
+                callbackMap[action] = callback;
+                action.performed += callback;
             }
+
+            isBound = true;
         }
 
-        public void UnSubscribeEvent()
+        public void Unbind()
         {
-            foreach (var info in abilityInputBridgeInfoList)
+            if (isBound == false)
+                return;
+
+            foreach (var pair in callbackMap)
             {
-                playerInput.FindAction(info.activationInput.action.name).performed -=
-                    HandleAbilityInputPerformed;
+                var action = pair.Key;
+                var callback = pair.Value;
+
+                action.performed -= callback;
+                action.Disable();
             }
+
+            callbackMap.Clear();
+            isBound = false;
+        }
+
+        private Action<InputAction.CallbackContext> CreateCallback(AbilityInputBridgeInfo info)
+        {
+            return (ctx) => { abilitySystemCompo.TryActivateAbility(info.abilityToActivate, ctx); };
         }
     }
 }

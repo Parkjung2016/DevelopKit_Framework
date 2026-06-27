@@ -1,6 +1,6 @@
 using System.Collections.Generic;
-using BandoWare.GameplayTags;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
+using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -14,8 +14,9 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         [Header("초기 Ability 등록이 필요한 경우에만 사용")] [SerializeField]
         private AbilitySetupSO abilitySetup;
 
-        private Dictionary<GameplayTag, AbilitySO> abilitiyDic = new();
         [SerializeField] private GameObjectGameplayTagContainer gamePlayTagContainerCompo;
+
+        private readonly Dictionary<GameplayTag, AbilitySO> abilitiyDic = new();
 
         private IAbilitySystemOwner owner;
 
@@ -23,13 +24,16 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         {
             this.owner = owner;
             CheckAbilitySetup();
-            abilityInputBridge?.Init(this);
+            if (abilityInputBridge != null)
+            {
+                abilityInputBridge.Init(this);
+                abilityInputBridge.Bind();
+            }
         }
-
 
         private void OnDestroy()
         {
-            abilityInputBridge?.UnSubscribeEvent();
+            abilityInputBridge?.Unbind();
         }
 
         private void CheckAbilitySetup()
