@@ -19,9 +19,14 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         [SerializeField]
         private string canvasName;
 
+        [SerializeField, TextArea(2, 4)]
+        private string description;
+
         public string GroupId => groupId;
 
         public string DisplayName => string.IsNullOrEmpty(displayName) ? groupId : displayName;
+
+        public string Description => description ?? string.Empty;
 
         public int SortingOrder => sortingOrder;
 
@@ -31,14 +36,16 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             string id,
             int sortingOrder,
             string display = null,
-            string canvas = null)
+            string canvas = null,
+            string descriptionText = null)
         {
             return new UICanvasGroupDefinition
             {
                 groupId = id,
                 displayName = display ?? id,
                 sortingOrder = sortingOrder,
-                canvasName = canvas
+                canvasName = canvas,
+                description = descriptionText ?? string.Empty
             };
         }
     }

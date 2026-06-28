@@ -44,7 +44,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
 
             BuildToolbar(root);
 
-            splitView = new GameplayTagSplitView(320f);
+            splitView = new GameplayTagSplitView();
             splitView.style.flexGrow = 1;
             splitView.style.flexShrink = 1;
             splitView.style.minHeight = 0;

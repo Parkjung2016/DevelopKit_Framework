@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -15,7 +17,18 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             if (string.IsNullOrEmpty(layerId))
                 return null;
 
-            return rootsByLayerId.TryGetValue(layerId, out RectTransform root) ? root : null;
+            if (TryGetStoredRoot(layerId, out RectTransform root))
+                return root;
+
+            if (registry != null
+                && string.Equals(layerId, UILayers.Screen, StringComparison.Ordinal)
+                && !registry.TryGet(UILayers.Screen, out _)
+                && TryGetStoredRoot(registry.ScreenLayerId, out root))
+            {
+                return root;
+            }
+
+            return null;
         }
 
         public Canvas GetCanvas(string groupId) =>
@@ -51,6 +64,15 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
                 rootsByLayerId[layerId] = GetOrCreateLayerRoot(canvas.transform, definition.RootName);
             }
+        }
+
+        private bool TryGetStoredRoot(string layerId, out RectTransform root)
+        {
+            if (rootsByLayerId.TryGetValue(layerId, out root) && root != null)
+                return true;
+
+            root = null;
+            return false;
         }
 
         public void SetRaycasterEnabled(string groupId, bool enabled)
@@ -109,9 +131,19 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
         private static RectTransform GetOrCreateLayerRoot(Transform canvasTransform, string rootName)
         {
+            if (string.IsNullOrEmpty(rootName))
+                return null;
+
             Transform existing = canvasTransform.Find(rootName);
             if (existing != null)
-                return existing as RectTransform;
+            {
+                if (existing is RectTransform existingRect)
+                    return existingRect;
+
+                CDebug.LogWarning(
+                    $"UI layer root '{rootName}' exists but is not a RectTransform. Creating '{rootName}UI' instead.");
+                rootName = $"{rootName}UI";
+            }
 
             GameObject rootObject = new GameObject(rootName, typeof(RectTransform));
             RectTransform rect = rootObject.GetComponent<RectTransform>();

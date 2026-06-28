@@ -20,6 +20,6 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         public string CanvasName { get; }
 
         public UICanvasGroupDefinition ToDefinition() =>
-            UICanvasGroupDefinition.Create(GroupId, SortingOrder, GroupId, CanvasName);
+            UICanvasGroupDefinition.Create(GroupId, SortingOrder, GroupId, CanvasName, Description);
     }
 }

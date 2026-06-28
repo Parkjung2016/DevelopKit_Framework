@@ -1,10 +1,10 @@
 {
   "name": "com.pjdev.developkit.framework",
   "displayName": "DevelopKit Framework",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "unity": "2021.0",
   "unityRelease": "1f1",
-  "description": "Provides frameworks such as StatSystem, AbilitySystem, InventorySystem, and GameplayTagSystem.",
+  "description": "Provides core frameworks such as StatSystem and AbilitySystem.",
   "author": {
     "name": "PJDev",
     "email": "bagj21563@gmail.com"

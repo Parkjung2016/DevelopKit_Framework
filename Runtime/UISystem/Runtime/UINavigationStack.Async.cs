@@ -13,7 +13,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             UIScreenBase current = Peek;
             if (current != null && current != screen)
-                await current.HideAsync(false, cancellationToken);
+                await current.Hide(false, cancellationToken);
 
             if (!screens.Contains(screen))
                 screens.Add(screen);
@@ -23,7 +23,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 screens.Add(screen);
             }
 
-            await screen.ShowAsync(context, cancellationToken);
+            await screen.Show(context, cancellationToken);
         }
     }
 }

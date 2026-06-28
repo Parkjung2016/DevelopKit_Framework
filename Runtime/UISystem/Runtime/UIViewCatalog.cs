@@ -11,6 +11,8 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         [SerializeField]
         private List<UIViewCatalogEntry> entries = new();
 
+        internal IReadOnlyList<UIViewCatalogEntry> GetEntriesForEditor() => entries;
+
         private Dictionary<string, UIViewCatalogEntry> entriesById;
         private Dictionary<Type, UIViewCatalogEntry> entriesByType;
 

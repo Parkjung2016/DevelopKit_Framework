@@ -8,19 +8,20 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
     {
         private const float SplitterWidth = 5f;
         private const float MinLeftWidth = 120f;
-        private const float MinRightWidth = 140f;
+        private const float MinRightWidth = 200f;
+        private const float DefaultRightWidth = 420f;
 
         private readonly VisualElement leftPane;
         private readonly VisualElement splitter;
         private readonly VisualElement rightPane;
         private bool isDragging;
         private int activePointerId = -1;
-        private float rightWidth = 300f;
+        private float rightWidth = DefaultRightWidth;
 
         public VisualElement LeftPane => leftPane;
         public VisualElement RightPane => rightPane;
 
-        public GameplayTagSplitView(float initialRightWidth = 300f)
+        public GameplayTagSplitView(float initialRightWidth = DefaultRightWidth)
         {
             rightWidth = initialRightWidth;
             style.flexGrow = 1;

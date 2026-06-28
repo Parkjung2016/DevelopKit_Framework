@@ -8,40 +8,100 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
     public sealed partial class UIManager
     {
         /// <summary>Addressable 로드 포함, Screen UI를 비동기로 엽니다.</summary>
-        public async UniTask<UIViewResult> OpenScreenAsync<T>(
+        public async UniTask<UIViewResult<T>> OpenScreenAsync<T>(
             object context = null,
             CancellationToken cancellationToken = default) where T : UIViewBase
         {
             EnsureLayerRoots();
 
             if (viewCatalog == null)
-                return UIViewResult.Failed("UIViewCatalog is not assigned. Call Initialize first.");
+                return UIViewResult<T>.Failed("UIViewCatalog is not assigned. Call Initialize first.");
 
             if (!viewCatalog.TryGetEntry<T>(out UIViewCatalogEntry entry))
-                return UIViewResult.Failed($"View not found in catalog: {typeof(T).Name}");
+                return UIViewResult<T>.Failed($"View not found in catalog: {typeof(T).Name}");
 
-            UIViewBase instance = await GetOrCreateInstanceAsync(entry, cancellationToken);
-            if (instance is not UIScreenBase screen)
-                return UIViewResult.Failed($"OpenScreen requires UIScreenBase: {typeof(T).Name}");
+            UIViewResult result = await OpenScreenEntryAsync(entry, context, cancellationToken);
+            if (!result.IsSuccess)
+                return UIViewResult<T>.Failed(result.ErrorMessage);
 
-            await screenStack.PushAsync(screen, context, cancellationToken);
-            TrackFloating(screen);
-            RefreshSorting();
-            return UIViewResult.Succeeded(screen);
+            if (result.Handle.View is T typedScreen)
+                return UIViewResult<T>.Succeeded(typedScreen);
+
+            return UIViewResult<T>.Failed(
+                $"View type mismatch: expected {typeof(T).Name}, got {result.Handle.View?.GetType().Name ?? "null"}");
+        }
+
+        /// <summary>뷰 ID로 Screen UI를 비동기로 엽니다.</summary>
+        public async UniTask<UIViewResult<T>> OpenScreenAsync<T>(
+            string viewId,
+            object context = null,
+            CancellationToken cancellationToken = default) where T : UIViewBase
+        {
+            UIViewResult result = await OpenScreenAsync(viewId, context, cancellationToken);
+            if (!result.IsSuccess)
+                return UIViewResult<T>.Failed(result.ErrorMessage);
+
+            if (result.Handle.View is T typedScreen)
+                return UIViewResult<T>.Succeeded(typedScreen);
+
+            return UIViewResult<T>.Failed(
+                $"View type mismatch: expected {typeof(T).Name}, got {result.Handle.View?.GetType().Name ?? "null"}");
+        }
+
+        /// <summary>뷰 ID로 Screen UI를 비동기로 엽니다.</summary>
+        public async UniTask<UIViewResult> OpenScreenAsync(
+            string viewId,
+            object context = null,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureLayerRoots();
+
+            if (viewCatalog == null)
+                return UIViewResult.Failed("UIViewCatalog is not assigned. Call Initialize first.");
+
+            if (!viewCatalog.TryGetEntry(viewId, out UIViewCatalogEntry entry))
+                return UIViewResult.Failed($"View not found: {viewId}");
+
+            return await OpenScreenEntryAsync(entry, context, cancellationToken);
         }
 
         /// <summary>Addressable 로드 포함, 팝업을 비동기로 엽니다.</summary>
-        public UniTask<UIViewResult> OpenPopupAsync<T>(
+        public UniTask<UIViewResult<T>> OpenPopupAsync<T>(
             object context = null,
             int? priority = null,
             CancellationToken cancellationToken = default) where T : UIViewBase =>
             OpenPopupAsyncInternal<T>(new UIViewOpenOptions(context, priority), cancellationToken);
 
         /// <summary>Addressable 로드 포함, 팝업을 옵션과 함께 비동기로 엽니다.</summary>
-        public UniTask<UIViewResult> OpenPopupAsync<T>(
+        public UniTask<UIViewResult<T>> OpenPopupAsync<T>(
             UIViewOpenOptions options,
             CancellationToken cancellationToken = default) where T : UIViewBase =>
             OpenPopupAsyncInternal<T>(options, cancellationToken);
+
+        /// <summary>뷰 ID로 팝업을 비동기로 엽니다.</summary>
+        public UniTask<UIViewResult<T>> OpenPopupAsync<T>(
+            string viewId,
+            object context = null,
+            int? priority = null,
+            CancellationToken cancellationToken = default) where T : UIViewBase =>
+            OpenPopupAsync<T>(viewId, new UIViewOpenOptions(context, priority), cancellationToken);
+
+        /// <summary>뷰 ID로 팝업을 옵션과 함께 비동기로 엽니다.</summary>
+        public async UniTask<UIViewResult<T>> OpenPopupAsync<T>(
+            string viewId,
+            UIViewOpenOptions options,
+            CancellationToken cancellationToken = default) where T : UIViewBase
+        {
+            UIViewResult result = await OpenPopupAsync(viewId, options, cancellationToken);
+            if (!result.IsSuccess)
+                return UIViewResult<T>.Failed(result.ErrorMessage);
+
+            if (result.Handle.View is T typedView)
+                return UIViewResult<T>.Succeeded(typedView);
+
+            return UIViewResult<T>.Failed(
+                $"View type mismatch: expected {typeof(T).Name}, got {result.Handle.View?.GetType().Name ?? "null"}");
+        }
 
         /// <summary>뷰 ID로 팝업을 비동기로 엽니다.</summary>
         public UniTask<UIViewResult> OpenPopupAsync(
@@ -69,33 +129,27 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         }
 
         /// <summary>열려 있는 UI를 비동기로 닫습니다.</summary>
-        public async UniTask CloseAsync(IUIView view, bool immediate = false, CancellationToken cancellationToken = default)
+        public async UniTask CloseAsync(IUIView view, bool immediate = false,
+            CancellationToken cancellationToken = default)
         {
-            if (view == null)
+            if (!IsViewAlive(view))
+            {
+                PurgeDeadReferences();
                 return;
+            }
+
+            await view.Hide(immediate, cancellationToken);
 
             if (view is UIScreenBase screen)
             {
-                if (view is UIViewBase screenView)
-                    await screenView.HideAsync(immediate, cancellationToken);
-                else
-                    view.Hide(immediate);
-
                 if (ReferenceEquals(screenStack.Peek, screen))
                     screenStack.PopSilently();
                 else
                     screenStack.Remove(screen, hide: false);
             }
-            else if (view is UIViewBase viewBase)
-            {
-                await viewBase.HideAsync(immediate, cancellationToken);
-            }
-            else
-            {
-                view.Hide(immediate);
-            }
 
             UntrackFloating(view);
+            TryReleaseInstance(view as UIViewBase);
             RefreshSorting();
         }
 
@@ -105,15 +159,36 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         {
             if (viewCatalog != null && viewCatalog.TryGetEntry<T>(out UIViewCatalogEntry entry))
             {
-                if (instancesById.TryGetValue(entry.ViewId, out UIViewBase instance))
+                if (entry.AllowMultipleInstances)
+                {
+                    await CloseAllOfViewIdAsync(entry.ViewId, immediate, cancellationToken);
+                    return;
+                }
+
+                if (UIViewInstanceCache.TryGetAlive(instancesById, entry.ViewId, out UIViewBase instance))
                 {
                     await CloseAsync(instance, immediate, cancellationToken);
                     return;
                 }
             }
 
-            if (instancesById.TryGetValue(typeof(T).Name, out UIViewBase fallback))
+            if (UIViewInstanceCache.TryGetAlive(instancesById, typeof(T).Name, out UIViewBase fallback))
                 await CloseAsync(fallback, immediate, cancellationToken);
+        }
+
+        /// <summary>뷰 ID로 열려 있는 UI를 모두 비동기로 닫습니다.</summary>
+        public async UniTask<int> CloseAllOfViewIdAsync(
+            string viewId,
+            bool immediate = false,
+            CancellationToken cancellationToken = default)
+        {
+            CollectByViewId(viewId, closeBuffer);
+            for (int i = closeBuffer.Count - 1; i >= 0; i--)
+                await CloseAsync(closeBuffer[i], immediate, cancellationToken);
+
+            int closed = closeBuffer.Count;
+            closeBuffer.Clear();
+            return closed;
         }
 
         /// <summary>지정 레이어 ID의 열려 있는 UI를 비동기로 모두 닫습니다.</summary>
@@ -133,13 +208,12 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 while (screenStack.Peek != null)
                 {
                     UIScreenBase top = screenStack.Peek;
-                    if (top is UIViewBase viewBase)
-                        await viewBase.HideAsync(immediate, cancellationToken);
-                    else
-                        top.Hide(immediate);
+
+                    await top.Hide(immediate, cancellationToken);
 
                     screenStack.PopSilently();
                     UntrackFloating(top);
+                    TryReleaseInstance(top);
                 }
 
                 RefreshSorting();
@@ -191,19 +265,42 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             return closed;
         }
 
-        private async UniTask<UIViewResult> OpenPopupAsyncInternal<T>(
+        private async UniTask<UIViewResult<T>> OpenPopupAsyncInternal<T>(
             UIViewOpenOptions options,
             CancellationToken cancellationToken) where T : UIViewBase
         {
             EnsureLayerRoots();
 
             if (viewCatalog == null)
-                return UIViewResult.Failed("UIViewCatalog is not assigned. Call Initialize first.");
+                return UIViewResult<T>.Failed("UIViewCatalog is not assigned. Call Initialize first.");
 
             if (!viewCatalog.TryGetEntry<T>(out UIViewCatalogEntry entry))
-                return UIViewResult.Failed($"View not found in catalog: {typeof(T).Name}");
+                return UIViewResult<T>.Failed($"View not found in catalog: {typeof(T).Name}");
 
-            return await OpenInstanceAsync(entry, options, cancellationToken);
+            UIViewResult result = await OpenInstanceAsync(entry, options, cancellationToken);
+            if (!result.IsSuccess)
+                return UIViewResult<T>.Failed(result.ErrorMessage);
+
+            if (result.Handle.View is T typedView)
+                return UIViewResult<T>.Succeeded(typedView);
+
+            return UIViewResult<T>.Failed(
+                $"View type mismatch: expected {typeof(T).Name}, got {result.Handle.View?.GetType().Name ?? "null"}");
+        }
+
+        private async UniTask<UIViewResult> OpenScreenEntryAsync(
+            UIViewCatalogEntry entry,
+            object context,
+            CancellationToken cancellationToken)
+        {
+            UIViewBase instance = await GetOrCreateInstanceAsync(entry, cancellationToken);
+            if (instance is not UIScreenBase screen)
+                return UIViewResult.Failed($"OpenScreen requires UIScreenBase: {entry.ViewId}");
+
+            await screenStack.PushAsync(screen, context, cancellationToken);
+            TrackFloating(screen);
+            RefreshSorting();
+            return UIViewResult.Succeeded(screen);
         }
 
         private async UniTask<UIViewResult> OpenInstanceAsync(
@@ -216,7 +313,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 return UIViewResult.Failed($"Failed to create view: {entry.ViewId}");
 
             ApplyOpenOptions(instance, options);
-            await instance.ShowAsync(options.Context, cancellationToken);
+            await instance.Show(options.Context, cancellationToken);
             TrackFloating(instance);
             RefreshSorting();
             return UIViewResult.Succeeded(instance);
@@ -236,7 +333,9 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             string layerId = entry.Prefab != null ? entry.Prefab.LayerId : UILayers.Popup;
             RectTransform parent = layerRoots.GetRoot(layerId, layerRegistry);
-            return await UIViewInstanceFactory.GetOrCreateAsync(entry, parent, instancesById, cancellationToken);
+            PurgeDeadReferences();
+            return await UIViewInstanceFactory.GetOrCreateAsync(
+                entry, parent, instancesById, duplicatePoolsByViewId, cancellationToken);
         }
     }
 }

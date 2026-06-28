@@ -52,6 +52,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 ? settings.Layers
                 : UISystemBuiltIn.CreateLayerDefinitions();
 
+            string screenStackCandidate = null;
             for (int i = 0; i < source.Count; i++)
             {
                 UILayerDefinition definition = source[i];
@@ -73,8 +74,10 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 groupLayers.Add(definition.LayerId);
 
                 if (definition.UseScreenStack)
-                    screenLayerId = definition.LayerId;
+                    screenStackCandidate = definition.LayerId;
             }
+
+            screenLayerId = ResolveScreenLayerId(screenStackCandidate);
 
             if (definitionsById.TryGetValue(UILayers.Popup, out UILayerDefinition popup))
                 fallbackSortOrder = popup.SortOrder;
@@ -125,6 +128,15 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             canvasGroupsById[groupId] = UICanvasGroupDefinition.Create(groupId, 150, groupId);
             allCanvasGroupIds.Add(groupId);
+        }
+
+        private string ResolveScreenLayerId(string screenStackCandidate)
+        {
+            if (definitionsById.TryGetValue(UILayers.Screen, out UILayerDefinition screen)
+                && screen.UseScreenStack)
+                return UILayers.Screen;
+
+            return !string.IsNullOrEmpty(screenStackCandidate) ? screenStackCandidate : UILayers.Screen;
         }
     }
 }

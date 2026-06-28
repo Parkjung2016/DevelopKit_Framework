@@ -10,20 +10,6 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
     [CustomEditor(typeof(UIViewBase), true)]
     public sealed class UIViewBaseEditor : Editor
     {
-        private static readonly string[] BackBehaviorLabels =
-        {
-            "Back으로 닫기",
-            "직접 처리",
-            "Back 제외"
-        };
-
-        private static readonly UIViewBackBehavior[] BackBehaviorValues =
-        {
-            UIViewBackBehavior.CloseOnBack,
-            UIViewBackBehavior.HandleManually,
-            UIViewBackBehavior.PassThrough
-        };
-
         public override VisualElement CreateInspectorGUI()
         {
             var root = new VisualElement();
@@ -114,59 +100,39 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             priorityField.Bind(serializedObject);
             section.Add(priorityField);
 
-            int selectedIndex = GetBackBehaviorIndex((UIViewBackBehavior)backBehavior.enumValueIndex);
+            int selectedIndex = UISystemEditorViewPrefabFields.GetBackBehaviorIndex(
+                (UIViewBackBehavior)backBehavior.enumValueIndex);
             var backField = new PopupField<string>(
                 "backBehavior",
-                new System.Collections.Generic.List<string>(BackBehaviorLabels),
+                new System.Collections.Generic.List<string>(UISystemEditorViewPrefabFields.BackBehaviorLabels),
                 selectedIndex);
             backField.style.marginTop = 4;
             section.Add(backField);
 
             var backHelp = UISystemEditorUI.BuildHelpBox(
-                DescribeBackBehavior((UIViewBackBehavior)backBehavior.enumValueIndex),
+                UISystemEditorViewPrefabFields.DescribeBackBehavior(
+                    (UIViewBackBehavior)backBehavior.enumValueIndex),
                 HelpBoxMessageType.Info);
             backHelp.style.marginTop = 6;
             section.Add(backHelp);
 
             backField.RegisterValueChangedCallback(evt =>
             {
-                int index = Array.IndexOf(BackBehaviorLabels, evt.newValue);
+                int index = Array.IndexOf(UISystemEditorViewPrefabFields.BackBehaviorLabels, evt.newValue);
                 if (index < 0)
                     return;
 
                 Undo.RecordObject(serializedObject.targetObject, "Change UI Back Behavior");
-                backBehavior.enumValueIndex = (int)BackBehaviorValues[index];
+                backBehavior.enumValueIndex = (int)UISystemEditorViewPrefabFields.BackBehaviorValues[index];
                 serializedObject.ApplyModifiedProperties();
                 EditorUtility.SetDirty(serializedObject.targetObject);
 
                 if (backHelp is HelpBox box)
-                    box.text = DescribeBackBehavior(BackBehaviorValues[index]);
+                    box.text = UISystemEditorViewPrefabFields.DescribeBackBehavior(
+                        UISystemEditorViewPrefabFields.BackBehaviorValues[index]);
             });
 
             return section;
         }
-
-        private static int GetBackBehaviorIndex(UIViewBackBehavior behavior)
-        {
-            for (int i = 0; i < BackBehaviorValues.Length; i++)
-            {
-                if (BackBehaviorValues[i] == behavior)
-                    return i;
-            }
-
-            return 0;
-        }
-
-        private static string DescribeBackBehavior(UIViewBackBehavior behavior) =>
-            behavior switch
-            {
-                UIViewBackBehavior.CloseOnBack =>
-                    "Back 키를 누르면 이 UI가 닫힙니다. 일반 팝업·모달에 쓰면 됩니다.",
-                UIViewBackBehavior.HandleManually =>
-                    "Back 키는 OnBack()으로만 넘어옵니다. 직접 닫거나 막으려면 OnBack()을 오버라이드하세요.",
-                UIViewBackBehavior.PassThrough =>
-                    "이 UI는 Back을 받지 않습니다. 뒤에 열려 있는 UI가 Back을 처리합니다.",
-                _ => string.Empty
-            };
     }
 }

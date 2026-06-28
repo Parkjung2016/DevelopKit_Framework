@@ -23,15 +23,20 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         [SerializeField]
         private string canvasGroupId = UICanvasGroups.Floating;
 
-        [SerializeField]
+        [SerializeField, HideInInspector]
         private bool useScreenStack;
 
         [SerializeField]
         private string rootName;
 
+        [SerializeField, TextArea(2, 4)]
+        private string description;
+
         public string LayerId => layerId;
 
         public string DisplayName => string.IsNullOrEmpty(displayName) ? layerId : displayName;
+
+        public string Description => description ?? string.Empty;
 
         public int SortOrder => sortOrder;
 
@@ -50,7 +55,8 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             int order,
             string canvasGroup,
             bool screenStack = false,
-            string root = null)
+            string root = null,
+            string descriptionText = null)
         {
             return new UILayerDefinition
             {
@@ -60,7 +66,8 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 canvasGroupId = canvasGroup,
                 canvasGroup = UICanvasGroupUtility.IdToEnum(canvasGroup),
                 useScreenStack = screenStack,
-                rootName = root ?? id
+                rootName = root ?? id,
+                description = descriptionText ?? string.Empty
             };
         }
 
@@ -71,6 +78,8 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             canvasGroupId = UICanvasGroupUtility.EnumToId(canvasGroup);
         }
+
+        internal void SetUseScreenStack(bool value) => useScreenStack = value;
 
         private string ResolveCanvasGroupId()
         {

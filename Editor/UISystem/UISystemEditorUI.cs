@@ -11,7 +11,49 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
 {
     internal static class UISystemEditorUI
     {
+        private const float DefaultDetailSizeWindow = 420f;
+        private const float DefaultDetailSizeInspector = 280f;
+
         public static bool PreferWindowLayout { get; set; }
+
+        public static UISystemEditorSplitView BuildMasterDetailSplit(
+            out VisualElement listHost,
+            out VisualElement detailHost,
+            float initialDetailSize = -1f)
+        {
+            var orientation = PreferWindowLayout
+                ? UISystemEditorSplitOrientation.Horizontal
+                : UISystemEditorSplitOrientation.Vertical;
+
+            if (initialDetailSize < 0f)
+                initialDetailSize = PreferWindowLayout ? DefaultDetailSizeWindow : DefaultDetailSizeInspector;
+
+            var split = new UISystemEditorSplitView(orientation, initialDetailSize);
+            split.style.minHeight = PreferWindowLayout ? 320 : 220;
+
+            var listScroll = new ScrollView(ScrollViewMode.Vertical);
+            listScroll.style.flexGrow = 1;
+            listScroll.style.minHeight = 0;
+            listScroll.style.minWidth = 0;
+
+            listHost = new VisualElement();
+            listScroll.Add(listHost);
+            split.FirstPane.Add(listScroll);
+
+            var detailScroll = new ScrollView(ScrollViewMode.Vertical);
+            detailScroll.style.flexGrow = 1;
+            detailScroll.style.minHeight = 0;
+            detailScroll.style.minWidth = 0;
+
+            detailHost = new VisualElement();
+            detailScroll.Add(detailHost);
+            split.SecondPane.Add(detailScroll);
+
+            split.SecondPane.style.paddingLeft = orientation == UISystemEditorSplitOrientation.Horizontal ? 6 : 0;
+            split.SecondPane.style.paddingTop = orientation == UISystemEditorSplitOrientation.Vertical ? 6 : 0;
+
+            return split;
+        }
 
         public enum LayerSettingsSection
         {
@@ -131,7 +173,7 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             table.style.paddingTop = 4;
             table.style.paddingBottom = 4;
 
-            table.Add(BuildReferenceRow("레이어 ID", "순서", "Canvas 묶음", "화면 스택", true));
+            table.Add(BuildReferenceRow("레이어 ID", "순서", "Canvas 묶음", "OpenScreen", true));
             IReadOnlyList<BuiltInLayerInfo> layers = UISystemBuiltIn.Layers;
             for (int i = 0; i < layers.Count; i++)
             {
@@ -140,7 +182,7 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
                     layer.LayerId,
                     layer.SortOrder.ToString(),
                     GetCanvasGroupLabel(layer.CanvasGroupId),
-                    layer.UseScreenStack ? "예" : "-",
+                    layer.UseScreenStack ? "전환" : "-",
                     false));
             }
 
@@ -376,6 +418,25 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             return card;
         }
 
+        public static VisualElement BuildInlineFieldsRow(params VisualElement[] fields)
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.FlexStart;
+
+            for (int i = 0; i < fields.Length; i++)
+            {
+                fields[i].style.flexGrow = 1;
+                fields[i].style.flexBasis = 0;
+                if (i > 0)
+                    fields[i].style.marginLeft = 8;
+
+                row.Add(fields[i]);
+            }
+
+            return row;
+        }
+
         public static void BindProperty(VisualElement root, SerializedProperty property, SerializedObject owner, string label = null)
         {
             PropertyField field = string.IsNullOrEmpty(label)
@@ -383,6 +444,107 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
                 : new PropertyField(property.Copy(), label);
             field.Bind(owner);
             root.Add(field);
+        }
+
+        public static VisualElement BuildEditableHint(
+            SerializedObject owner,
+            UnityEngine.Object undoTarget,
+            SerializedProperty descriptionProperty,
+            string builtInFallback = null,
+            Action onChanged = null)
+        {
+            var root = new VisualElement();
+
+            var displayRow = new VisualElement();
+            displayRow.style.flexDirection = FlexDirection.Row;
+            displayRow.style.alignItems = Align.FlexStart;
+            root.Add(displayRow);
+
+            var hint = BuildHint(string.Empty);
+            hint.style.flexGrow = 1;
+            hint.style.marginTop = 0;
+            hint.style.marginBottom = 0;
+            displayRow.Add(hint);
+
+            var editButton = new Button { text = "수정" };
+            editButton.style.height = 18;
+            editButton.style.fontSize = 9;
+            editButton.style.marginLeft = 4;
+            editButton.style.flexShrink = 0;
+
+            var editHost = new VisualElement();
+            editHost.style.display = DisplayStyle.None;
+            editHost.style.marginTop = 4;
+            root.Add(editHost);
+
+            var editField = new TextField
+            {
+                multiline = true
+            };
+            editField.style.minHeight = 56;
+            editField.style.whiteSpace = WhiteSpace.Normal;
+            editHost.Add(editField);
+
+            var editActions = new VisualElement();
+            editActions.style.flexDirection = FlexDirection.Row;
+            editActions.style.justifyContent = Justify.FlexEnd;
+            editActions.style.marginTop = 4;
+            editHost.Add(editActions);
+
+            var saveButton = new Button { text = "닫기" };
+            saveButton.style.height = 20;
+            saveButton.style.fontSize = 10;
+            editActions.Add(saveButton);
+
+            displayRow.Add(editButton);
+
+            RefreshDisplay();
+
+            void RefreshDisplay()
+            {
+                string text = ResolveDisplayText();
+                hint.text = text;
+                hint.style.display = string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex;
+                displayRow.style.display = DisplayStyle.Flex;
+            }
+
+            string ResolveDisplayText()
+            {
+                string stored = descriptionProperty.stringValue ?? string.Empty;
+                if (!string.IsNullOrEmpty(stored))
+                    return stored;
+
+                return builtInFallback ?? string.Empty;
+            }
+
+            void EnterEditMode()
+            {
+                editField.SetValueWithoutNotify(descriptionProperty.stringValue ?? string.Empty);
+                displayRow.style.display = DisplayStyle.None;
+                editHost.style.display = DisplayStyle.Flex;
+                editField.Focus();
+            }
+
+            void SaveAndClose()
+            {
+                string newValue = editField.value ?? string.Empty;
+                if (!string.Equals(descriptionProperty.stringValue, newValue, StringComparison.Ordinal))
+                {
+                    Undo.RecordObject(undoTarget, "Change Description");
+                    descriptionProperty.stringValue = newValue;
+                    owner.ApplyModifiedProperties();
+                    EditorUtility.SetDirty(undoTarget);
+                    onChanged?.Invoke();
+                }
+
+                editHost.style.display = DisplayStyle.None;
+                RefreshDisplay();
+            }
+
+            editButton.clicked += EnterEditMode;
+            saveButton.clicked += SaveAndClose;
+
+            return root;
         }
 
         public static string BuildBuiltInSummaryText()

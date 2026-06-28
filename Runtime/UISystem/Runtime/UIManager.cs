@@ -20,7 +20,10 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         private readonly List<IUIView> showOrder = new();
         private readonly List<IUIView> closeBuffer = new();
         private readonly List<string> layerIdBuffer = new();
+        private readonly List<string> staleInstanceKeys = new();
+        private readonly List<UIScreenBase> screenBuffer = new();
         private readonly Dictionary<string, UIViewBase> instancesById = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, List<UIViewBase>> duplicatePoolsByViewId = new(StringComparer.Ordinal);
 
         /// <summary>레이어 설정 레지스트리입니다.</summary>
         public UILayerRegistry LayerRegistry
@@ -45,11 +48,31 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             layerSettings = settings;
             layerRegistry.Initialize(settings ?? UILayerSettings.CreateBuiltIn());
             layerRegistryReady = true;
+            PurgeDeadReferences();
             EnsureLayerRoots();
         }
 
         /// <summary>화면 스택에 Screen UI를 엽니다.</summary>
-        public UIViewResult OpenScreen<T>(object context = null) where T : UIViewBase
+        public UIViewResult<T> OpenScreen<T>(object context = null) where T : UIViewBase
+        {
+            EnsureLayerRegistry();
+            EnsureLayerRoots();
+
+            if (viewCatalog == null)
+                return UIViewResult<T>.Failed("UIViewCatalog is not assigned. Call Initialize first.");
+
+            if (!viewCatalog.TryGetEntry<T>(out UIViewCatalogEntry entry))
+                return UIViewResult<T>.Failed($"View not found in catalog: {typeof(T).Name}");
+
+            return ToTypedResult<T>(OpenScreenEntry(entry, context));
+        }
+
+        /// <summary>뷰 ID로 화면 스택에 Screen UI를 엽니다.</summary>
+        public UIViewResult<T> OpenScreen<T>(string viewId, object context = null) where T : UIViewBase =>
+            ToTypedResult<T>(OpenScreen(viewId, context));
+
+        /// <summary>뷰 ID로 화면 스택에 Screen UI를 엽니다.</summary>
+        public UIViewResult OpenScreen(string viewId, object context = null)
         {
             EnsureLayerRegistry();
             EnsureLayerRoots();
@@ -57,17 +80,10 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             if (viewCatalog == null)
                 return UIViewResult.Failed("UIViewCatalog is not assigned. Call Initialize first.");
 
-            if (!viewCatalog.TryGetEntry<T>(out UIViewCatalogEntry entry))
-                return UIViewResult.Failed($"View not found in catalog: {typeof(T).Name}");
+            if (!viewCatalog.TryGetEntry(viewId, out UIViewCatalogEntry entry))
+                return UIViewResult.Failed($"View not found: {viewId}");
 
-            UIViewBase instance = GetOrCreateInstance(entry);
-            if (instance is not UIScreenBase screen)
-                return UIViewResult.Failed($"OpenScreen requires UIScreenBase: {typeof(T).Name}");
-
-            screenStack.Push(screen, context);
-            TrackFloating(screen);
-            RefreshSorting();
-            return UIViewResult.Succeeded(screen);
+            return OpenScreenEntry(entry, context);
         }
 
         /// <summary>화면 스택 최상단 Screen UI를 닫습니다.</summary>
@@ -79,17 +95,29 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             screenStack.TryPop();
             UntrackFloating(top);
+            TryReleaseInstance(top);
             RefreshSorting();
             return true;
         }
 
         /// <summary>팝업·모달·오버레이를 엽니다.</summary>
-        public UIViewResult OpenPopup<T>(object context = null, int? priority = null) where T : UIViewBase =>
+        public UIViewResult<T> OpenPopup<T>(object context = null, int? priority = null) where T : UIViewBase =>
             OpenPopupInternal<T>(new UIViewOpenOptions(context, priority));
 
         /// <summary>팝업·모달·오버레이를 옵션과 함께 엽니다.</summary>
-        public UIViewResult OpenPopup<T>(UIViewOpenOptions options) where T : UIViewBase =>
+        public UIViewResult<T> OpenPopup<T>(UIViewOpenOptions options) where T : UIViewBase =>
             OpenPopupInternal<T>(options);
+
+        /// <summary>뷰 ID로 팝업·모달·오버레이를 엽니다.</summary>
+        public UIViewResult<T> OpenPopup<T>(string viewId, object context = null, int? priority = null) where T : UIViewBase =>
+            OpenPopup<T>(viewId, new UIViewOpenOptions(context, priority));
+
+        /// <summary>뷰 ID로 팝업·모달·오버레이를 옵션과 함께 엽니다.</summary>
+        public UIViewResult<T> OpenPopup<T>(string viewId, UIViewOpenOptions options) where T : UIViewBase
+        {
+            UIViewResult result = OpenPopup(viewId, options);
+            return ToTypedResult<T>(result);
+        }
 
         /// <summary>뷰 ID로 팝업·모달·오버레이를 엽니다.</summary>
         public UIViewResult OpenPopup(string viewId, object context = null, int? priority = null) =>
@@ -113,8 +141,11 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         /// <summary>열려 있는 UI를 닫습니다.</summary>
         public void Close(IUIView view, bool immediate = false)
         {
-            if (view == null)
+            if (!IsViewAlive(view))
+            {
+                PurgeDeadReferences();
                 return;
+            }
 
             if (view is UIScreenBase screen)
             {
@@ -122,16 +153,17 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                     screenStack.TryPop();
                 else
                 {
-                    view.Hide(immediate);
+                    UIViewLifecycle.Hide(view, immediate);
                     screenStack.Remove(screen, hide: false);
                 }
             }
             else
             {
-                view.Hide(immediate);
+                UIViewLifecycle.Hide(view, immediate);
             }
 
             UntrackFloating(view);
+            TryReleaseInstance(view as UIViewBase);
             RefreshSorting();
         }
 
@@ -181,28 +213,46 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             return closed;
         }
 
-        /// <summary>타입으로 열려 있는 UI를 닫습니다.</summary>
+        /// <summary>뷰 ID로 열려 있는 UI를 모두 닫습니다. 중복 허용 팝업(토스트 등)에 사용합니다.</summary>
+        public int CloseAllOfViewId(string viewId, bool immediate = false)
+        {
+            if (AllowsMultipleInstances(viewId))
+                return CloseAllMatchingViewId(viewId, immediate);
+
+            if (UIViewInstanceCache.TryGetAlive(instancesById, viewId, out UIViewBase instance))
+            {
+                Close(instance, immediate);
+                return 1;
+            }
+
+            return CloseAllMatchingViewId(viewId, immediate);
+        }
+
+        /// <summary>타입으로 열려 있는 UI를 닫습니다. 중복 허용이면 해당 viewId 전부 닫습니다.</summary>
         public void ClosePopup<T>(bool immediate = false) where T : UIViewBase
         {
             if (viewCatalog != null && viewCatalog.TryGetEntry<T>(out UIViewCatalogEntry entry))
             {
-                if (instancesById.TryGetValue(entry.ViewId, out UIViewBase instance))
+                if (entry.AllowMultipleInstances)
+                {
+                    CloseAllOfViewId(entry.ViewId, immediate);
+                    return;
+                }
+
+                if (UIViewInstanceCache.TryGetAlive(instancesById, entry.ViewId, out UIViewBase instance))
                 {
                     Close(instance, immediate);
                     return;
                 }
             }
 
-            if (instancesById.TryGetValue(typeof(T).Name, out UIViewBase fallback))
+            if (UIViewInstanceCache.TryGetAlive(instancesById, typeof(T).Name, out UIViewBase fallback))
                 Close(fallback, immediate);
         }
 
         /// <summary>뷰 ID로 열려 있는 UI를 닫습니다.</summary>
-        public void ClosePopup(string viewId, bool immediate = false)
-        {
-            if (instancesById.TryGetValue(viewId, out UIViewBase instance))
-                Close(instance, immediate);
-        }
+        public void ClosePopup(string viewId, bool immediate = false) =>
+            CloseAllOfViewId(viewId, immediate);
 
         /// <summary>Back 입력을 처리합니다. 처리했으면 true를 반환합니다.</summary>
         public bool TryHandleBack()
@@ -214,10 +264,11 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             return false;
         }
 
+        /// <summary>열려 있는 UI를 숨깁니다. 풀링된 인스턴스는 유지됩니다.</summary>
         public void ClearAll(bool includeScreens = true)
         {
             for (int i = floatingViews.Count - 1; i >= 0; i--)
-                floatingViews[i].Hide();
+                UIViewLifecycle.Hide(floatingViews[i]);
 
             floatingViews.Clear();
             showOrder.Clear();
@@ -228,18 +279,29 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             RefreshCanvasRaycasters();
         }
 
+        /// <summary>열려 있는 UI를 숨기고, 풀링 설정과 관계없이 모든 인스턴스를 파괴합니다.</summary>
+        public void DisposeAll(bool includeScreens = true)
+        {
+            CollectAllInstances(closeBuffer, includeScreens);
+            ClearAll(includeScreens);
+            DestroyInstances(closeBuffer);
+            instancesById.Clear();
+            UIViewInstanceCache.ClearDuplicates(duplicatePoolsByViewId);
+            UIViewDuplicateInstanceNaming.ResetAll();
+            closeBuffer.Clear();
+        }
+
         private int CloseScreenLayer(bool immediate)
         {
             int count = screenStack.Count;
             if (count == 0)
                 return 0;
 
-            screenStack.Clear(immediate);
-
-            for (int i = floatingViews.Count - 1; i >= 0; i--)
+            List<UIScreenBase> drained = screenStack.Drain(immediate);
+            for (int i = 0; i < drained.Count; i++)
             {
-                if (layerRegistry.IsScreenLayer(floatingViews[i].LayerId))
-                    UntrackFloating(floatingViews[i]);
+                UntrackFloating(drained[i]);
+                TryReleaseInstance(drained[i]);
             }
 
             RefreshSorting();
@@ -271,18 +333,45 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             }
         }
 
-        private UIViewResult OpenPopupInternal<T>(UIViewOpenOptions options) where T : UIViewBase
+        private UIViewResult<T> OpenPopupInternal<T>(UIViewOpenOptions options) where T : UIViewBase
         {
             EnsureLayerRegistry();
             EnsureLayerRoots();
 
             if (viewCatalog == null)
-                return UIViewResult.Failed("UIViewCatalog is not assigned. Call Initialize first.");
+                return UIViewResult<T>.Failed("UIViewCatalog is not assigned. Call Initialize first.");
 
             if (!viewCatalog.TryGetEntry<T>(out UIViewCatalogEntry entry))
-                return UIViewResult.Failed($"View not found in catalog: {typeof(T).Name}");
+                return UIViewResult<T>.Failed($"View not found in catalog: {typeof(T).Name}");
 
-            return OpenInstance(entry, options);
+            UIViewResult result = OpenInstance(entry, options);
+            return ToTypedResult<T>(result);
+        }
+
+        private static UIViewResult<T> ToTypedResult<T>(UIViewResult result) where T : UIViewBase
+        {
+            if (!result.IsSuccess)
+                return UIViewResult<T>.Failed(result.ErrorMessage);
+
+            if (result.Handle.View is T typedView)
+                return UIViewResult<T>.Succeeded(typedView);
+
+            return UIViewResult<T>.Failed(CreateTypeMismatchMessage<T>(result.Handle.View as UIViewBase));
+        }
+
+        private static string CreateTypeMismatchMessage<T>(UIViewBase instance) where T : UIViewBase =>
+            $"View type mismatch: expected {typeof(T).Name}, got {instance?.GetType().Name ?? "null"}";
+
+        private UIViewResult OpenScreenEntry(UIViewCatalogEntry entry, object context)
+        {
+            UIViewBase instance = GetOrCreateInstance(entry);
+            if (instance is not UIScreenBase screen)
+                return UIViewResult.Failed($"OpenScreen requires UIScreenBase: {entry.ViewId}");
+
+            screenStack.Push(screen, context);
+            TrackFloating(screen);
+            RefreshSorting();
+            return UIViewResult.Succeeded(screen);
         }
 
         private UIViewResult OpenInstance(UIViewCatalogEntry entry, UIViewOpenOptions options)
@@ -292,7 +381,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 return UIViewResult.Failed($"Failed to create view: {entry.ViewId}");
 
             ApplyOpenOptions(instance, options);
-            instance.Show(options.Context);
+            UIViewLifecycle.Show(instance, options.Context);
             TrackFloating(instance);
             RefreshSorting();
             return UIViewResult.Succeeded(instance);
@@ -318,7 +407,9 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             string layerId = entry.Prefab != null ? entry.Prefab.LayerId : UILayers.Popup;
             RectTransform parent = layerRoots.GetRoot(layerId, layerRegistry);
-            return UIViewInstanceFactory.GetOrCreateFromPrefab(entry, parent, instancesById);
+            PurgeDeadReferences();
+            return UIViewInstanceFactory.GetOrCreateFromPrefab(
+                entry, parent, instancesById, duplicatePoolsByViewId);
         }
 
         private void TrackFloating(IUIView view)
@@ -345,6 +436,8 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
         private void RefreshSorting()
         {
+            PurgeDeadReferences();
+
             List<IUIView> visible = new();
             for (int i = 0; i < floatingViews.Count; i++)
             {
@@ -388,6 +481,163 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             layerRoots.SetRaycasterEnabled(groupId, hasVisible);
         }
+
+        private void TryReleaseInstance(UIViewBase view)
+        {
+            if (view == null)
+            {
+                PurgeStaleInstances();
+                return;
+            }
+
+            if (ShouldPool(view))
+                return;
+
+            ReleaseDuplicateDisplayIndex(view);
+
+            string viewId = view.ViewId;
+            if (instancesById.TryGetValue(viewId, out UIViewBase cached) && ReferenceEquals(cached, view))
+                instancesById.Remove(viewId);
+
+            UIViewInstanceCache.RemoveDuplicate(duplicatePoolsByViewId, viewId, view);
+
+            UnityEngine.Object.Destroy(view.gameObject);
+        }
+
+        private bool ShouldPool(UIViewBase view)
+        {
+            if (view == null)
+                return false;
+
+            if (viewCatalog != null && viewCatalog.TryGetEntry(view.ViewId, out UIViewCatalogEntry entry))
+                return entry.UsePooling;
+
+            return false;
+        }
+
+        private void DestroyAllInstances()
+        {
+            CollectAllInstances(closeBuffer, includeScreens: true);
+            DestroyInstances(closeBuffer);
+            instancesById.Clear();
+            UIViewInstanceCache.ClearDuplicates(duplicatePoolsByViewId);
+            UIViewDuplicateInstanceNaming.ResetAll();
+            closeBuffer.Clear();
+        }
+
+        private int CloseAllMatchingViewId(string viewId, bool immediate)
+        {
+            CollectByViewId(viewId, closeBuffer);
+            for (int i = closeBuffer.Count - 1; i >= 0; i--)
+                Close(closeBuffer[i], immediate);
+
+            int closed = closeBuffer.Count;
+            closeBuffer.Clear();
+            return closed;
+        }
+
+        private void CollectByViewId(string viewId, List<IUIView> buffer)
+        {
+            buffer.Clear();
+            for (int i = 0; i < floatingViews.Count; i++)
+            {
+                if (floatingViews[i] is not UIViewBase viewBase || !IsViewAlive(viewBase))
+                    continue;
+
+                if (viewBase.ViewId == viewId)
+                    buffer.Add(viewBase);
+            }
+        }
+
+        private void CollectAllInstances(List<IUIView> buffer, bool includeScreens)
+        {
+            buffer.Clear();
+
+            for (int i = 0; i < floatingViews.Count; i++)
+            {
+                if (IsViewAlive(floatingViews[i]))
+                    buffer.Add(floatingViews[i]);
+            }
+
+            if (includeScreens)
+            {
+                screenStack.CopyTo(screenBuffer);
+                for (int i = 0; i < screenBuffer.Count; i++)
+                {
+                    UIScreenBase screen = screenBuffer[i];
+                    if (IsViewAlive(screen) && !buffer.Contains(screen))
+                        buffer.Add(screen);
+                }
+            }
+
+            foreach (UIViewBase instance in instancesById.Values)
+            {
+                if (IsViewAlive(instance) && !buffer.Contains(instance))
+                    buffer.Add(instance);
+            }
+
+            foreach (KeyValuePair<string, List<UIViewBase>> pair in duplicatePoolsByViewId)
+            {
+                List<UIViewBase> pool = pair.Value;
+                for (int i = 0; i < pool.Count; i++)
+                {
+                    UIViewBase instance = pool[i];
+                    if (IsViewAlive(instance) && !buffer.Contains(instance))
+                        buffer.Add(instance);
+                }
+            }
+        }
+
+        private static void DestroyInstances(List<IUIView> instances)
+        {
+            for (int i = 0; i < instances.Count; i++)
+            {
+                if (instances[i] is not UIViewBase viewBase || viewBase == null)
+                    continue;
+
+                ReleaseDuplicateDisplayIndex(viewBase);
+                UnityEngine.Object.Destroy(viewBase.gameObject);
+            }
+        }
+
+        private static void ReleaseDuplicateDisplayIndex(UIViewBase view)
+        {
+            if (view == null || view.DuplicateDisplayIndex <= 0)
+                return;
+
+            UIViewDuplicateInstanceNaming.Release(view.ViewId, view.DuplicateDisplayIndex);
+        }
+
+        private bool AllowsMultipleInstances(string viewId) =>
+            viewCatalog != null
+            && viewCatalog.TryGetEntry(viewId, out UIViewCatalogEntry entry)
+            && entry.AllowMultipleInstances;
+
+        private void PurgeStaleInstances()
+        {
+            UIViewInstanceCache.PurgeStale(instancesById, staleInstanceKeys);
+            UIViewInstanceCache.PurgeStaleDuplicates(duplicatePoolsByViewId, staleInstanceKeys);
+        }
+
+        private void PurgeDeadReferences()
+        {
+            PurgeStaleInstances();
+
+            for (int i = floatingViews.Count - 1; i >= 0; i--)
+            {
+                if (!IsViewAlive(floatingViews[i]))
+                    floatingViews.RemoveAt(i);
+            }
+
+            for (int i = showOrder.Count - 1; i >= 0; i--)
+            {
+                if (!IsViewAlive(showOrder[i]))
+                    showOrder.RemoveAt(i);
+            }
+        }
+
+        private static bool IsViewAlive(IUIView view) =>
+            view is UIViewBase viewBase && viewBase != null;
 
         private void RefreshCanvasRaycaster(UICanvasGroup group) =>
             RefreshCanvasRaycaster(UICanvasGroupUtility.EnumToId(group));

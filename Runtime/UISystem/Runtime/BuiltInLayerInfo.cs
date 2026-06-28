@@ -34,6 +34,6 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         public string RootName { get; }
 
         public UILayerDefinition ToLayerDefinition() =>
-            UILayerDefinition.Create(LayerId, SortOrder, CanvasGroupId, UseScreenStack, RootName);
+            UILayerDefinition.Create(LayerId, SortOrder, CanvasGroupId, UseScreenStack, RootName, Description);
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.UISystem.Runtime;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace PJDev.DevelopKit.Framework.Editors.UISystem
 {
@@ -80,6 +81,54 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             }
 
             return 0;
+        }
+
+        public static string ResolveGroupId(SerializedProperty groupIdProp)
+        {
+            if (groupIdProp == null)
+                return UICanvasGroups.Floating;
+
+            string currentGroupId = groupIdProp.stringValue;
+            return string.IsNullOrEmpty(currentGroupId)
+                ? ReadLegacyCanvasGroupId(groupIdProp)
+                : currentGroupId;
+        }
+
+        public static PopupField<string> CreatePopupField(
+            SerializedProperty groupIdProp,
+            UILayerSettings settings,
+            string label = "Canvas 묶음")
+        {
+            string currentGroupId = ResolveGroupId(groupIdProp);
+            CanvasGroupOptionList options = BuildOptions(currentGroupId, settings);
+            int selectedIndex = GetSelectedIndex(options, currentGroupId);
+
+            var popup = new PopupField<string>(
+                options.Values,
+                selectedIndex,
+                id => FormatGroupLabel(id, settings),
+                id => FormatGroupLabel(id, settings))
+            {
+                label = label
+            };
+            return popup;
+        }
+
+        public static void SyncPopupField(
+            PopupField<string> popup,
+            SerializedProperty groupIdProp,
+            UILayerSettings settings)
+        {
+            if (popup == null || groupIdProp == null)
+                return;
+
+            string currentGroupId = ResolveGroupId(groupIdProp);
+            CanvasGroupOptionList options = BuildOptions(currentGroupId, settings);
+            popup.choices = options.Values;
+
+            int selectedIndex = GetSelectedIndex(options, currentGroupId);
+            if (selectedIndex >= 0 && selectedIndex < options.Values.Count)
+                popup.SetValueWithoutNotify(options.Values[selectedIndex]);
         }
 
         public static bool DrawCanvasGroupPopup(
@@ -177,6 +226,9 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
 
         private static string FormatGroupLabel(UICanvasGroupDefinition group)
         {
+            if (!string.IsNullOrEmpty(group.Description))
+                return $"{group.GroupId} · {group.Description}";
+
             string displayName = group.DisplayName;
             return string.Equals(displayName, group.GroupId, StringComparison.Ordinal)
                 ? group.GroupId

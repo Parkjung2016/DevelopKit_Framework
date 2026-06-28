@@ -176,6 +176,9 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             toolbar.Add(CreateToolbarButton("저장", () =>
                 UISystemEditorAssets.SaveAssets(viewCatalog, layerSettings), primary: true));
 
+            toolbar.Add(CreateToolbarButton("ViewId 생성", () =>
+                UIViewIdsScriptGenerator.GenerateWithFeedback(viewCatalog)));
+
             toolbar.Add(CreateToolbarButton("찾기", () =>
                 UISystemEditorAssets.Ping(viewCatalog, layerSettings)));
 
@@ -320,6 +323,9 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
 
             root.Add(status);
 
+            if (viewCatalog != null)
+                root.Add(UIViewIdsScriptGenerator.BuildGenerationPanel(viewCatalog));
+
             var code = UISystemEditorUI.BuildFieldGroup("런타임 초기화");
             code.Add(UISystemEditorUI.BuildHint(
                 "UIManager.Instance.Initialize(viewCatalog, layerSettings);\n" +
@@ -330,6 +336,7 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
                 ("Canvas 묶음 편집", () => SelectTab(Tab.CanvasGroups)),
                 ("레이어 편집", () => SelectTab(Tab.Layers)),
                 ("뷰 카탈로그 편집", () => SelectTab(Tab.ViewCatalog)),
+                ("ViewId 상수 생성", () => UIViewIdsScriptGenerator.GenerateWithFeedback(viewCatalog)),
                 ("둘 다 새로 만들기", CreateDefaultPair)));
 
             root.Add(UISystemEditorUI.BuildBuiltInLayersReference());

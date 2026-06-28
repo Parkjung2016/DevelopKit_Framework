@@ -1,3 +1,7 @@
+using System.Threading;
+#if UNITASK_INSTALLED
+using Cysharp.Threading.Tasks;
+#endif
 using NUnit.Framework;
 using PJDev.DevelopKit.Framework.UISystem.Runtime;
 using UnityEngine;
@@ -48,9 +52,29 @@ namespace PJDev.DevelopKit.Framework.UISystem.Tests
             public int ShowCount { get; private set; }
             public int HideCount { get; private set; }
 
-            protected override void OnOpen(object context) => ShowCount++;
+#if UNITASK_INSTALLED
+            protected override UniTask OnOpen(object context, CancellationToken cancellationToken = default)
+            {
+                ShowCount++;
+                return UniTask.CompletedTask;
+            }
 
-            protected override void OnClose() => HideCount++;
+            protected override UniTask OnClose(CancellationToken cancellationToken = default)
+            {
+                HideCount++;
+                return UniTask.CompletedTask;
+            }
+#else
+            protected override void OnOpen(object context)
+            {
+                ShowCount++;
+            }
+
+            protected override void OnClose()
+            {
+                HideCount++;
+            }
+#endif
         }
     }
 }

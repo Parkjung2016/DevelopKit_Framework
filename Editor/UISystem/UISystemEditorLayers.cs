@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.UISystem.Runtime;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace PJDev.DevelopKit.Framework.Editors.UISystem
 {
@@ -74,6 +75,43 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             }
 
             return 0;
+        }
+
+        public static PopupField<string> CreateLayerPopupField(
+            SerializedProperty layerIdProp,
+            UIViewBase view,
+            UILayerSettings settings = null,
+            string label = "레이어 ID")
+        {
+            string defaultLayer = view != null ? view.DefaultLayerId : UILayers.Popup;
+            string currentLayerId = layerIdProp.stringValue;
+            LayerOptionList options = BuildOptions(defaultLayer, currentLayerId, settings);
+            int selectedIndex = GetSelectedIndex(options, currentLayerId);
+
+            var popup = new PopupField<string>(
+                options.Values,
+                selectedIndex,
+                id => FormatLayerOptionLabel(id, defaultLayer, settings),
+                id => FormatLayerOptionLabel(id, defaultLayer, settings))
+            {
+                label = label
+            };
+            return popup;
+        }
+
+        public static void SyncLayerPopupField(
+            PopupField<string> popup,
+            SerializedProperty layerIdProp,
+            UIViewBase view,
+            UILayerSettings settings = null)
+        {
+            string defaultLayer = view != null ? view.DefaultLayerId : UILayers.Popup;
+            string currentLayerId = layerIdProp.stringValue;
+            LayerOptionList options = BuildOptions(defaultLayer, currentLayerId, settings);
+            int selectedIndex = GetSelectedIndex(options, currentLayerId);
+
+            popup.choices = options.Values;
+            popup.SetValueWithoutNotify(options.Values[selectedIndex]);
         }
 
         /// <summary>레이어 ID 드롭다운을 그립니다. 값이 바뀌면 true를 반환합니다.</summary>
@@ -197,7 +235,13 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             {
                 UILayerDefinition definition = layers[i];
                 if (definition != null && definition.LayerId == resolvedLayerId)
-                    return $"현재 적용 레이어: {resolvedLayerId} · Canvas {UISystemEditorCanvasGroups.FormatGroupLabel(definition.CanvasGroupId, settings)}";
+                {
+                    string canvas = UISystemEditorCanvasGroups.FormatGroupLabel(definition.CanvasGroupId, settings);
+                    if (!string.IsNullOrEmpty(definition.Description))
+                        return $"{definition.Description} · Canvas {canvas}";
+
+                    return $"현재 적용 레이어: {resolvedLayerId} · Canvas {canvas}";
+                }
             }
 
             return $"현재 적용 레이어: {resolvedLayerId} (UILayerSettings: {settings.name})";
@@ -209,6 +253,26 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             return string.Equals(displayName, layer.LayerId, StringComparison.Ordinal)
                 ? layer.LayerId
                 : $"{layer.LayerId} · {displayName}";
+        }
+
+        private static string FormatLayerOptionLabel(string layerId, string defaultLayer, UILayerSettings settings)
+        {
+            if (string.IsNullOrEmpty(layerId))
+                return $"기본값 ({defaultLayer})";
+
+            settings ??= UISystemEditorAssets.LoadOrFindLayerSettings();
+            if (settings != null)
+            {
+                IReadOnlyList<UILayerDefinition> layers = settings.Layers;
+                for (int i = 0; i < layers.Count; i++)
+                {
+                    UILayerDefinition layer = layers[i];
+                    if (layer != null && layer.LayerId == layerId)
+                        return FormatLayerLabel(layer);
+                }
+            }
+
+            return layerId;
         }
     }
 }

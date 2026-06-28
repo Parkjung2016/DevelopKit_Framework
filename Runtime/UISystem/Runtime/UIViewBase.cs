@@ -7,26 +7,24 @@ using Cysharp.Threading.Tasks;
 namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 {
     /// <summary>모든 런타임 UI 뷰의 기본 MonoBehaviour입니다.</summary>
-    public abstract class UIViewBase : MonoBehaviour, IUIView
+    public abstract partial class UIViewBase : MonoBehaviour, IUIView
     {
-        [UILayerId]
-        [SerializeField]
-        private string layerId;
+        [UILayerId] [SerializeField] private string layerId;
 
-        [SerializeField]
-        private int priority;
+        [SerializeField] private int priority;
 
-        [SerializeField]
-        private UIViewBackBehavior backBehavior = UIViewBackBehavior.CloseOnBack;
+        [SerializeField] private UIViewBackBehavior backBehavior = UIViewBackBehavior.CloseOnBack;
 
         private CanvasGroup canvasGroup;
         private UIViewState state = UIViewState.Hidden;
         private object currentContext;
         private string runtimeLayerId;
         private int? runtimePriority;
+        private string catalogViewId;
+        private int duplicateDisplayIndex;
 
-        /// <summary>뷰 ID입니다. 프리팹 루트 오브젝트 이름과 같습니다.</summary>
-        public virtual string ViewId => gameObject.name;
+        /// <summary>뷰 ID입니다. 카탈로그 등록 시 viewId, 아니면 프리팹 루트 이름입니다.</summary>
+        public virtual string ViewId => string.IsNullOrEmpty(catalogViewId) ? gameObject.name : catalogViewId;
 
         /// <summary>레이어 ID입니다. 비어 있으면 <see cref="DefaultLayerId"/>를 사용합니다.</summary>
         public string LayerId => string.IsNullOrEmpty(runtimeLayerId)
@@ -63,6 +61,23 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             SetVisible(false, immediate: true);
         }
 
+#if UNITASK_INSTALLED
+        public async UniTask Show(object context = null, CancellationToken cancellationToken = default)
+        {
+            currentContext = context;
+            if (IsVisible)
+            {
+                OnUpdate(context);
+                return;
+            }
+
+            state = UIViewState.Showing;
+            SetActiveHidden();
+            await OnOpen(context, cancellationToken);
+            SetVisible(true);
+            state = UIViewState.Shown;
+        }
+#else
         public void Show(object context = null)
         {
             currentContext = context;
@@ -78,25 +93,22 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             SetVisible(true);
             state = UIViewState.Shown;
         }
-
-#if UNITASK_INSTALLED
-        public async UniTask ShowAsync(object context = null, CancellationToken cancellationToken = default)
-        {
-            currentContext = context;
-            if (IsVisible)
-            {
-                OnUpdate(context);
-                return;
-            }
-
-            state = UIViewState.Showing;
-            SetActiveHidden();
-            await OnOpenAsync(context, cancellationToken);
-            SetVisible(true);
-            state = UIViewState.Shown;
-        }
 #endif
 
+#if UNITASK_INSTALLED
+        public async UniTask Hide(bool immediate = false, CancellationToken cancellationToken = default)
+        {
+            if (!IsVisible && state != UIViewState.Hidden)
+                return;
+
+            state = UIViewState.Hiding;
+            await OnClose(cancellationToken);
+            SetVisible(false, immediate);
+            state = UIViewState.Hidden;
+            currentContext = null;
+            ClearOpenOverrides();
+        }
+#else
         public void Hide(bool immediate = false)
         {
             if (!IsVisible && state != UIViewState.Hidden)
@@ -104,20 +116,6 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             state = UIViewState.Hiding;
             OnClose();
-            SetVisible(false, immediate);
-            state = UIViewState.Hidden;
-            currentContext = null;
-            ClearOpenOverrides();
-        }
-
-#if UNITASK_INSTALLED
-        public async UniTask HideAsync(bool immediate = false, CancellationToken cancellationToken = default)
-        {
-            if (!IsVisible && state != UIViewState.Hidden)
-                return;
-
-            state = UIViewState.Hiding;
-            await OnCloseAsync(cancellationToken);
             SetVisible(false, immediate);
             state = UIViewState.Hidden;
             currentContext = null;
@@ -142,15 +140,13 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
         public void Close(bool immediate = false) => UIManager.Instance.Close(this, immediate);
 
-        /// <summary>열 때 호출됩니다. 아직 화면에 보이지 않은 상태에서 UI를 셋팅하세요.</summary>
+#if UNITASK_INSTALLED
+        protected virtual UniTask OnOpen(object context, CancellationToken cancellationToken = default) =>
+            UniTask.CompletedTask;
+#else
         protected virtual void OnOpen(object context)
         {
         }
-
-#if UNITASK_INSTALLED
-        /// <summary>비동기로 열 때 호출됩니다. 아직 화면에 보이지 않은 상태에서 UI를 셋팅하세요.</summary>
-        protected virtual UniTask OnOpenAsync(object context, CancellationToken cancellationToken) =>
-            UniTask.CompletedTask;
 #endif
 
         /// <summary>이미 열려 있을 때 같은 UI를 다시 열면 호출됩니다.</summary>
@@ -158,15 +154,13 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         {
         }
 
-        /// <summary>닫을 때 호출됩니다.</summary>
+#if UNITASK_INSTALLED
+        protected virtual UniTask OnClose(CancellationToken cancellationToken = default) =>
+            UniTask.CompletedTask;
+#else
         protected virtual void OnClose()
         {
         }
-
-#if UNITASK_INSTALLED
-        /// <summary>비동기로 닫을 때 호출됩니다.</summary>
-        protected virtual UniTask OnCloseAsync(CancellationToken cancellationToken) =>
-            UniTask.CompletedTask;
 #endif
 
         /// <summary>셋팅이 끝나고 화면에 보이기 직전에 호출됩니다. 딤 배경 등에 사용합니다.</summary>
@@ -203,6 +197,12 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             if (priorityOverride.HasValue)
                 runtimePriority = priorityOverride.Value;
         }
+
+        internal void SetCatalogViewId(string viewId) => catalogViewId = viewId;
+
+        internal void SetDuplicateDisplayIndex(int index) => duplicateDisplayIndex = index;
+
+        internal int DuplicateDisplayIndex => duplicateDisplayIndex;
 
         internal void ClearOpenOverrides()
         {
@@ -242,17 +242,24 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         private void SetVisible(bool visible, bool immediate = false)
         {
             if (visible)
+            {
+                if (!gameObject.activeSelf)
+                    gameObject.SetActive(true);
+
                 OnBeforeVisible();
-            else
-                OnBeforeHidden();
+                EnsureCanvasGroup();
+                canvasGroup.alpha = 1f;
+                canvasGroup.interactable = true;
+                canvasGroup.blocksRaycasts = true;
+                return;
+            }
 
+            OnBeforeHidden();
             EnsureCanvasGroup();
-            canvasGroup.alpha = visible ? 1f : 0f;
-            canvasGroup.interactable = visible;
-            canvasGroup.blocksRaycasts = visible;
-
-            if (!visible && immediate)
-                gameObject.SetActive(false);
+            canvasGroup.alpha = 0f;
+            canvasGroup.interactable = false;
+            canvasGroup.blocksRaycasts = false;
+            gameObject.SetActive(false);
         }
     }
 }

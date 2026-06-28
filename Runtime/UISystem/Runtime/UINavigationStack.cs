@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+#if UNITASK_INSTALLED
+using Cysharp.Threading.Tasks;
+#endif
 
 namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 {
@@ -18,7 +21,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             UIScreenBase current = Peek;
             if (current != null && current != screen)
-                current.Hide();
+                UIViewLifecycle.Hide(current);
 
             if (!screens.Contains(screen))
                 screens.Add(screen);
@@ -28,7 +31,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 screens.Add(screen);
             }
 
-            screen.Show(context);
+            UIViewLifecycle.Show(screen, context);
         }
 
         public bool TryPop()
@@ -37,7 +40,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 return false;
 
             UIScreenBase top = screens[^1];
-            top.Hide();
+            UIViewLifecycle.Hide(top);
             PopSilently();
             return true;
         }
@@ -48,7 +51,8 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 return;
 
             screens.RemoveAt(screens.Count - 1);
-            Peek?.Show();
+            if (Peek != null)
+                UIViewLifecycle.Show(Peek);
         }
 
         public void Remove(UIScreenBase screen, bool hide = true)
@@ -58,20 +62,36 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             bool wasTop = ReferenceEquals(Peek, screen);
             if (hide)
-                screen.Hide();
+                UIViewLifecycle.Hide(screen);
 
             screens.Remove(screen);
 
-            if (wasTop)
-                Peek?.Show();
+            if (wasTop && Peek != null)
+                UIViewLifecycle.Show(Peek);
         }
 
         public void Clear(bool immediate = false)
         {
             for (int i = screens.Count - 1; i >= 0; i--)
-                screens[i].Hide(immediate);
+                UIViewLifecycle.Hide(screens[i], immediate);
 
             screens.Clear();
+        }
+
+        internal List<UIScreenBase> Drain(bool immediate = false)
+        {
+            for (int i = screens.Count - 1; i >= 0; i--)
+                UIViewLifecycle.Hide(screens[i], immediate);
+
+            var drained = new List<UIScreenBase>(screens);
+            screens.Clear();
+            return drained;
+        }
+
+        internal void CopyTo(List<UIScreenBase> buffer)
+        {
+            buffer.Clear();
+            buffer.AddRange(screens);
         }
     }
 }

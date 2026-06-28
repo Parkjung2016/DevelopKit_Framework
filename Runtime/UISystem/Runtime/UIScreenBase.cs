@@ -6,11 +6,5 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
     public class UIScreenBase : UIViewBase
     {
         protected override string ResolveDefaultLayerId() => UILayers.Screen;
-
-        protected virtual void OnEnable()
-        {
-            if (!UIManager.Instance.LayerRegistry.IsScreenLayer(LayerId))
-                CDebug.LogWarning($"{name}: UIScreenBase는 Screen 레이어를 권장합니다. 현재={LayerId}");
-        }
     }
 }

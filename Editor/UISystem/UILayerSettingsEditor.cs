@@ -11,12 +11,58 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
     [CustomEditor(typeof(UILayerSettings))]
     public sealed class UILayerSettingsEditor : Editor
     {
+        private sealed class LayerListRowBinding
+        {
+            public int Index;
+            public Label TitleLabel;
+            public Label SubtitleLabel;
+            public VisualElement BuiltInBadge;
+            public VisualElement StackBadge;
+            public Button OpenScreenButton;
+        }
+
+        private sealed class CanvasGroupListRowBinding
+        {
+            public int Index;
+            public Label TitleLabel;
+            public Label SubtitleLabel;
+        }
+
         private VisualElement rootElement;
-        private VisualElement canvasGroupsHost;
-        private VisualElement layersHost;
+        private VisualElement canvasGroupsListHost;
+        private VisualElement canvasGroupsDetailHost;
+        private VisualElement layersListHost;
+        private VisualElement layersDetailHost;
+        private Label canvasGroupsCountLabel;
+        private Label layersCountLabel;
+        private ToolbarSearchField canvasGroupsSearchField;
+        private ToolbarSearchField layersSearchField;
         private VisualElement subTabRow;
-        private readonly List<Action> layerSummaryRefreshers = new();
         private bool externalNotifyScheduled;
+        private bool suppressExternalListRefresh;
+        private ExternalNotifyFlags pendingExternalNotify = ExternalNotifyFlags.None;
+        private IVisualElementScheduledItem layersSearchRebuildSchedule;
+        private IVisualElementScheduledItem canvasGroupsSearchRebuildSchedule;
+        private readonly Dictionary<int, LayerListRowBinding> layerRowBindings = new();
+        private readonly Dictionary<int, CanvasGroupListRowBinding> canvasGroupRowBindings = new();
+        private PopupField<string> openLayerCanvasGroupPopup;
+        private string openLayerCanvasGroupPropPath;
+        private PopupField<string> screenStackLayerPopup;
+        private bool suppressScreenStackPopupCallback;
+
+        private enum ExternalNotifyFlags
+        {
+            None = 0,
+            Layers = 1 << 0,
+            CanvasGroups = 1 << 1
+        }
+
+        private int selectedCanvasGroupIndex => canvasGroupSelection?.Primary ?? -1;
+        private int selectedLayerIndex => layerSelection?.Primary ?? -1;
+        private UISystemEditorListSelectionController canvasGroupSelection;
+        private UISystemEditorListSelectionController layerSelection;
+        private string canvasGroupsSearchText = string.Empty;
+        private string layersSearchText = string.Empty;
 
         private UISystemEditorUI.LayerSettingsSection ActiveSection
         {
@@ -37,6 +83,7 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
         public override VisualElement CreateInspectorGUI()
         {
             rootElement = new VisualElement();
+            rootElement.style.flexGrow = 1;
             var settings = (UILayerSettings)target;
 
             rootElement.Add(UISystemEditorUI.BuildHeader(
@@ -50,30 +97,24 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
                     ActiveSection == UISystemEditorUI.LayerSettingsSection.CanvasGroups ? 0 : 1,
                     OnStandaloneSubTabSelected);
                 rootElement.Add(subTabRow);
-            }
-
-            if (!UISystemEditorUI.PreferWindowLayout)
                 rootElement.Add(UISystemEditorUI.BuildOpenSettingsToolbar(serializedObject.targetObject));
+            }
 
             if (UISystemEditorUI.PreferWindowLayout)
             {
                 if (ActiveSection == UISystemEditorUI.LayerSettingsSection.CanvasGroups)
-                {
-                    canvasGroupsHost = BuildCanvasGroupsPanel(settings);
-                    rootElement.Add(canvasGroupsHost);
-                }
+                    rootElement.Add(BuildCanvasGroupsPanel(settings));
                 else
-                {
-                    layersHost = BuildLayersPanel(settings);
-                    rootElement.Add(layersHost);
-                }
+                    rootElement.Add(BuildLayersPanel(settings));
             }
             else
             {
-                canvasGroupsHost = BuildCanvasGroupsPanel(settings);
-                layersHost = BuildLayersPanel(settings);
-                rootElement.Add(canvasGroupsHost);
-                rootElement.Add(layersHost);
+                var canvasPanel = BuildCanvasGroupsPanel(settings);
+                var layersPanel = BuildLayersPanel(settings);
+                canvasPanel.name = "canvas-groups-panel";
+                layersPanel.name = "layers-panel";
+                rootElement.Add(canvasPanel);
+                rootElement.Add(layersPanel);
                 ApplySectionVisibility();
             }
 
@@ -122,10 +163,12 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
         private void ApplySectionVisibility()
         {
             bool showCanvas = ActiveSection == UISystemEditorUI.LayerSettingsSection.CanvasGroups;
-            if (canvasGroupsHost != null)
-                canvasGroupsHost.style.display = showCanvas ? DisplayStyle.Flex : DisplayStyle.None;
-            if (layersHost != null)
-                layersHost.style.display = showCanvas ? DisplayStyle.None : DisplayStyle.Flex;
+            var canvasPanel = rootElement.Q("canvas-groups-panel");
+            var layersPanel = rootElement.Q("layers-panel");
+            if (canvasPanel != null)
+                canvasPanel.style.display = showCanvas ? DisplayStyle.Flex : DisplayStyle.None;
+            if (layersPanel != null)
+                layersPanel.style.display = showCanvas ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
         private VisualElement BuildCanvasGroupsPanel(UILayerSettings settings)
@@ -133,17 +176,29 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             var panel = new VisualElement();
             panel.style.flexGrow = 1;
 
-            panel.Add(UISystemEditorUI.BuildToolbar(
+            var setupFoldout = new Foldout { text = "추가 · 초기화", value = false };
+            setupFoldout.style.marginBottom = 6;
+            setupFoldout.Add(UISystemEditorUI.BuildToolbar(
                 ("기본값으로 초기화", () => ResetAll(settings)),
                 ("빈 묶음 추가", AddEmptyCanvasGroup),
                 ("기본 묶음 추가…", ShowAddBuiltInCanvasGroupMenu)));
+            panel.Add(setupFoldout);
 
-            var scroll = CreateListScroll();
-            var list = new VisualElement();
-            scroll.Add(list);
-            panel.Add(scroll);
+            panel.Add(BuildCanvasGroupsFilterBar());
 
-            RebuildCanvasGroupsList(list);
+            canvasGroupsCountLabel = UISystemEditorUI.BuildSectionLabel("Canvas 묶음");
+            panel.Add(canvasGroupsCountLabel);
+
+            var body = BuildMasterDetailBody(
+                out canvasGroupsListHost,
+                out canvasGroupsDetailHost);
+            canvasGroupSelection = new UISystemEditorListSelectionController(
+                canvasGroupsListHost,
+                RebuildCanvasGroupsDetail,
+                DeleteSelectedCanvasGroups);
+            panel.Add(body);
+
+            RebuildCanvasGroupsAll();
             return panel;
         }
 
@@ -152,35 +207,139 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             var panel = new VisualElement();
             panel.style.flexGrow = 1;
 
-            panel.Add(UISystemEditorUI.BuildToolbar(
+            var setupFoldout = new Foldout { text = "추가 · 초기화 · 참고", value = false };
+            setupFoldout.style.marginBottom = 6;
+            setupFoldout.Add(UISystemEditorUI.BuildToolbar(
                 ("기본값으로 초기화", () => ResetAll(settings)),
                 ("빈 레이어 추가", AddEmptyLayer),
                 ("기본 레이어 추가…", ShowAddBuiltInMenu)));
+            setupFoldout.Add(UISystemEditorUI.BuildBuiltInLayersReference(asFoldout: false));
+            panel.Add(setupFoldout);
 
-            var reference = UISystemEditorUI.BuildBuiltInLayersReference();
-            reference.style.marginBottom = 6;
-            panel.Add(reference);
+            panel.Add(BuildLayersFilterBar());
+            panel.Add(BuildScreenStackLayerSelector());
 
-            var scroll = CreateListScroll();
-            var list = new VisualElement();
-            scroll.Add(list);
-            panel.Add(scroll);
+            layersCountLabel = UISystemEditorUI.BuildSectionLabel("레이어");
+            panel.Add(layersCountLabel);
 
-            RebuildLayersList(list);
+            var body = BuildMasterDetailBody(
+                out layersListHost,
+                out layersDetailHost);
+            layerSelection = new UISystemEditorListSelectionController(
+                layersListHost,
+                RebuildLayersDetail,
+                DeleteSelectedLayers);
+            panel.Add(body);
+
+            RebuildLayersAll();
             return panel;
         }
 
-        private static ScrollView CreateListScroll()
+        private static VisualElement BuildMasterDetailBody(out VisualElement listHost, out VisualElement detailHost)
         {
-            var scroll = new ScrollView(ScrollViewMode.Vertical);
-            scroll.style.flexGrow = 1;
-            if (!UISystemEditorUI.PreferWindowLayout)
-            {
-                scroll.style.minHeight = 160;
-                scroll.style.maxHeight = 520;
-            }
+            return UISystemEditorUI.BuildMasterDetailSplit(out listHost, out detailHost);
+        }
 
-            return scroll;
+        private VisualElement BuildCanvasGroupsFilterBar()
+        {
+            var bar = new VisualElement();
+            bar.style.flexDirection = FlexDirection.Row;
+            bar.style.flexWrap = Wrap.Wrap;
+            bar.style.alignItems = Align.Center;
+            bar.style.marginBottom = 6;
+
+            canvasGroupsSearchField = new ToolbarSearchField();
+            canvasGroupsSearchField.style.flexGrow = 1;
+            canvasGroupsSearchField.style.flexShrink = 1;
+            canvasGroupsSearchField.style.minWidth = 100;
+            canvasGroupsSearchField.style.marginRight = 6;
+            canvasGroupsSearchField.RegisterValueChangedCallback(evt =>
+            {
+                canvasGroupsSearchText = evt.newValue ?? string.Empty;
+                ScheduleCanvasGroupsListRebuild();
+            });
+            bar.Add(canvasGroupsSearchField);
+
+            var clear = new Button(() =>
+            {
+                canvasGroupSelection?.ClearSelection();
+                RebuildCanvasGroupsDetail();
+            })
+            { text = "선택 해제" };
+            clear.style.height = 22;
+            clear.style.flexShrink = 0;
+            bar.Add(clear);
+
+            return bar;
+        }
+
+        private VisualElement BuildLayersFilterBar()
+        {
+            var bar = new VisualElement();
+            bar.style.flexDirection = FlexDirection.Row;
+            bar.style.flexWrap = Wrap.Wrap;
+            bar.style.alignItems = Align.Center;
+            bar.style.marginBottom = 6;
+
+            layersSearchField = new ToolbarSearchField();
+            layersSearchField.style.flexGrow = 1;
+            layersSearchField.style.flexShrink = 1;
+            layersSearchField.style.minWidth = 100;
+            layersSearchField.style.marginRight = 6;
+            layersSearchField.RegisterValueChangedCallback(evt =>
+            {
+                layersSearchText = evt.newValue ?? string.Empty;
+                ScheduleLayersListRebuild();
+            });
+            bar.Add(layersSearchField);
+
+            var clear = new Button(() =>
+            {
+                layerSelection?.ClearSelection();
+                RebuildLayersDetail();
+            })
+            { text = "선택 해제" };
+            clear.style.height = 22;
+            clear.style.flexShrink = 0;
+            bar.Add(clear);
+
+            return bar;
+        }
+
+        private VisualElement BuildScreenStackLayerSelector()
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.flexWrap = Wrap.Wrap;
+            row.style.alignItems = Align.Center;
+            row.style.marginBottom = 6;
+
+            var label = new Label("OpenScreen");
+            label.style.minWidth = 72;
+            label.style.marginRight = 4;
+            label.style.unityTextAlign = TextAnchor.MiddleLeft;
+            row.Add(label);
+
+            screenStackLayerPopup = new PopupField<string>(new List<string>(), 0);
+            screenStackLayerPopup.style.minWidth = 140;
+            screenStackLayerPopup.style.flexShrink = 0;
+            screenStackLayerPopup.style.marginRight = 8;
+            screenStackLayerPopup.RegisterValueChangedCallback(evt =>
+            {
+                if (suppressScreenStackPopupCallback)
+                    return;
+
+                ApplyScreenStackLayer(evt.newValue);
+            });
+            row.Add(screenStackLayerPopup);
+
+            var hint = UISystemEditorUI.BuildHint(
+                "OpenScreen() 전환 레이어 · Ctrl+A 전체 선택 · Shift/Ctrl 클릭·드래그 다중 선택 · Delete 삭제");
+            hint.style.marginBottom = 0;
+            hint.style.flexGrow = 1;
+            row.Add(hint);
+
+            return row;
         }
 
         private void ResetAll(UILayerSettings settings)
@@ -194,70 +353,198 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
 
         private void RebuildActiveLists()
         {
-            if (canvasGroupsHost != null && canvasGroupsHost.childCount > 0)
-            {
-                var scroll = canvasGroupsHost.Q<ScrollView>();
-                var list = scroll?[0] as VisualElement;
-                if (list != null)
-                    RebuildCanvasGroupsList(list);
-            }
-
-            if (layersHost != null && layersHost.childCount > 0)
-            {
-                var scroll = layersHost.Q<ScrollView>();
-                var list = scroll?[0] as VisualElement;
-                if (list != null)
-                    RebuildLayersList(list);
-            }
+            if (canvasGroupsListHost != null)
+                RebuildCanvasGroupsAll();
+            if (layersListHost != null)
+                RebuildLayersAll();
         }
 
-        private void RebuildCanvasGroupsList(VisualElement listHost)
+        private void RebuildCanvasGroupsAll()
         {
-            listHost.Clear();
+            RebuildCanvasGroupsList();
+            RebuildCanvasGroupsDetail();
+        }
+
+        private void RebuildLayersAll()
+        {
+            RebuildLayersList();
+            RebuildLayersDetail();
+        }
+
+        private void RebuildCanvasGroupsList()
+        {
+            canvasGroupSelection?.ClearListRows();
+            canvasGroupRowBindings.Clear();
             serializedObject.Update();
 
             SerializedProperty groups = serializedObject.FindProperty("canvasGroups");
-            if (groups.arraySize == 0)
+            int total = groups.arraySize;
+            int visible = CountVisibleCanvasGroups(groups);
+            canvasGroupsCountLabel.text = visible == total
+                ? $"Canvas 묶음 ({total})"
+                : $"Canvas 묶음 ({visible} / {total})";
+
+            if (total == 0)
             {
-                listHost.Add(UISystemEditorUI.BuildHelpBox(
-                    "Canvas 묶음이 없습니다. '기본값으로 초기화' 또는 '빈 묶음 추가'를 사용하세요.",
+                canvasGroupsListHost.Add(UISystemEditorUI.BuildHelpBox(
+                    "Canvas 묶음이 없습니다. '추가 · 초기화'에서 항목을 추가하세요.",
                     HelpBoxMessageType.Warning));
+                canvasGroupSelection?.ClearSelection();
                 return;
             }
 
-            for (int i = 0; i < groups.arraySize; i++)
-                listHost.Add(BuildCanvasGroupCard(groups.GetArrayElementAtIndex(i), i, groups));
+            canvasGroupSelection?.PruneInvalidIndices(total);
+
+            bool anyVisible = false;
+            for (int i = 0; i < total; i++)
+            {
+                SerializedProperty element = groups.GetArrayElementAtIndex(i);
+                if (!MatchesCanvasGroupFilter(element))
+                    continue;
+
+                anyVisible = true;
+                canvasGroupsListHost.Add(BuildCanvasGroupListRow(element, i, groups));
+            }
+
+            if (!anyVisible)
+            {
+                canvasGroupsListHost.Add(UISystemEditorUI.BuildHelpBox(
+                    "검색 조건에 맞는 Canvas 묶음이 없습니다.",
+                    HelpBoxMessageType.Info));
+            }
+
+            canvasGroupSelection?.RefreshAllRowStyles();
         }
 
-        private void RebuildLayersList(VisualElement listHost)
+        private void RebuildCanvasGroupsDetail()
         {
-            listHost.Clear();
-            layerSummaryRefreshers.Clear();
+            canvasGroupsDetailHost.Clear();
+
+            SerializedProperty groups = serializedObject.FindProperty("canvasGroups");
+            if (canvasGroupSelection != null && canvasGroupSelection.Count > 1)
+            {
+                canvasGroupsDetailHost.Add(UISystemEditorUI.BuildHelpBox(
+                    $"{canvasGroupSelection.Count}개 선택됨 · Ctrl+A 전체 선택 · Delete 키로 삭제 · Shift/Ctrl+클릭·드래그로 다중 선택",
+                    HelpBoxMessageType.Info));
+                return;
+            }
+
+            if (selectedCanvasGroupIndex < 0 || selectedCanvasGroupIndex >= groups.arraySize)
+            {
+                canvasGroupsDetailHost.Add(UISystemEditorUI.BuildHelpBox(
+                    "목록에서 Canvas 묶음을 선택하면 상세 설정을 편집할 수 있습니다.",
+                    HelpBoxMessageType.Info));
+                return;
+            }
+
+            canvasGroupsDetailHost.Add(BuildCanvasGroupDetailPanel(
+                groups.GetArrayElementAtIndex(selectedCanvasGroupIndex),
+                selectedCanvasGroupIndex,
+                groups));
+        }
+
+        private void RebuildLayersList()
+        {
+            layerSelection?.ClearListRows();
+            layerRowBindings.Clear();
             serializedObject.Update();
 
             SerializedProperty layers = serializedObject.FindProperty("layers");
-            if (layers.arraySize == 0)
+            int total = layers.arraySize;
+            int visible = CountVisibleLayers(layers);
+            layersCountLabel.text = visible == total
+                ? $"레이어 ({total})"
+                : $"레이어 ({visible} / {total})";
+
+            if (total == 0)
             {
-                listHost.Add(UISystemEditorUI.BuildHelpBox(
-                    "레이어가 없습니다. '기본값으로 초기화' 또는 '빈 레이어 추가'를 사용하세요.",
+                layersListHost.Add(UISystemEditorUI.BuildHelpBox(
+                    "레이어가 없습니다. '추가 · 초기화 · 참고'에서 항목을 추가하세요.",
                     HelpBoxMessageType.Warning));
+                layerSelection?.ClearSelection();
                 return;
             }
 
-            for (int i = 0; i < layers.arraySize; i++)
-                listHost.Add(BuildLayerCard(layers.GetArrayElementAtIndex(i), i, layers));
+            layerSelection?.PruneInvalidIndices(total);
+            EnsureScreenStackLayerAssigned();
+            SyncScreenStackLayerPopup();
+
+            bool anyVisible = false;
+            for (int i = 0; i < total; i++)
+            {
+                SerializedProperty element = layers.GetArrayElementAtIndex(i);
+                if (!MatchesLayerFilter(element))
+                    continue;
+
+                anyVisible = true;
+                layersListHost.Add(BuildLayerListRow(element, i, layers));
+            }
+
+            if (!anyVisible)
+            {
+                layersListHost.Add(UISystemEditorUI.BuildHelpBox(
+                    "검색 조건에 맞는 레이어가 없습니다.",
+                    HelpBoxMessageType.Info));
+            }
+
+            layerSelection?.RefreshAllRowStyles();
         }
 
-        private void OnExternalCanvasGroupsChanged() => RefreshAllLayerSummaries();
-
-        private void RefreshAllLayerSummaries()
+        private void RebuildLayersDetail()
         {
-            for (int i = 0; i < layerSummaryRefreshers.Count; i++)
-                layerSummaryRefreshers[i]?.Invoke();
+            layersDetailHost.Clear();
+            openLayerCanvasGroupPopup = null;
+            openLayerCanvasGroupPropPath = null;
+
+            SerializedProperty layers = serializedObject.FindProperty("layers");
+            if (layerSelection != null && layerSelection.Count > 1)
+            {
+                layersDetailHost.Add(UISystemEditorUI.BuildHelpBox(
+                    $"{layerSelection.Count}개 선택됨 · Ctrl+A 전체 선택 · Delete 키로 삭제 · Shift/Ctrl+클릭·드래그로 다중 선택",
+                    HelpBoxMessageType.Info));
+                return;
+            }
+
+            if (selectedLayerIndex < 0 || selectedLayerIndex >= layers.arraySize)
+            {
+                layersDetailHost.Add(UISystemEditorUI.BuildHelpBox(
+                    "목록에서 레이어를 선택하면 상세 설정을 편집할 수 있습니다.",
+                    HelpBoxMessageType.Info));
+                return;
+            }
+
+            layersDetailHost.Add(BuildLayerDetailPanel(
+                layers.GetArrayElementAtIndex(selectedLayerIndex),
+                selectedLayerIndex,
+                layers));
         }
 
-        private void QueueExternalNotify()
+        private void OnExternalCanvasGroupsChanged()
         {
+            if (suppressExternalListRefresh || layersListHost == null)
+                return;
+
+            RefreshAllLayerListRowSubtitles();
+            SyncOpenLayerDetailCanvasGroupPopup();
+        }
+
+        private void ScheduleLayersListRebuild()
+        {
+            layersSearchRebuildSchedule?.Pause();
+            layersSearchRebuildSchedule = layersSearchField?.schedule.Execute(RebuildLayersList).StartingIn(150);
+        }
+
+        private void ScheduleCanvasGroupsListRebuild()
+        {
+            canvasGroupsSearchRebuildSchedule?.Pause();
+            canvasGroupsSearchRebuildSchedule = canvasGroupsSearchField?.schedule
+                .Execute(RebuildCanvasGroupsList)
+                .StartingIn(150);
+        }
+
+        private void QueueExternalNotify(ExternalNotifyFlags flags = ExternalNotifyFlags.Layers | ExternalNotifyFlags.CanvasGroups)
+        {
+            pendingExternalNotify |= flags;
             if (externalNotifyScheduled || rootElement?.panel == null)
                 return;
 
@@ -265,8 +552,22 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             rootElement.schedule.Execute(() =>
             {
                 externalNotifyScheduled = false;
-                UISystemEditorLayers.NotifyLayerIdChanged();
-                UISystemEditorCanvasGroups.NotifyCanvasGroupsChanged();
+                ExternalNotifyFlags notify = pendingExternalNotify;
+                pendingExternalNotify = ExternalNotifyFlags.None;
+
+                suppressExternalListRefresh = true;
+                try
+                {
+                    if ((notify & ExternalNotifyFlags.Layers) != 0)
+                        UISystemEditorLayers.NotifyLayerIdChanged();
+
+                    if ((notify & ExternalNotifyFlags.CanvasGroups) != 0)
+                        UISystemEditorCanvasGroups.NotifyCanvasGroupsChanged();
+                }
+                finally
+                {
+                    suppressExternalListRefresh = false;
+                }
             }).StartingIn(120);
         }
 
@@ -280,7 +581,8 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             element.FindPropertyRelative("sortingOrder").intValue = 150;
             element.FindPropertyRelative("canvasName").stringValue = "Custom Canvas";
             serializedObject.ApplyModifiedProperties();
-            RebuildActiveLists();
+            canvasGroupSelection?.SelectSingle(groups.arraySize - 1);
+            RebuildCanvasGroupsAll();
             QueueExternalNotify();
         }
 
@@ -296,7 +598,8 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             element.FindPropertyRelative("useScreenStack").boolValue = false;
             element.FindPropertyRelative("rootName").stringValue = "CustomLayer";
             serializedObject.ApplyModifiedProperties();
-            RebuildActiveLists();
+            layerSelection?.SelectSingle(layers.arraySize - 1);
+            RebuildLayersAll();
             QueueExternalNotify();
         }
 
@@ -328,7 +631,8 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             groups.InsertArrayElementAtIndex(groups.arraySize);
             ApplyBuiltInCanvasGroup(groups.GetArrayElementAtIndex(groups.arraySize - 1), info);
             serializedObject.ApplyModifiedProperties();
-            RebuildActiveLists();
+            canvasGroupSelection?.SelectSingle(groups.arraySize - 1);
+            RebuildCanvasGroupsAll();
             QueueExternalNotify();
         }
 
@@ -368,7 +672,8 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             layers.InsertArrayElementAtIndex(layers.arraySize);
             ApplyBuiltInToProperty(layers.GetArrayElementAtIndex(layers.arraySize - 1), info);
             serializedObject.ApplyModifiedProperties();
-            RebuildActiveLists();
+            layerSelection?.SelectSingle(layers.arraySize - 1);
+            RebuildLayersAll();
             QueueExternalNotify();
         }
 
@@ -382,166 +687,498 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             element.FindPropertyRelative("rootName").stringValue = info.RootName;
         }
 
-        private VisualElement BuildCanvasGroupCard(SerializedProperty element, int index, SerializedProperty groupsArray)
+        private VisualElement BuildCanvasGroupListRow(SerializedProperty element, int index, SerializedProperty groupsArray)
+        {
+            SerializedProperty groupIdProp = element.FindPropertyRelative("groupId");
+            string groupId = groupIdProp.stringValue;
+
+            var row = CreateSelectableListRow(index, canvasGroupSelection);
+
+            var textCol = new VisualElement();
+            textCol.style.flexGrow = 1;
+            textCol.style.minWidth = 0;
+
+            var title = new Label(groupId);
+            title.style.unityFontStyleAndWeight = FontStyle.Bold;
+            title.style.fontSize = 11;
+            title.style.overflow = Overflow.Hidden;
+            title.style.textOverflow = TextOverflow.Ellipsis;
+            textCol.Add(title);
+
+            var sub = new Label();
+            sub.style.fontSize = 9;
+            sub.style.color = new Color(0.65f, 0.65f, 0.65f);
+            sub.style.overflow = Overflow.Hidden;
+            sub.style.textOverflow = TextOverflow.Ellipsis;
+            textCol.Add(sub);
+            row.Add(textCol);
+
+            if (UISystemBuiltIn.IsBuiltInCanvasGroupId(groupId))
+                row.Add(UISystemEditorUI.BuildBadge("기본", new Color(0.6f, 0.85f, 1f)));
+
+            var binding = new CanvasGroupListRowBinding
+            {
+                Index = index,
+                TitleLabel = title,
+                SubtitleLabel = sub
+            };
+            canvasGroupRowBindings[index] = binding;
+            RefreshCanvasGroupListRow(binding);
+
+            return row;
+        }
+
+        private VisualElement BuildLayerListRow(SerializedProperty element, int index, SerializedProperty layersArray)
+        {
+            SerializedProperty layerIdProp = element.FindPropertyRelative("layerId");
+            string layerId = layerIdProp.stringValue;
+
+            var row = CreateSelectableListRow(index, layerSelection);
+
+            var textCol = new VisualElement();
+            textCol.style.flexGrow = 1;
+            textCol.style.minWidth = 0;
+
+            var title = new Label(layerId);
+            title.style.unityFontStyleAndWeight = FontStyle.Bold;
+            title.style.fontSize = 11;
+            title.style.overflow = Overflow.Hidden;
+            title.style.textOverflow = TextOverflow.Ellipsis;
+            textCol.Add(title);
+
+            var sub = new Label();
+            sub.style.fontSize = 9;
+            sub.style.color = new Color(0.65f, 0.65f, 0.65f);
+            sub.style.overflow = Overflow.Hidden;
+            sub.style.textOverflow = TextOverflow.Ellipsis;
+            textCol.Add(sub);
+            row.Add(textCol);
+
+            var badges = new VisualElement();
+            badges.style.flexDirection = FlexDirection.Row;
+            badges.style.flexShrink = 0;
+
+            var builtInBadge = UISystemEditorUI.BuildBadge("기본", new Color(0.6f, 0.85f, 1f));
+            builtInBadge.style.display = DisplayStyle.None;
+            badges.Add(builtInBadge);
+
+            var stackBadge = UISystemEditorUI.BuildBadge("OpenScreen", new Color(0.75f, 0.85f, 1f));
+            stackBadge.style.display = DisplayStyle.None;
+            badges.Add(stackBadge);
+
+            bool isOpenScreenLayer = IsScreenStackLayerId(layerId);
+            var openScreenButton = new Button(() => ApplyScreenStackLayer(layerId))
+            { text = "OpenScreen" };
+            openScreenButton.style.height = 18;
+            openScreenButton.style.fontSize = 9;
+            openScreenButton.style.marginLeft = 2;
+            openScreenButton.style.flexShrink = 0;
+            ApplyOpenScreenButtonStyle(openScreenButton, isOpenScreenLayer);
+            openScreenButton.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
+            openScreenButton.RegisterCallback<PointerDownEvent>(evt => evt.StopPropagation());
+            row.Add(openScreenButton);
+
+            row.Add(badges);
+
+            var binding = new LayerListRowBinding
+            {
+                Index = index,
+                TitleLabel = title,
+                SubtitleLabel = sub,
+                BuiltInBadge = builtInBadge,
+                StackBadge = stackBadge,
+                OpenScreenButton = openScreenButton
+            };
+            layerRowBindings[index] = binding;
+            RefreshLayerListRow(binding);
+
+            return row;
+        }
+
+        private static VisualElement CreateSelectableListRow(int index, UISystemEditorListSelectionController selection)
+        {
+            var row = new VisualElement();
+            row.userData = index;
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            row.style.paddingLeft = 6;
+            row.style.paddingRight = 4;
+            row.style.paddingTop = 3;
+            row.style.paddingBottom = 3;
+            row.style.marginBottom = 1;
+            row.style.borderTopLeftRadius = 3;
+            row.style.borderTopRightRadius = 3;
+            row.style.borderBottomLeftRadius = 3;
+            row.style.borderBottomRightRadius = 3;
+            UISystemEditorListSelectionStyles.PrepareRow(row, selection != null && selection.IsSelected(index));
+
+            return row;
+        }
+
+        private void DeleteSelectedCanvasGroups()
+        {
+            if (canvasGroupSelection == null || canvasGroupSelection.Count == 0)
+                return;
+
+            SerializedProperty groups = serializedObject.FindProperty("canvasGroups");
+            UISystemEditorListSelectionDelete.DeleteDescending(
+                groups,
+                canvasGroupSelection.GetSelectedSnapshot(),
+                target,
+                "Delete Canvas Groups");
+            canvasGroupSelection.ClearSelection();
+            RebuildCanvasGroupsAll();
+            QueueExternalNotify(ExternalNotifyFlags.CanvasGroups | ExternalNotifyFlags.Layers);
+        }
+
+        private void DeleteSelectedLayers()
+        {
+            if (layerSelection == null || layerSelection.Count == 0)
+                return;
+
+            SerializedProperty layers = serializedObject.FindProperty("layers");
+            UISystemEditorListSelectionDelete.DeleteDescending(
+                layers,
+                layerSelection.GetSelectedSnapshot(),
+                target,
+                "Delete UI Layers");
+            layerSelection.ClearSelection();
+            EnsureScreenStackLayerAssigned();
+            RebuildLayersAll();
+            QueueExternalNotify(ExternalNotifyFlags.Layers);
+        }
+
+        private static void ApplyOpenScreenButtonStyle(Button button, bool active)
+        {
+            if (active)
+            {
+                button.style.backgroundColor = new Color(0.2f, 0.45f, 0.7f, 0.45f);
+                button.style.color = new Color(0.9f, 0.95f, 1f);
+                button.style.unityFontStyleAndWeight = FontStyle.Bold;
+            }
+            else
+            {
+                button.style.backgroundColor = new Color(0f, 0f, 0f, 0.1f);
+                button.style.color = new Color(0.75f, 0.75f, 0.75f);
+                button.style.unityFontStyleAndWeight = FontStyle.Normal;
+            }
+        }
+
+        private VisualElement BuildCanvasGroupDetailPanel(
+            SerializedProperty element,
+            int index,
+            SerializedProperty groupsArray)
         {
             SerializedProperty groupIdProp = element.FindPropertyRelative("groupId");
             SerializedProperty sortingOrderProp = element.FindPropertyRelative("sortingOrder");
+            string groupId = groupIdProp.stringValue;
 
-            var card = UISystemEditorUI.BuildCard();
+            var panel = UISystemEditorUI.BuildCard();
+            panel.style.marginBottom = 0;
 
             var header = new VisualElement();
             header.style.flexDirection = FlexDirection.Row;
             header.style.alignItems = Align.Center;
-            header.style.marginBottom = 4;
+            header.style.marginBottom = 8;
 
-            var title = new Label();
+            var title = new Label(groupId);
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            title.style.fontSize = 13;
+            title.style.fontSize = 14;
             title.style.flexGrow = 1;
             header.Add(title);
 
-            var badgeHost = new VisualElement();
-            badgeHost.style.flexDirection = FlexDirection.Row;
-            header.Add(badgeHost);
+            var builtInBadgeHost = new VisualElement();
+            builtInBadgeHost.style.flexDirection = FlexDirection.Row;
+            header.Add(builtInBadgeHost);
 
             var remove = new Button(() =>
             {
                 groupsArray.DeleteArrayElementAtIndex(index);
                 serializedObject.ApplyModifiedProperties();
-                RebuildActiveLists();
+                if (selectedCanvasGroupIndex >= groupsArray.arraySize)
+                    canvasGroupSelection?.ClearSelection();
+                RebuildCanvasGroupsAll();
                 QueueExternalNotify();
             })
             { text = "삭제" };
             remove.style.height = 20;
             header.Add(remove);
-            card.Add(header);
+            panel.Add(header);
 
-            var description = UISystemEditorUI.BuildHint(string.Empty);
-            card.Add(description);
-
-            void RefreshSummary()
+            void RefreshCanvasGroupDetailPresentation(string currentGroupId)
             {
-                serializedObject.Update();
-                string groupId = groupIdProp.stringValue;
-                title.text = $"{groupId}  ·  order {sortingOrderProp.intValue}";
+                title.text = currentGroupId;
 
-                badgeHost.Clear();
-                if (UISystemBuiltIn.IsBuiltInCanvasGroupId(groupId))
-                    badgeHost.Add(UISystemEditorUI.BuildBadge("기본", new Color(0.6f, 0.85f, 1f)));
-
-                description.text = UISystemBuiltIn.TryGetCanvasGroup(groupId, out BuiltInCanvasGroupInfo info)
-                    ? info.Description
-                    : string.Empty;
-                description.style.display = string.IsNullOrEmpty(description.text)
-                    ? DisplayStyle.None
-                    : DisplayStyle.Flex;
+                builtInBadgeHost.Clear();
+                if (UISystemBuiltIn.IsBuiltInCanvasGroupId(currentGroupId))
+                {
+                    builtInBadgeHost.Add(UISystemEditorUI.BuildBadge(
+                        "기본",
+                        new Color(0.6f, 0.85f, 1f)));
+                }
             }
 
-            RefreshSummary();
+            RefreshCanvasGroupDetailPresentation(groupId);
 
-            var fields = UISystemEditorUI.BuildFieldGroup();
-            BindField(fields, groupIdProp, "묶음 ID", () =>
-            {
-                RefreshSummary();
-                RefreshAllLayerSummaries();
-                QueueExternalNotify();
-            });
-            BindField(fields, element.FindPropertyRelative("displayName"), "표시 이름", QueueExternalNotify);
+            string canvasBuiltInDescription = null;
+            if (UISystemBuiltIn.TryGetCanvasGroup(groupId, out BuiltInCanvasGroupInfo canvasBuiltInInfo))
+                canvasBuiltInDescription = canvasBuiltInInfo.Description;
+
+            panel.Add(UISystemEditorUI.BuildEditableHint(
+                serializedObject,
+                target,
+                element.FindPropertyRelative("description"),
+                canvasBuiltInDescription));
+
+            var fields = UISystemEditorUI.BuildFieldGroup("속성");
+            BindRenamableStringField(
+                fields,
+                groupIdProp,
+                "묶음 ID",
+                groupId,
+                (oldGroupId, newGroupId) =>
+                {
+                    UISystemEditorReferencePropagation.PropagateCanvasGroupIdRename(
+                        (UILayerSettings)target,
+                        oldGroupId,
+                        newGroupId);
+                },
+                () =>
+                {
+                    RefreshCanvasGroupDetailPresentation(groupIdProp.stringValue);
+                    RefreshCanvasGroupListRow(selectedCanvasGroupIndex);
+                    RefreshAllLayerListRowSubtitles();
+                    SyncOpenLayerDetailCanvasGroupPopup();
+                },
+                ExternalNotifyFlags.CanvasGroups | ExternalNotifyFlags.Layers);
+            BindField(fields, element.FindPropertyRelative("displayName"), "표시 이름", () =>
+                QueueExternalNotify(ExternalNotifyFlags.CanvasGroups));
             BindField(fields, sortingOrderProp, "sortingOrder", () =>
             {
-                RefreshSummary();
-                QueueExternalNotify();
+                RefreshCanvasGroupListRow(selectedCanvasGroupIndex);
+                QueueExternalNotify(ExternalNotifyFlags.CanvasGroups);
             });
-            BindField(fields, element.FindPropertyRelative("canvasName"), "Canvas 이름", QueueExternalNotify);
-            card.Add(fields);
+            BindField(fields, element.FindPropertyRelative("canvasName"), "Canvas 이름", () =>
+            {
+                RefreshCanvasGroupListRow(selectedCanvasGroupIndex);
+                QueueExternalNotify(ExternalNotifyFlags.CanvasGroups);
+            });
+            panel.Add(fields);
 
-            return card;
+            return panel;
         }
 
-        private VisualElement BuildLayerCard(SerializedProperty element, int index, SerializedProperty layersArray)
+        private VisualElement BuildLayerDetailPanel(
+            SerializedProperty element,
+            int index,
+            SerializedProperty layersArray)
         {
-            var settings = (UILayerSettings)target;
             SerializedProperty layerIdProp = element.FindPropertyRelative("layerId");
-            SerializedProperty sortOrderProp = element.FindPropertyRelative("sortOrder");
-            SerializedProperty canvasGroupIdProp = element.FindPropertyRelative("canvasGroupId");
+            string layerId = layerIdProp.stringValue;
 
-            var card = UISystemEditorUI.BuildCard();
+            var panel = UISystemEditorUI.BuildCard();
+            panel.style.marginBottom = 0;
 
             var header = new VisualElement();
             header.style.flexDirection = FlexDirection.Row;
             header.style.alignItems = Align.Center;
-            header.style.marginBottom = 4;
+            header.style.marginBottom = 8;
 
-            var title = new Label();
+            var title = new Label(layerId);
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            title.style.fontSize = 13;
+            title.style.fontSize = 14;
             title.style.flexGrow = 1;
             header.Add(title);
 
-            var badgeHost = new VisualElement();
-            badgeHost.style.flexDirection = FlexDirection.Row;
-            header.Add(badgeHost);
+            var builtInBadgeHost = new VisualElement();
+            builtInBadgeHost.style.flexDirection = FlexDirection.Row;
+            header.Add(builtInBadgeHost);
 
             var remove = new Button(() =>
             {
                 layersArray.DeleteArrayElementAtIndex(index);
                 serializedObject.ApplyModifiedProperties();
-                RebuildActiveLists();
+                if (selectedLayerIndex >= layersArray.arraySize)
+                    layerSelection?.ClearSelection();
+                EnsureScreenStackLayerAssigned();
+                RebuildLayersAll();
                 QueueExternalNotify();
             })
             { text = "삭제" };
             remove.style.height = 20;
             header.Add(remove);
-            card.Add(header);
+            panel.Add(header);
 
-            var description = UISystemEditorUI.BuildHint(string.Empty);
-            card.Add(description);
+            var screenStackInfo = UISystemEditorUI.BuildHint(
+                "이 레이어가 OpenScreen() 화면 전환 스택입니다. Popup/OpenPopup과는 무관합니다.");
+            screenStackInfo.style.display = DisplayStyle.None;
+            panel.Add(screenStackInfo);
 
-            void RefreshSummary()
+            void RefreshLayerDetailPresentation(string currentLayerId)
             {
-                serializedObject.Update();
+                title.text = currentLayerId;
 
-                string layerId = layerIdProp.stringValue;
-                int sortOrder = sortOrderProp.intValue;
-                string groupId = string.IsNullOrEmpty(canvasGroupIdProp.stringValue)
-                    ? UISystemEditorCanvasGroups.ReadLegacyCanvasGroupId(canvasGroupIdProp)
-                    : canvasGroupIdProp.stringValue;
+                builtInBadgeHost.Clear();
+                if (UISystemBuiltIn.IsBuiltInLayerId(currentLayerId))
+                {
+                    builtInBadgeHost.Add(UISystemEditorUI.BuildBadge(
+                        "기본",
+                        new Color(0.6f, 0.85f, 1f)));
+                }
 
-                title.text = $"{layerId}  ·  {sortOrder}  ·  {UISystemEditorCanvasGroups.FormatGroupLabel(groupId, settings)}";
-
-                badgeHost.Clear();
-                if (UISystemBuiltIn.IsBuiltInLayerId(layerId))
-                    badgeHost.Add(UISystemEditorUI.BuildBadge("기본", new Color(0.6f, 0.85f, 1f)));
-
-                description.text = UISystemBuiltIn.TryGetLayer(layerId, out BuiltInLayerInfo info)
-                    ? info.Description
-                    : string.Empty;
-                description.style.display = string.IsNullOrEmpty(description.text)
-                    ? DisplayStyle.None
-                    : DisplayStyle.Flex;
+                screenStackInfo.style.display = IsScreenStackLayerId(currentLayerId)
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
             }
 
-            RefreshSummary();
-            layerSummaryRefreshers.Add(RefreshSummary);
+            RefreshLayerDetailPresentation(layerId);
 
-            var fields = UISystemEditorUI.BuildFieldGroup();
-            BindField(fields, layerIdProp, "레이어 ID", () =>
-            {
-                RefreshSummary();
-                QueueExternalNotify();
-            });
-            BindField(fields, element.FindPropertyRelative("displayName"), "표시 이름", QueueExternalNotify);
-            BindField(fields, sortOrderProp, "정렬 순서", RefreshSummary);
-            BindCanvasGroupField(fields, canvasGroupIdProp, () =>
-            {
-                RefreshSummary();
-                QueueExternalNotify();
-            });
-            BindField(fields, element.FindPropertyRelative("useScreenStack"), "화면 스택", QueueExternalNotify);
-            BindField(fields, element.FindPropertyRelative("rootName"), "루트 이름", QueueExternalNotify);
-            card.Add(fields);
+            string layerBuiltInDescription = null;
+            if (UISystemBuiltIn.TryGetLayer(layerId, out BuiltInLayerInfo layerBuiltInInfo))
+                layerBuiltInDescription = layerBuiltInInfo.Description;
 
-            return card;
+            panel.Add(UISystemEditorUI.BuildEditableHint(
+                serializedObject,
+                target,
+                element.FindPropertyRelative("description"),
+                layerBuiltInDescription));
+
+            var fields = UISystemEditorUI.BuildFieldGroup("속성");
+            BindRenamableStringField(
+                fields,
+                layerIdProp,
+                "레이어 ID",
+                layerId,
+                (oldLayerId, newLayerId) =>
+                {
+                    UISystemEditorReferencePropagation.PropagateLayerIdRename(
+                        (UILayerSettings)target,
+                        oldLayerId,
+                        newLayerId);
+                },
+                () =>
+                {
+                    RefreshLayerDetailPresentation(layerIdProp.stringValue);
+                    RefreshAllLayerListRows();
+                    SyncScreenStackLayerPopup();
+                },
+                ExternalNotifyFlags.Layers);
+            BindField(fields, element.FindPropertyRelative("displayName"), "표시 이름", () =>
+                QueueExternalNotify(ExternalNotifyFlags.Layers));
+            BindField(fields, element.FindPropertyRelative("sortOrder"), "정렬 순서", () =>
+            {
+                RefreshLayerListRow(selectedLayerIndex);
+                QueueExternalNotify(ExternalNotifyFlags.Layers);
+            });
+            BindCanvasGroupField(fields, element.FindPropertyRelative("canvasGroupId"), () =>
+            {
+                RefreshLayerListRow(selectedLayerIndex);
+                QueueExternalNotify(ExternalNotifyFlags.Layers | ExternalNotifyFlags.CanvasGroups);
+            });
+            BindField(fields, element.FindPropertyRelative("rootName"), "루트 이름", () =>
+                QueueExternalNotify(ExternalNotifyFlags.Layers));
+            panel.Add(fields);
+
+            return panel;
+        }
+
+        private int CountVisibleCanvasGroups(SerializedProperty groups)
+        {
+            int count = 0;
+            for (int i = 0; i < groups.arraySize; i++)
+            {
+                if (MatchesCanvasGroupFilter(groups.GetArrayElementAtIndex(i)))
+                    count++;
+            }
+
+            return count;
+        }
+
+        private int CountVisibleLayers(SerializedProperty layers)
+        {
+            int count = 0;
+            for (int i = 0; i < layers.arraySize; i++)
+            {
+                if (MatchesLayerFilter(layers.GetArrayElementAtIndex(i)))
+                    count++;
+            }
+
+            return count;
+        }
+
+        private bool MatchesCanvasGroupFilter(SerializedProperty element)
+        {
+            if (string.IsNullOrEmpty(canvasGroupsSearchText))
+                return true;
+
+            string query = canvasGroupsSearchText.Trim();
+            string groupId = element.FindPropertyRelative("groupId").stringValue;
+            if (groupId.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            string displayName = element.FindPropertyRelative("displayName").stringValue;
+            if (displayName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            string canvasName = element.FindPropertyRelative("canvasName").stringValue;
+            return canvasName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private bool MatchesLayerFilter(SerializedProperty element)
+        {
+            if (string.IsNullOrEmpty(layersSearchText))
+                return true;
+
+            string query = layersSearchText.Trim();
+            string layerId = element.FindPropertyRelative("layerId").stringValue;
+            if (layerId.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            string displayName = element.FindPropertyRelative("displayName").stringValue;
+            if (displayName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            string groupId = element.FindPropertyRelative("canvasGroupId").stringValue;
+            if (groupId.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            string rootName = element.FindPropertyRelative("rootName").stringValue;
+            return rootName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private void BindRenamableStringField(
+            VisualElement root,
+            SerializedProperty property,
+            string label,
+            string initialValue,
+            Action<string, string> onRenamed,
+            Action onChanged,
+            ExternalNotifyFlags notifyFlags = ExternalNotifyFlags.Layers)
+        {
+            string trackedValue = initialValue ?? string.Empty;
+            var textField = new TextField(label)
+            {
+                value = trackedValue,
+                isDelayed = true
+            };
+
+            textField.RegisterValueChangedCallback(evt =>
+            {
+                string newValue = evt.newValue ?? string.Empty;
+                if (string.Equals(trackedValue, newValue, StringComparison.Ordinal))
+                    return;
+
+                Undo.RecordObject(target, label);
+                property.stringValue = newValue;
+                serializedObject.ApplyModifiedProperties();
+                EditorUtility.SetDirty(target);
+
+                onRenamed?.Invoke(trackedValue, newValue);
+                trackedValue = newValue;
+                onChanged?.Invoke();
+                QueueExternalNotify(notifyFlags);
+            });
+            root.Add(textField);
         }
 
         private void BindField(VisualElement root, SerializedProperty property, string label, Action onChanged)
@@ -556,19 +1193,264 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
         private void BindCanvasGroupField(VisualElement root, SerializedProperty groupIdProp, Action onChanged)
         {
             var settings = (UILayerSettings)target;
-            var container = new IMGUIContainer(() =>
+            PopupField<string> popup = UISystemEditorCanvasGroups.CreatePopupField(groupIdProp, settings);
+            popup.RegisterValueChangedCallback(evt =>
             {
-                serializedObject.Update();
-                if (UISystemEditorCanvasGroups.DrawCanvasGroupPopup(
-                        groupIdProp,
-                        settings,
-                        new GUIContent("Canvas 묶음")))
-                {
-                    onChanged?.Invoke();
-                }
+                string newGroupId = evt.newValue;
+                if (string.Equals(groupIdProp.stringValue, newGroupId, StringComparison.Ordinal))
+                    return;
+
+                groupIdProp.stringValue = newGroupId;
+                serializedObject.ApplyModifiedProperties();
+                onChanged?.Invoke();
             });
-            container.style.height = EditorGUIUtility.singleLineHeight + 4;
-            root.Add(container);
+
+            openLayerCanvasGroupPopup = popup;
+            openLayerCanvasGroupPropPath = groupIdProp.propertyPath;
+            root.Add(popup);
+        }
+
+        private void RefreshCanvasGroupListRow(int index)
+        {
+            if (!canvasGroupRowBindings.TryGetValue(index, out CanvasGroupListRowBinding binding))
+                return;
+
+            RefreshCanvasGroupListRow(binding);
+        }
+
+        private void RefreshCanvasGroupListRow(CanvasGroupListRowBinding binding)
+        {
+            if (binding == null)
+                return;
+
+            serializedObject.Update();
+            SerializedProperty groups = serializedObject.FindProperty("canvasGroups");
+            if (binding.Index < 0 || binding.Index >= groups.arraySize)
+                return;
+
+            SerializedProperty element = groups.GetArrayElementAtIndex(binding.Index);
+            binding.TitleLabel.text = element.FindPropertyRelative("groupId").stringValue;
+            binding.SubtitleLabel.text =
+                $"order {element.FindPropertyRelative("sortingOrder").intValue} · {element.FindPropertyRelative("canvasName").stringValue}";
+        }
+
+        private void RefreshLayerListRow(int index)
+        {
+            if (!layerRowBindings.TryGetValue(index, out LayerListRowBinding binding))
+                return;
+
+            RefreshLayerListRow(binding);
+        }
+
+        private void RefreshLayerListRow(LayerListRowBinding binding)
+        {
+            if (binding == null)
+                return;
+
+            var settings = (UILayerSettings)target;
+            serializedObject.Update();
+            SerializedProperty layers = serializedObject.FindProperty("layers");
+            if (binding.Index < 0 || binding.Index >= layers.arraySize)
+                return;
+
+            SerializedProperty element = layers.GetArrayElementAtIndex(binding.Index);
+            string layerId = element.FindPropertyRelative("layerId").stringValue;
+            SerializedProperty canvasGroupIdProp = element.FindPropertyRelative("canvasGroupId");
+            string groupId = UISystemEditorCanvasGroups.ResolveGroupId(canvasGroupIdProp);
+
+            binding.TitleLabel.text = layerId;
+            binding.SubtitleLabel.text =
+                $"{element.FindPropertyRelative("sortOrder").intValue} · {UISystemEditorCanvasGroups.FormatGroupLabel(groupId, settings)}";
+
+            if (binding.BuiltInBadge != null)
+            {
+                binding.BuiltInBadge.style.display = UISystemBuiltIn.IsBuiltInLayerId(layerId)
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+            }
+
+            if (binding.StackBadge != null)
+            {
+                binding.StackBadge.style.display = element.FindPropertyRelative("useScreenStack").boolValue
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+            }
+
+            if (binding.OpenScreenButton != null)
+                ApplyOpenScreenButtonStyle(binding.OpenScreenButton, IsScreenStackLayerId(layerId));
+        }
+
+        private void RefreshAllLayerListRows()
+        {
+            foreach (LayerListRowBinding binding in layerRowBindings.Values)
+                RefreshLayerListRow(binding);
+        }
+
+        private void RefreshAllLayerListRowSubtitles()
+        {
+            var settings = (UILayerSettings)target;
+            serializedObject.Update();
+            SerializedProperty layers = serializedObject.FindProperty("layers");
+
+            foreach (KeyValuePair<int, LayerListRowBinding> pair in layerRowBindings)
+            {
+                LayerListRowBinding binding = pair.Value;
+                if (binding.Index < 0 || binding.Index >= layers.arraySize)
+                    continue;
+
+                SerializedProperty element = layers.GetArrayElementAtIndex(binding.Index);
+                SerializedProperty canvasGroupIdProp = element.FindPropertyRelative("canvasGroupId");
+                string groupId = UISystemEditorCanvasGroups.ResolveGroupId(canvasGroupIdProp);
+                binding.SubtitleLabel.text =
+                    $"{element.FindPropertyRelative("sortOrder").intValue} · {UISystemEditorCanvasGroups.FormatGroupLabel(groupId, settings)}";
+            }
+        }
+
+        private void SyncOpenLayerDetailCanvasGroupPopup()
+        {
+            if (openLayerCanvasGroupPopup == null || string.IsNullOrEmpty(openLayerCanvasGroupPropPath))
+                return;
+
+            serializedObject.Update();
+            SerializedProperty groupIdProp = serializedObject.FindProperty(openLayerCanvasGroupPropPath);
+            if (groupIdProp == null)
+                return;
+
+            UISystemEditorCanvasGroups.SyncPopupField(
+                openLayerCanvasGroupPopup,
+                groupIdProp,
+                (UILayerSettings)target);
+        }
+
+        private void SyncScreenStackLayerPopup()
+        {
+            if (screenStackLayerPopup == null)
+                return;
+
+            serializedObject.Update();
+            SerializedProperty layers = serializedObject.FindProperty("layers");
+            var choices = new List<string>();
+            for (int i = 0; i < layers.arraySize; i++)
+            {
+                string layerId = layers.GetArrayElementAtIndex(i).FindPropertyRelative("layerId").stringValue;
+                if (!string.IsNullOrEmpty(layerId) && !choices.Contains(layerId))
+                    choices.Add(layerId);
+            }
+
+            if (choices.Count == 0)
+            {
+                screenStackLayerPopup.style.display = DisplayStyle.None;
+                return;
+            }
+
+            screenStackLayerPopup.style.display = DisplayStyle.Flex;
+            string current = GetScreenStackLayerId(layers);
+            if (string.IsNullOrEmpty(current) || !choices.Contains(current))
+                current = choices[0];
+
+            suppressScreenStackPopupCallback = true;
+            screenStackLayerPopup.choices = choices;
+            screenStackLayerPopup.SetValueWithoutNotify(current);
+            suppressScreenStackPopupCallback = false;
+        }
+
+        private static string GetScreenStackLayerId(SerializedProperty layers)
+        {
+            for (int i = 0; i < layers.arraySize; i++)
+            {
+                SerializedProperty element = layers.GetArrayElementAtIndex(i);
+                if (element.FindPropertyRelative("useScreenStack").boolValue)
+                    return element.FindPropertyRelative("layerId").stringValue;
+            }
+
+            return null;
+        }
+
+        private bool IsScreenStackLayerId(string layerId)
+        {
+            if (string.IsNullOrEmpty(layerId))
+                return false;
+
+            serializedObject.Update();
+            SerializedProperty layers = serializedObject.FindProperty("layers");
+            for (int i = 0; i < layers.arraySize; i++)
+            {
+                SerializedProperty element = layers.GetArrayElementAtIndex(i);
+                if (!element.FindPropertyRelative("useScreenStack").boolValue)
+                    continue;
+
+                return string.Equals(element.FindPropertyRelative("layerId").stringValue, layerId, StringComparison.Ordinal);
+            }
+
+            return false;
+        }
+
+        private void EnsureScreenStackLayerAssigned()
+        {
+            serializedObject.Update();
+            SerializedProperty layers = serializedObject.FindProperty("layers");
+            if (layers.arraySize == 0)
+                return;
+
+            string current = GetScreenStackLayerId(layers);
+            if (!string.IsNullOrEmpty(current))
+            {
+                for (int i = 0; i < layers.arraySize; i++)
+                {
+                    if (layers.GetArrayElementAtIndex(i).FindPropertyRelative("layerId").stringValue == current)
+                        return;
+                }
+            }
+
+            string fallback = FindLayerId(layers, UILayers.Screen);
+            if (string.IsNullOrEmpty(fallback))
+                fallback = layers.GetArrayElementAtIndex(0).FindPropertyRelative("layerId").stringValue;
+
+            ApplyScreenStackLayer(fallback, notify: false);
+        }
+
+        private static string FindLayerId(SerializedProperty layers, string layerId)
+        {
+            for (int i = 0; i < layers.arraySize; i++)
+            {
+                if (layers.GetArrayElementAtIndex(i).FindPropertyRelative("layerId").stringValue == layerId)
+                    return layerId;
+            }
+
+            return null;
+        }
+
+        private void ApplyScreenStackLayer(string layerId, bool notify = true)
+        {
+            if (string.IsNullOrEmpty(layerId))
+                return;
+
+            Undo.RecordObject(target, "Set OpenScreen Layer");
+            serializedObject.Update();
+            SerializedProperty layers = serializedObject.FindProperty("layers");
+            bool anyMatched = false;
+            for (int i = 0; i < layers.arraySize; i++)
+            {
+                SerializedProperty element = layers.GetArrayElementAtIndex(i);
+                bool isTarget = string.Equals(
+                    element.FindPropertyRelative("layerId").stringValue,
+                    layerId,
+                    StringComparison.Ordinal);
+                element.FindPropertyRelative("useScreenStack").boolValue = isTarget;
+                anyMatched |= isTarget;
+            }
+
+            if (!anyMatched)
+                return;
+
+            serializedObject.ApplyModifiedProperties();
+            EditorUtility.SetDirty(target);
+            RefreshAllLayerListRows();
+            SyncScreenStackLayerPopup();
+            if (selectedLayerIndex >= 0 && (layerSelection == null || layerSelection.Count <= 1))
+                RebuildLayersDetail();
+            if (notify)
+                QueueExternalNotify(ExternalNotifyFlags.Layers);
         }
     }
 }

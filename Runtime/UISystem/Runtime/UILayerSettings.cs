@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -54,9 +55,63 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             if (layers == null || layers.Count == 0)
                 layers = new List<UILayerDefinition>(UISystemBuiltIn.CreateLayerDefinitions());
+            else
+                EnsureBuiltInLayersPresent();
 
             for (int i = 0; i < layers.Count; i++)
                 layers[i]?.MigrateLegacyCanvasGroup();
+
+            EnsureSingleScreenStack();
+        }
+
+        private void EnsureSingleScreenStack()
+        {
+            if (!ContainsLayerId(UILayers.Screen))
+                return;
+
+            for (int i = 0; i < layers.Count; i++)
+            {
+                UILayerDefinition layer = layers[i];
+                if (layer == null)
+                    continue;
+
+                layer.SetUseScreenStack(string.Equals(layer.LayerId, UILayers.Screen, StringComparison.Ordinal));
+            }
+        }
+
+        private void EnsureBuiltInLayersPresent()
+        {
+            IReadOnlyList<BuiltInLayerInfo> builtIn = UISystemBuiltIn.Layers;
+            for (int i = 0; i < builtIn.Count; i++)
+            {
+                BuiltInLayerInfo info = builtIn[i];
+                if (ContainsLayerId(info.LayerId))
+                    continue;
+
+                int insertIndex = layers.Count;
+                for (int j = 0; j < layers.Count; j++)
+                {
+                    if (layers[j].SortOrder > info.SortOrder)
+                    {
+                        insertIndex = j;
+                        break;
+                    }
+                }
+
+                layers.Insert(insertIndex, info.ToLayerDefinition());
+            }
+        }
+
+        private bool ContainsLayerId(string layerId)
+        {
+            for (int i = 0; i < layers.Count; i++)
+            {
+                UILayerDefinition layer = layers[i];
+                if (layer != null && string.Equals(layer.LayerId, layerId, StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
         }
     }
 }
