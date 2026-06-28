@@ -2,9 +2,13 @@ using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
+
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
-    public class InventorySystem : MonoBehaviour, IInventoryContainer
+    /// <summary>
+    /// 플레이어·UI용 인벤토리 진입점입니다. 단일/멀티 컨테이너와 제작·루팅을 모두 처리합니다.
+    /// </summary>
+    public partial class InventorySystem : MonoBehaviour, IInventoryContainer
     {
         public delegate void SlotChangeHandler(int slotIndex, InventorySlot slot);
 
@@ -13,126 +17,235 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         public event Action<int> OnItemAcquired;
         public event Action<int> OnItemDepleted;
 
-        [field: SerializeField] public InventoryConfigSO inventoryConfig { get; private set; }
+        private const int DefaultMainSlotCount = 20;
 
-        private InventoryContainer container;
+        [SerializeField] private InventorySetupSO setup;
 
-        public string ContainerId => container?.ContainerId ?? inventoryConfig?.ContainerId ?? "main";
-        public ContainerKind Kind => container?.Kind ?? inventoryConfig?.Kind ?? ContainerKind.Main;
-        public InventoryContainerDescriptor Descriptor => container?.Descriptor ?? inventoryConfig?.CreateDescriptor() ?? InventoryContainerDescriptor.Main();
-        public int SlotCount => container?.SlotCount ?? 0;
-        public int Revision => container?.Revision ?? 0;
-        public InventoryContainer Container => container;
+        private InventoryGroup group;
+        private InventoryContainer primaryContainer;
+        private IInventoryOwner owner;
 
-        public void Init(IInventoryOwner owner, InventorySetupSO setup)
+        public InventorySetupSO Setup => setup;
+        public InventoryGroup Group => group;
+
+        public string ContainerId => Primary.ContainerId;
+        public ContainerKind Kind => Primary.Kind;
+        public InventoryContainerDescriptor Descriptor => Primary.Descriptor;
+        public int SlotCount => Primary.SlotCount;
+        public int Revision => Primary.Revision;
+        public InventoryContainer Container => Primary;
+
+        private InventoryContainer Primary
         {
-            if (setup == null)
+            get
             {
-                CDebug.LogWarning("InventorySetupSO is null.");
+                EnsureInitialized();
+                return primaryContainer;
+            }
+        }
+
+        public void Init(IInventoryOwner owner, InventorySetupSO setupAsset, IItemContainerRouter router = null)
+        {
+            if (setupAsset == null)
+            {
+                CDebug.LogWarning("InventorySystem : InventorySetupSO is null.");
                 return;
             }
 
-            Init(owner, setup.ItemDatabase);
+            this.setup = setupAsset;
+            Init(owner, setupAsset.CreateDataProvider(), router);
         }
 
-        public void Init(IInventoryOwner owner, IItemDatabase itemDatabase)
+        public void Init(IInventoryOwner owner, IInventoryDataProvider dataProvider, IItemContainerRouter router = null)
         {
-            container?.Dispose();
-            if (inventoryConfig == null)
+            if (dataProvider == null)
             {
-                CDebug.LogWarning("InventoryConfigSO is not assigned.");
-                container = new InventoryContainer(0, itemDatabase);
+                CDebug.LogWarning("InventorySystem : IInventoryDataProvider is null.");
                 return;
             }
 
-            container = new InventoryContainer(
-                inventoryConfig.SlotCount,
-                itemDatabase,
-                inventoryConfig.CreateDescriptor());
+            Init(owner, dataProvider.ItemDatabase, router);
+            group?.SetDataServices(dataProvider.RecipeDatabase, dataProvider.LootTableDatabase);
         }
 
-        private void OnDestroy() => container?.Dispose();
+        public void Init(IInventoryOwner owner, IItemDatabase itemDatabase, IItemContainerRouter router = null)
+        {
+            this.owner = owner;
+            RebuildGroup(itemDatabase, router);
+        }
+
+        public bool TryGetContainer(string containerId, out IInventoryContainer container)
+        {
+            container = null;
+            if (group == null || string.IsNullOrEmpty(containerId))
+                return false;
+
+            if (!group.TryGetContainer(containerId, out InventoryContainer found))
+                return false;
+
+            container = found;
+            return true;
+        }
+
+        public bool TryGetContainerByKind(ContainerKind kind, out IInventoryContainer container)
+        {
+            if (group != null && group.TryGetContainerByKind(kind, out container))
+                return true;
+
+            container = null;
+            return false;
+        }
+
+        private void OnDestroy() => DisposeGroup();
 
         public InventoryChangeResult TryAddItem(int itemId, int count) =>
-            Execute(() => container.TryAddItem(itemId, count), itemId, count, InventoryChangeType.Add);
+            ExecuteGroup(() => group.TryAddItem(itemId, count), itemId, count, InventoryChangeType.Add);
+
+        public InventoryChangeResult TryAddItemToContainer(string containerId, int itemId, int count) =>
+            ExecuteGroup(
+                () => group.TryAddItemToContainer(containerId, itemId, count),
+                itemId,
+                count,
+                InventoryChangeType.Add);
 
         public InventoryChangeResult TryAddItemToSlot(int slotIndex, int itemId, int count) =>
-            Execute(() => container.TryAddItemToSlot(slotIndex, itemId, count), itemId, count, InventoryChangeType.Add);
+            ExecuteContainer(
+                () => Primary.TryAddItemToSlot(slotIndex, itemId, count),
+                itemId,
+                count,
+                InventoryChangeType.Add);
 
         public InventoryChangeResult TryAddItemToSlot(int slotIndex, int itemId, int count, long instanceId) =>
-            Execute(() => container.TryAddItemToSlot(slotIndex, itemId, count, instanceId), itemId, count, InventoryChangeType.Add);
+            ExecuteContainer(
+                () => Primary.TryAddItemToSlot(slotIndex, itemId, count, instanceId),
+                itemId,
+                count,
+                InventoryChangeType.Add);
 
         public InventoryChangeResult TryRemoveItem(int itemId, int count) =>
-            Execute(() => container.TryRemoveItem(itemId, count), itemId, count, InventoryChangeType.Remove);
+            ExecuteGroup(() => group.TryRemoveItem(itemId, count), itemId, count, InventoryChangeType.Remove);
 
         public InventoryChangeResult TryRemoveItemFromSlot(int slotIndex, int count) =>
-            Execute(() => container.TryRemoveItemFromSlot(slotIndex, count), 0, count, InventoryChangeType.Remove);
+            ExecuteContainer(() => Primary.TryRemoveItemFromSlot(slotIndex, count), 0, count, InventoryChangeType.Remove);
 
         public InventoryChangeResult TryMoveSlot(int fromSlotIndex, int toSlotIndex) =>
-            Execute(() => container.TryMoveSlot(fromSlotIndex, toSlotIndex), 0, 0, InventoryChangeType.Move);
+            ExecuteContainer(
+                () => Primary.TryMoveSlot(fromSlotIndex, toSlotIndex),
+                0,
+                0,
+                InventoryChangeType.Move);
 
         public InventoryChangeResult TrySwapSlots(int slotIndexA, int slotIndexB) =>
-            Execute(() => container.TrySwapSlots(slotIndexA, slotIndexB), 0, 0, InventoryChangeType.Swap);
+            ExecuteContainer(
+                () => Primary.TrySwapSlots(slotIndexA, slotIndexB),
+                0,
+                0,
+                InventoryChangeType.Swap);
+
+        public InventoryChangeResult TryMoveBetween(
+            string fromContainerId,
+            int fromSlotIndex,
+            string toContainerId,
+            int toSlotIndex) =>
+            ExecuteGroup(
+                () => group.TryMoveBetween(fromContainerId, fromSlotIndex, toContainerId, toSlotIndex),
+                0,
+                0,
+                InventoryChangeType.Move);
 
         public InventoryChangeResult ClearSlot(int slotIndex) =>
-            Execute(() => container.ClearSlot(slotIndex), 0, 0, InventoryChangeType.Clear);
+            ExecuteContainer(() => Primary.ClearSlot(slotIndex), 0, 0, InventoryChangeType.Clear);
 
         public InventoryChangeResult ClearAll() =>
-            Execute(() => container.ClearAll(), 0, 0, InventoryChangeType.Clear);
+            ExecuteContainer(() => Primary.ClearAll(), 0, 0, InventoryChangeType.Clear);
 
         public InventoryChangeResult TrySplitStack(int slotIndex, int splitCount) =>
-            Execute(() => container.TrySplitStack(slotIndex, splitCount), 0, splitCount, InventoryChangeType.Split);
+            ExecuteContainer(
+                () => Primary.TrySplitStack(slotIndex, splitCount),
+                0,
+                splitCount,
+                InventoryChangeType.Split);
 
         public InventoryChangeResult TryDropItemFromSlot(int slotIndex, int count) =>
-            Execute(() => container.TryDropItemFromSlot(slotIndex, count), 0, count, InventoryChangeType.Drop);
+            ExecuteContainer(
+                () => Primary.TryDropItemFromSlot(slotIndex, count),
+                0,
+                count,
+                InventoryChangeType.Drop);
 
         public InventoryChangeResult TryTradeItemFromSlot(int slotIndex, int count) =>
-            Execute(() => container.TryTradeItemFromSlot(slotIndex, count), 0, count, InventoryChangeType.Trade);
+            ExecuteContainer(
+                () => Primary.TryTradeItemFromSlot(slotIndex, count),
+                0,
+                count,
+                InventoryChangeType.Trade);
 
         public InventoryChangeResult TryUseItem(int slotIndex, IItemUseHandler handler) =>
-            Execute(() => container.TryUseItem(slotIndex, handler), 0, 0, InventoryChangeType.Use);
+            ExecuteContainer(() => Primary.TryUseItem(slotIndex, handler), 0, 0, InventoryChangeType.Use);
 
-        public bool CanAddItem(int itemId, int count, out InventoryFailReason reason, out int addableCount) =>
-            container != null
-                ? container.CanAddItem(itemId, count, out reason, out addableCount)
-                : FailCanAddQuery(out reason, out addableCount, InventoryFailReason.DatabaseNotReady);
+        public bool CanAddItem(int itemId, int count, out InventoryFailReason reason, out int addableCount)
+        {
+            if (group == null)
+                return FailCanAddQuery(out reason, out addableCount, InventoryFailReason.DatabaseNotReady);
 
-        public bool CanRemoveItem(int itemId, int count, out InventoryFailReason reason) =>
-            container != null
-                ? container.CanRemoveItem(itemId, count, out reason)
-                : FailQuery(out reason, InventoryFailReason.DatabaseNotReady);
+            if (!group.ItemDatabase.TryGetDefinition(itemId, out ItemDefinition definition))
+                return FailCanAddQuery(out reason, out addableCount, InventoryFailReason.DefinitionNotFound);
+
+            if (!group.TryGetContainerByKind((ContainerKind)InventoryEnumCore.MainContainerKindValue, out IInventoryContainer main))
+                return Primary.CanAddItem(itemId, count, out reason, out addableCount);
+
+            return main.CanAddItem(itemId, count, out reason, out addableCount);
+        }
+
+        public bool CanRemoveItem(int itemId, int count, out InventoryFailReason reason)
+        {
+            if (group == null)
+                return FailQuery(out reason, InventoryFailReason.DatabaseNotReady);
+
+            if (group.HasItem(itemId, count))
+            {
+                reason = InventoryFailReason.None;
+                return true;
+            }
+
+            reason = InventoryFailReason.InsufficientItemCount;
+            return false;
+        }
 
         public bool CanMoveSlot(int fromSlotIndex, int toSlotIndex, out InventoryFailReason reason) =>
-            container != null
-                ? container.CanMoveSlot(fromSlotIndex, toSlotIndex, out reason)
+            Primary != null
+                ? Primary.CanMoveSlot(fromSlotIndex, toSlotIndex, out reason)
                 : FailQuery(out reason, InventoryFailReason.DatabaseNotReady);
 
         public bool CanSplitStack(int slotIndex, int splitCount, out InventoryFailReason reason, out int targetSlotIndex) =>
-            container != null
-                ? container.CanSplitStack(slotIndex, splitCount, out reason, out targetSlotIndex)
+            Primary != null
+                ? Primary.CanSplitStack(slotIndex, splitCount, out reason, out targetSlotIndex)
                 : FailCanSplitQuery(out reason, out targetSlotIndex, InventoryFailReason.DatabaseNotReady);
 
         public bool HasItem(int itemId, int count = 1) =>
-            container != null && container.HasItem(itemId, count);
+            group != null && group.HasItem(itemId, count);
 
         public int GetItemCount(int itemId) =>
-            container?.GetItemCount(itemId) ?? 0;
+            group?.GetItemCount(itemId) ?? 0;
+
+        public int GetItemCount(string containerId, int itemId) =>
+            group?.GetItemCount(containerId, itemId) ?? 0;
 
         public InventorySlot GetSlot(int slotIndex) =>
-            container?.GetSlot(slotIndex) ?? default;
+            Primary?.GetSlot(slotIndex) ?? default;
 
         public bool TryGetSlot(int slotIndex, out InventorySlot slot)
         {
-            if (container == null)
+            if (Primary == null)
             {
-                CDebug.LogWarning("not initialized.");
+                CDebug.LogWarning("InventorySystem : not initialized.");
                 slot = default;
                 return false;
             }
 
-            if (!container.TryGetSlot(slotIndex, out slot))
+            if (!Primary.TryGetSlot(slotIndex, out slot))
             {
-                CDebug.LogWarning($"invalid slot index {slotIndex}");
+                CDebug.LogWarning($"InventorySystem : invalid slot index {slotIndex}");
                 return false;
             }
 
@@ -140,60 +253,145 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         }
 
         public bool IsSlotEmpty(int slotIndex) =>
-            container != null && container.IsSlotEmpty(slotIndex);
+            Primary != null && Primary.IsSlotEmpty(slotIndex);
 
         public int GetFirstEmptySlotIndex() =>
-            container?.GetFirstEmptySlotIndex() ?? -1;
+            Primary?.GetFirstEmptySlotIndex() ?? -1;
 
         public int GetOccupiedSlotCount() =>
-            container?.GetOccupiedSlotCount() ?? 0;
+            Primary?.GetOccupiedSlotCount() ?? 0;
 
         public void FindSlotsWithItem(int itemId, List<int> results) =>
-            container?.FindSlotsWithItem(itemId, results);
+            Primary?.FindSlotsWithItem(itemId, results);
 
         public bool TryFindStackableSlot(int itemId, out int slotIndex)
         {
-            if (container == null)
+            if (Primary == null)
             {
                 slotIndex = -1;
                 return false;
             }
 
-            return container.TryFindStackableSlot(itemId, out slotIndex);
+            return Primary.TryFindStackableSlot(itemId, out slotIndex);
         }
 
         public InventoryContainerSaveData ExportSaveData() =>
-            container == null ? new InventoryContainerSaveData() : InventorySerializer.Export(container);
+            Primary == null ? new InventoryContainerSaveData() : InventorySerializer.Export(Primary);
 
         public InventoryImportReport ImportSaveData(InventoryContainerSaveData saveData)
         {
-            if (container == null)
+            if (Primary == null)
             {
-                CDebug.LogWarning("not initialized.");
+                CDebug.LogWarning("InventorySystem : not initialized.");
                 return new InventoryImportReport
                 {
                     LastResult = InventoryChangeResult.Fail(InventoryChangeType.Clear, InventoryFailReason.DatabaseNotReady)
                 };
             }
 
-            InventoryImportReport report = InventorySerializer.ImportWithReport(container, saveData);
+            InventoryImportReport report = InventorySerializer.ImportWithReport(Primary, saveData);
             if (report.LastResult.Success)
                 ApplyChangeResult(report.LastResult);
 
             return report;
         }
 
-        public float GetTotalWeight() => container?.GetTotalWeight() ?? 0f;
+        public float GetTotalWeight() => Primary?.GetTotalWeight() ?? 0f;
 
-        private InventoryChangeResult Execute(
+        private void RebuildGroup(IItemDatabase itemDatabase, IItemContainerRouter router)
+        {
+            DisposeGroup();
+            group = new InventoryGroup(itemDatabase, router);
+            primaryContainer = null;
+
+            InventoryConfigSO[] configs = setup != null
+                ? setup.ContainerConfigs
+                : null;
+
+            if (configs is { Length: > 0 })
+            {
+                for (int i = 0; i < configs.Length; i++)
+                {
+                    if (configs[i] == null)
+                        continue;
+
+                    RegisterContainer(CreateContainer(configs[i], itemDatabase));
+                }
+            }
+
+            if (primaryContainer != null)
+                return;
+
+            if (setup != null)
+                CDebug.LogWarning("InventorySystem : Setup has no ContainerConfigs. Using default main container.");
+
+            RegisterContainer(CreateDefaultMainContainer(itemDatabase));
+        }
+
+        private static InventoryContainer CreateContainer(InventoryConfigSO config, IItemDatabase itemDatabase) =>
+            new(config.SlotCount, itemDatabase, config.CreateDescriptor());
+
+        private static InventoryContainer CreateDefaultMainContainer(IItemDatabase itemDatabase) =>
+            new(DefaultMainSlotCount, itemDatabase, InventoryContainerDescriptor.Main());
+
+        private void RegisterContainer(InventoryContainer container)
+        {
+            if (container == null)
+                return;
+
+            group.RegisterContainer(container);
+
+            if (primaryContainer == null || container.Kind == (ContainerKind)InventoryEnumCore.MainContainerKindValue)
+                primaryContainer = container;
+        }
+
+        private void DisposeGroup()
+        {
+            group?.Dispose();
+            group = null;
+            primaryContainer = null;
+        }
+
+        private void EnsureInitialized()
+        {
+            if (group != null)
+                return;
+
+            if (setup != null)
+            {
+                Init(owner, setup);
+                return;
+            }
+
+            CDebug.LogWarning("InventorySystem : not initialized.");
+        }
+
+        private InventoryChangeResult ExecuteContainer(
             Func<InventoryChangeResult> action,
             int itemId,
             int count,
             InventoryChangeType changeType)
         {
-            if (container == null)
+            if (Primary == null)
             {
-                CDebug.LogWarning("not initialized.");
+                CDebug.LogWarning("InventorySystem : not initialized.");
+                return InventoryChangeResult.Fail(changeType, InventoryFailReason.DatabaseNotReady, itemId, count);
+            }
+
+            InventoryChangeResult result = action();
+            ApplyChangeResult(result);
+            return result;
+        }
+
+        private InventoryChangeResult ExecuteGroup(
+            Func<InventoryChangeResult> action,
+            int itemId,
+            int count,
+            InventoryChangeType changeType)
+        {
+            if (group == null)
+            {
+                CDebug.LogWarning("InventorySystem : not initialized.");
                 return InventoryChangeResult.Fail(changeType, InventoryFailReason.DatabaseNotReady, itemId, count);
             }
 
@@ -207,11 +405,15 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (!result.Success)
                 return;
 
+            bool notifyPrimarySlots = primaryContainer != null
+                && string.Equals(result.ContainerId, primaryContainer.ContainerId, StringComparison.Ordinal);
+
             InventorySlotChange[] slotChanges = result.SlotChanges;
             for (int i = 0; i < slotChanges.Length; i++)
             {
                 InventorySlotChange change = slotChanges[i];
-                OnSlotChanged?.Invoke(change.SlotIndex, change.ToCurrentSlot());
+                if (notifyPrimarySlots)
+                    OnSlotChanged?.Invoke(change.SlotIndex, change.ToCurrentSlot());
             }
 
             if (result.ItemWasAcquired)

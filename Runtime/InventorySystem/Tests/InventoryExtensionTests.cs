@@ -210,7 +210,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
                     false,
                     false,
                     container.ContainerId,
-                    ContainerKind.Main,
+                    (ContainerKind)InventoryTestValues.MainKind,
                     null,
                     new[] { slotIndex },
                     System.Array.Empty<InventorySlotChange>());

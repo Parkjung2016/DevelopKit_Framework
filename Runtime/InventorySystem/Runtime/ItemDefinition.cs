@@ -18,7 +18,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             int itemId,
             int maxStackSize = 99,
             bool isStackable = true,
-            ItemType itemType = ItemType.General,
+            ItemType itemType = default,
             bool canDrop = true,
             bool canTrade = true,
             float weight = 0f)

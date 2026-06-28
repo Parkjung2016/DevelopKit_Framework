@@ -34,7 +34,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
 
             Assert.IsTrue(result.Success);
             Assert.AreEqual("equipment", result.ContainerId);
-            Assert.AreEqual(ContainerKind.Equipment, result.Kind);
+            Assert.AreEqual((ContainerKind)InventoryTestValues.EquipmentKind, result.Kind);
             Assert.AreEqual(1, equipment.GetItemCount(InventoryTestItemDatabase.EquipmentItemId));
             Assert.AreEqual(0, main.GetItemCount(InventoryTestItemDatabase.EquipmentItemId));
         }

@@ -35,7 +35,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
                 database,
                 new InventoryContainerDescriptor(
                     "main",
-                    ContainerKind.Main,
+                    (ContainerKind)InventoryTestValues.MainKind,
                     AnySlotRule.Instance,
                     new WeightCapacityRule(25f)));
         }
@@ -53,7 +53,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         public void ItemDatabaseSO_TryGetDefinition_ReturnsCachedDefinition()
         {
             Assert.IsTrue(database.TryGetDefinition(InventoryTestItemDatabase.GeneralItemId, out ItemDefinition definition));
-            Assert.AreEqual(ItemType.General, definition.ItemType);
+            Assert.AreEqual((ItemType)InventoryTestValues.GeneralType, definition.ItemType);
         }
 
         [Test]
@@ -163,10 +163,10 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         {
             var config = ScriptableObject.CreateInstance<InventoryConfigSO>();
             config.ContainerId = "bag";
-            config.Kind = ContainerKind.Equipment;
+            config.Kind = (ContainerKind)InventoryTestValues.EquipmentKind;
             config.SlotCount = 8;
             config.SlotRuleMode = InventorySlotRuleMode.ItemType;
-            config.AllowedSlotTypes = new[] { ItemType.Equipment };
+            config.AllowedSlotTypes = new[] { (ItemType)InventoryTestValues.EquipmentType };
             config.CapacityRuleMode = InventoryCapacityRuleMode.Weight;
             config.MaxWeight = 25f;
 
@@ -175,7 +175,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             Object.DestroyImmediate(config);
 
             Assert.AreEqual("bag", descriptor.ContainerId);
-            Assert.AreEqual(ContainerKind.Equipment, descriptor.Kind);
+            Assert.AreEqual((ContainerKind)InventoryTestValues.EquipmentKind, descriptor.Kind);
             Assert.IsInstanceOf<ItemTypeSlotRule>(descriptor.SlotRule);
             Assert.IsInstanceOf<WeightCapacityRule>(descriptor.CapacityRule);
             Assert.AreEqual(25f, ((WeightCapacityRule)descriptor.CapacityRule).MaxWeight);

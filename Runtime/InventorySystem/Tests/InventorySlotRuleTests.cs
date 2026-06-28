@@ -9,7 +9,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         [Test]
         public void ItemTypeSlotRule_AcceptsOnlyAllowedTypes()
         {
-            var rule = new ItemTypeSlotRule(ItemType.Equipment, ItemType.Quest);
+            var rule = new ItemTypeSlotRule((ItemType)InventoryTestValues.EquipmentType, (ItemType)InventoryTestValues.QuestType);
             InventoryTestItemDatabase.Shared.TryGetDefinition(InventoryTestItemDatabase.EquipmentItemId, out ItemDefinition equipment);
             InventoryTestItemDatabase.Shared.TryGetDefinition(InventoryTestItemDatabase.GeneralItemId, out ItemDefinition general);
 

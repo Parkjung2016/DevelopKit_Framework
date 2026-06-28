@@ -20,15 +20,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         }
 
         public static InventoryContainerDescriptor Main(string containerId = "main", ISlotRule slotRule = null, IContainerCapacityRule capacityRule = null) =>
-            new(containerId, ContainerKind.Main, slotRule, capacityRule);
-
-        public static InventoryContainerDescriptor Equipment(string containerId = "equipment", ISlotRule slotRule = null, IContainerCapacityRule capacityRule = null) =>
-            new(containerId, ContainerKind.Equipment, slotRule ?? new ItemTypeSlotRule(ItemType.Equipment), capacityRule);
-
-        public static InventoryContainerDescriptor QuickBar(string containerId = "quickbar", ISlotRule slotRule = null, IContainerCapacityRule capacityRule = null) =>
-            new(containerId, ContainerKind.QuickBar, slotRule, capacityRule);
-
-        public static InventoryContainerDescriptor Stash(string containerId = "stash", ISlotRule slotRule = null, IContainerCapacityRule capacityRule = null) =>
-            new(containerId, ContainerKind.Stash, slotRule, capacityRule);
+            new(containerId, (ContainerKind)InventoryEnumCore.MainContainerKindValue, slotRule, capacityRule);
     }
 }

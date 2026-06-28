@@ -9,10 +9,19 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             new(slotCount, InventoryTestItemDatabase.Shared, InventoryContainerDescriptor.Main(containerId));
 
         public static InventoryContainer CreateEquipmentContainer(int slotCount = 5, string containerId = "equipment") =>
-            new(slotCount, InventoryTestItemDatabase.Shared, InventoryContainerDescriptor.Equipment(containerId));
+            new(
+                slotCount,
+                InventoryTestItemDatabase.Shared,
+                new InventoryContainerDescriptor(
+                    containerId,
+                    (ContainerKind)InventoryTestValues.EquipmentKind,
+                    new ItemTypeSlotRule((ItemType)InventoryTestValues.EquipmentType)));
 
         public static InventoryContainer CreateQuestContainer(int slotCount = 5, string containerId = "quest") =>
-            new(slotCount, InventoryTestItemDatabase.Shared, new InventoryContainerDescriptor(containerId, ContainerKind.Quest));
+            new(
+                slotCount,
+                InventoryTestItemDatabase.Shared,
+                new InventoryContainerDescriptor(containerId, (ContainerKind)InventoryTestValues.QuestKind));
 
         public static InventoryContainer CreateContainerWithoutDatabase(int slotCount = 5) =>
             new(slotCount, null, InventoryContainerDescriptor.Main());

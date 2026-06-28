@@ -54,7 +54,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             int[] changedSlotIndices,
             InventorySlotChange[] slotChanges,
             string containerId = "main",
-            ContainerKind containerKind = ContainerKind.Main,
+            ContainerKind containerKind = (ContainerKind)InventoryEnumCore.MainContainerKindValue,
             string secondaryContainerId = null)
         {
             ChangeType = changeType;
@@ -89,7 +89,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             ItemDefinition definition = default,
             ItemDefinition secondaryDefinition = default,
             string containerId = "main",
-            ContainerKind containerKind = ContainerKind.Main) =>
+            ContainerKind containerKind = (ContainerKind)InventoryEnumCore.MainContainerKindValue) =>
             new(
                 changeType,
                 reason,
@@ -203,7 +203,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 itemWasAcquired,
                 itemWasDepleted,
                 "main",
-                ContainerKind.Main,
+                (ContainerKind)InventoryEnumCore.MainContainerKindValue,
                 null,
                 changedSlotIndices,
                 slotChanges);

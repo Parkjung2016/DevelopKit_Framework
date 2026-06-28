@@ -104,7 +104,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             where T : ScriptableObject
         {
             Undo.RecordObject(Context.Setup, $"Create {typeof(T).Name}");
-            T database = InventoryEditorAssetActions.CreateAsset<T>(Context, prefix, rebuild);
+            T database = InventoryEditorAssetActions.CreateAsset<T>(
+                Context,
+                prefix,
+                rebuild,
+                Context.GetSetupAssetDirectory());
             assign(database);
             Context.MarkDirty(Context.Setup);
             Refresh();

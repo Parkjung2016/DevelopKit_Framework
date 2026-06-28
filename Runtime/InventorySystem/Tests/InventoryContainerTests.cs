@@ -174,7 +174,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             InventoryChangeResult result = container.TryAddItem(InventoryTestItemDatabase.EquipmentItemId, 1);
 
             Assert.IsTrue(result.Success);
-            Assert.AreEqual(ContainerKind.Equipment, result.Kind);
+            Assert.AreEqual((ContainerKind)InventoryTestValues.EquipmentKind, result.Kind);
             Assert.AreEqual("equipment", result.ContainerId);
         }
 

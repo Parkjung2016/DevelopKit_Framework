@@ -213,14 +213,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             grid.AddToClassList(InventoryEditorStyles.TypeChipGridClass);
 
             var allowed = new HashSet<ItemType>(config.AllowedSlotTypes ?? Array.Empty<ItemType>());
-            Array itemTypes = Enum.GetValues(typeof(ItemType));
 
-            for (int i = 0; i < itemTypes.Length; i++)
+            foreach (ItemType itemType in InventoryEnumCatalog.GetSelectableItemTypes())
             {
-                var itemType = (ItemType)itemTypes.GetValue(i);
-                if (itemType == ItemType.None)
-                    continue;
-
                 bool selected = allowed.Contains(itemType);
                 Button chip = null;
                 chip = new Button(() =>
@@ -230,8 +225,10 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     chip.EnableInClassList(InventoryEditorStyles.TypeChipSelectedClass, nowSelected);
                 })
                 {
-                    text = itemType.ToString(),
-                    tooltip = selected ? $"{itemType} 허용 (클릭하여 제외)" : $"{itemType} 제외됨 (클릭하여 허용)"
+                    text = InventoryEnumCatalog.GetItemTypeDisplayName(itemType),
+                    tooltip = selected
+                        ? $"{InventoryEnumCatalog.GetItemTypeDisplayName(itemType)} 허용 (클릭하여 제외)"
+                        : $"{InventoryEnumCatalog.GetItemTypeDisplayName(itemType)} 제외됨 (클릭하여 허용)"
                 };
                 chip.AddToClassList(InventoryEditorStyles.TypeChipClass);
                 if (selected)
@@ -398,10 +395,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             onRebuildDetail?.Invoke();
         }
 
-        private static ItemType[] DefaultAllowedTypesForKind(ContainerKind kind) =>
-            kind == ContainerKind.Equipment
-                ? new[] { ItemType.Equipment }
-                : new[] { ItemType.General };
+        private static ItemType[] DefaultAllowedTypesForKind(ContainerKind kind)
+        {
+            var types = new List<ItemType>(InventoryEnumCatalog.GetSelectableItemTypes());
+            return types.Count > 0 ? types.ToArray() : System.Array.Empty<ItemType>();
+        }
 
         private static ItemType[] ToSortedArray(HashSet<ItemType> allowed)
         {
@@ -417,7 +415,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
             var parts = new string[types.Length];
             for (int i = 0; i < types.Length; i++)
-                parts[i] = types[i].ToString();
+                parts[i] = InventoryEnumCatalog.GetItemTypeDisplayName(types[i]);
 
             return string.Join(", ", parts);
         }

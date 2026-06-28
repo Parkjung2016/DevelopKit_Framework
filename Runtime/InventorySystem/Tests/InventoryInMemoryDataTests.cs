@@ -18,7 +18,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         {
             itemDatabase = new InMemoryItemDatabase();
             itemDatabase.Register(
-                new ItemDefinition(InventoryTestItemDatabase.GeneralItemId, 99, true, ItemType.General),
+                new ItemDefinition(InventoryTestItemDatabase.GeneralItemId, 99, true, (ItemType)InventoryTestValues.GeneralType),
                 displayName: "General",
                 tags: new[] { "Material", "Wood" });
 

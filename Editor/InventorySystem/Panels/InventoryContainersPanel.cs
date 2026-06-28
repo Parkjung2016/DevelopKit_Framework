@@ -114,7 +114,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             content.AddToClassList(InventoryEditorStyles.ListRowContentClass);
             content.Add(InventoryEditorVisuals.CreateEllipsisLabel(config.ContainerId ?? config.name, bold: true));
             content.Add(InventoryEditorVisuals.CreateEllipsisLabel(
-                $"{config.Kind} · slots {config.SlotCount}",
+                $"{InventoryEnumCatalog.GetContainerKindDisplayName(config.Kind)} · slots {config.SlotCount}",
                 fontSize: 11));
 
             var ruleLabel = InventoryEditorVisuals.CreateEllipsisLabel(
@@ -165,10 +165,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 asset =>
                 {
                     asset.ContainerId = "new_container";
-                    asset.Kind = ContainerKind.Main;
+                    asset.Kind = (ContainerKind)InventoryEnumCore.MainContainerKindValue;
                     asset.SlotCount = 20;
                 },
-                asset => InventoryEditorAssetNaming.ForContainer(asset.ContainerId));
+                asset => InventoryEditorAssetNaming.ForContainer(asset.ContainerId),
+                Context.GetSetupAssetDirectory());
 
             AddConfigReference(config);
             Refresh();
@@ -206,7 +207,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 source,
                 Context,
                 asset => asset.ContainerId = source.ContainerId + "_copy",
-                asset => InventoryEditorAssetNaming.ForContainer(asset.ContainerId));
+                asset => InventoryEditorAssetNaming.ForContainer(asset.ContainerId),
+                Context.GetSetupAssetDirectory());
             if (copy == null)
                 return;
 

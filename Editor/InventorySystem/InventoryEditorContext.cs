@@ -13,7 +13,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         Items,
         Recipes,
         Loot,
-        Containers
+        Containers,
+        Enums
     }
 
     internal sealed class InventoryEditorContext
@@ -96,40 +97,56 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             AssetDatabase.SaveAssets();
         }
 
-        public string GetAssetDirectory()
+        public string GetAssetDirectory() => GetSetupAssetDirectory();
+
+        public string GetSetupAssetDirectory() =>
+            GetDirectoryForObject(Setup) ?? "Assets";
+
+        public string GetItemDatabaseDirectory() =>
+            GetDirectoryForObject(ItemDatabase) ?? GetSetupAssetDirectory();
+
+        public string GetRecipeDatabaseDirectory() =>
+            GetDirectoryForObject(RecipeDatabase) ?? GetSetupAssetDirectory();
+
+        public string GetLootDatabaseDirectory() =>
+            GetDirectoryForObject(LootTableDatabase) ?? GetSetupAssetDirectory();
+
+        private static string GetDirectoryForObject(UnityEngine.Object asset)
         {
-            UnityEngine.Object anchor = Setup != null
-                ? Setup
-                : (UnityEngine.Object)ItemDatabase
-                  ?? RecipeDatabase
-                  ?? (UnityEngine.Object)LootTableDatabase;
+            if (asset == null)
+                return null;
 
-            if (anchor == null)
-                return "Assets";
+            string path = AssetDatabase.GetAssetPath(asset);
+            if (string.IsNullOrEmpty(path))
+                return null;
 
-            string path = AssetDatabase.GetAssetPath(anchor);
-            return string.IsNullOrEmpty(path) ? "Assets" : Path.GetDirectoryName(path);
+            return Path.GetDirectoryName(path)?.Replace('\\', '/');
         }
     }
 
     internal static class InventoryEditorAssetActions
     {
-        public static T CreateAsset<T>(InventoryEditorContext context, string filePrefix, Action<T> initialize = null)
+        public static T CreateAsset<T>(
+            InventoryEditorContext context,
+            string filePrefix,
+            Action<T> initialize = null,
+            string directory = null)
             where T : ScriptableObject =>
-            CreateAsset(context, initialize, _ => filePrefix);
+            CreateAsset(context, initialize, _ => filePrefix, directory);
 
         public static T CreateAsset<T>(
             InventoryEditorContext context,
             Action<T> initialize,
-            Func<T, string> filePrefixResolver)
+            Func<T, string> filePrefixResolver,
+            string directory = null)
             where T : ScriptableObject
         {
             var asset = ScriptableObject.CreateInstance<T>();
             initialize?.Invoke(asset);
 
             string filePrefix = filePrefixResolver(asset);
-            string directory = context.GetAssetDirectory();
-            string path = AssetDatabase.GenerateUniqueAssetPath(Path.Combine(directory, $"{filePrefix}.asset"));
+            string targetDirectory = directory ?? context.GetAssetDirectory();
+            string path = AssetDatabase.GenerateUniqueAssetPath(Path.Combine(targetDirectory, $"{filePrefix}.asset"));
             AssetDatabase.CreateAsset(asset, path);
             AssetDatabase.SaveAssets();
             return asset;
@@ -139,7 +156,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             T source,
             InventoryEditorContext context,
             Action<T> configureCopy,
-            Func<T, string> filePrefixResolver)
+            Func<T, string> filePrefixResolver,
+            string directory = null)
             where T : ScriptableObject
         {
             if (source == null)
@@ -149,8 +167,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             configureCopy?.Invoke(copy);
 
             string filePrefix = filePrefixResolver(copy);
-            string directory = context.GetAssetDirectory();
-            string path = AssetDatabase.GenerateUniqueAssetPath(Path.Combine(directory, $"{filePrefix}.asset"));
+            string targetDirectory = directory ?? context.GetAssetDirectory();
+            string path = AssetDatabase.GenerateUniqueAssetPath(Path.Combine(targetDirectory, $"{filePrefix}.asset"));
             AssetDatabase.CreateAsset(copy, path);
             AssetDatabase.SaveAssets();
             return copy;
@@ -229,17 +247,29 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
             if (context.Setup.ItemDatabase == null)
             {
-                context.Setup.ItemDatabase = CreateAsset<ItemDatabaseSO>(context, "SO_ItemDatabase", db => db.RebuildCache());
+                context.Setup.ItemDatabase = CreateAsset<ItemDatabaseSO>(
+                    context,
+                    "SO_ItemDatabase",
+                    db => db.RebuildCache(),
+                    context.GetSetupAssetDirectory());
             }
 
             if (context.Setup.RecipeDatabase == null)
             {
-                context.Setup.RecipeDatabase = CreateAsset<RecipeDatabaseSO>(context, "SO_RecipeDatabase", db => db.RebuildCache());
+                context.Setup.RecipeDatabase = CreateAsset<RecipeDatabaseSO>(
+                    context,
+                    "SO_RecipeDatabase",
+                    db => db.RebuildCache(),
+                    context.GetSetupAssetDirectory());
             }
 
             if (context.Setup.LootTableDatabase == null)
             {
-                context.Setup.LootTableDatabase = CreateAsset<LootTableDatabaseSO>(context, "SO_LootTableDatabase", db => db.RebuildCache());
+                context.Setup.LootTableDatabase = CreateAsset<LootTableDatabaseSO>(
+                    context,
+                    "SO_LootTableDatabase",
+                    db => db.RebuildCache(),
+                    context.GetSetupAssetDirectory());
             }
 
             context.MarkDirty(context.Setup);

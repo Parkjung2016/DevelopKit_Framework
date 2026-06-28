@@ -134,6 +134,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             panels.Add(new InventoryRecipesPanel(context));
             panels.Add(new InventoryLootPanel(context));
             panels.Add(new InventoryContainersPanel(context));
+            panels.Add(new InventoryEnumsPanel(context));
 
             BuildNavigation();
 
@@ -190,6 +191,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 InventoryEditorTab.Recipes => 2,
                 InventoryEditorTab.Loot => 3,
                 InventoryEditorTab.Containers => 4,
+                InventoryEditorTab.Enums => 5,
                 _ => 0
             };
 

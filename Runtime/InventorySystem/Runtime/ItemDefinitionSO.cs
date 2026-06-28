@@ -9,7 +9,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         [field: SerializeField] public string DisplayName { get; set; }
         [field: SerializeField, TextArea] public string Description { get; set; }
         [field: SerializeField] public Sprite Icon { get; set; }
-        [field: SerializeField] public ItemType ItemType { get; set; } = ItemType.General;
+        [field: SerializeField] public ItemType ItemType { get; set; }
         [field: SerializeField] public int MaxStackSize { get; set; } = 99;
         [field: SerializeField] public bool IsStackable { get; set; } = true;
         [field: SerializeField] public bool CanDrop { get; set; } = true;

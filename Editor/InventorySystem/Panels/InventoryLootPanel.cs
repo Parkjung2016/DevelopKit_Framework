@@ -235,7 +235,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             Context.Setup.LootTableDatabase = InventoryEditorAssetActions.CreateAsset<LootTableDatabaseSO>(
                 Context,
                 "SO_LootTableDatabase",
-                db => db.RebuildCache());
+                db => db.RebuildCache(),
+                Context.GetSetupAssetDirectory());
             Context.MarkDirty(Context.Setup);
             Refresh();
         }
@@ -250,7 +251,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                     asset.RollCount = 1;
                     asset.Entries = Array.Empty<LootEntry>();
                 },
-                asset => InventoryEditorAssetNaming.ForLoot(asset.TableId));
+                asset => InventoryEditorAssetNaming.ForLoot(asset.TableId),
+                Context.GetLootDatabaseDirectory());
 
             AddTableReference(table);
             Refresh();
@@ -289,7 +291,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 source,
                 Context,
                 asset => asset.TableId = source.TableId + "_copy",
-                asset => InventoryEditorAssetNaming.ForLoot(asset.TableId));
+                asset => InventoryEditorAssetNaming.ForLoot(asset.TableId),
+                Context.GetLootDatabaseDirectory());
             if (copy == null)
                 return;
 

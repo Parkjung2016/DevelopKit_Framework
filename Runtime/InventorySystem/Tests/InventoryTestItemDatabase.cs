@@ -17,9 +17,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         {
             definitions = new Dictionary<int, ItemDefinition>
             {
-                [GeneralItemId] = new(GeneralItemId, maxStackSize: 5, isStackable: true, itemType: ItemType.General),
-                [EquipmentItemId] = new(EquipmentItemId, maxStackSize: 1, isStackable: false, itemType: ItemType.Equipment),
-                [QuestItemId] = new(QuestItemId, maxStackSize: 99, isStackable: true, itemType: ItemType.Quest, canDrop: false)
+                [GeneralItemId] = new(GeneralItemId, maxStackSize: 5, isStackable: true, itemType: (ItemType)InventoryTestValues.GeneralType),
+                [EquipmentItemId] = new(EquipmentItemId, maxStackSize: 1, isStackable: false, itemType: (ItemType)InventoryTestValues.EquipmentType),
+                [QuestItemId] = new(QuestItemId, maxStackSize: 99, isStackable: true, itemType: (ItemType)InventoryTestValues.QuestType, canDrop: false)
             };
         }
 

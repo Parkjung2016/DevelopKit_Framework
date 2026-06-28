@@ -53,7 +53,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             Assert.AreEqual(1, result.SlotChanges[1].CurrentCount);
             Assert.AreEqual(6, result.TotalCountDelta);
             Assert.AreEqual("main", result.ContainerId);
-            Assert.AreEqual(ContainerKind.Main, result.Kind);
+            Assert.AreEqual((ContainerKind)InventoryTestValues.MainKind, result.Kind);
         }
 
         [Test]

@@ -15,29 +15,45 @@
 | `SO/InventorySystem/Recipe` | 제작 레시피 |
 | `SO/InventorySystem/LootTable` | 드롭 테이블 |
 
-### 2. 단일 인벤토리 (MonoBehaviour)
+### ItemType / ContainerKind 커스터마이즈
+
+1. `PJDev → Inventory → Data Editor` → **Enums** 탭
+2. 항목 추가·**Name**·표시명 편집 (Name = C# enum 이름, 자유롭게 변경)
+3. **Generate Enums** → `Runtime/Generated/*.cs` 갱신
+
+설정 파일: `ProjectSettings/InventorySystem/InventoryEnums.json`  
+메뉴: `PJDev → Inventory → Generate Enums`
+
+- **value=0**: ItemType None / ContainerKind Main 관례 (이름은 변경 가능)
+- **itemTypeRoutes**: 아이템 타입 value → 컨테이너 kind value 라우팅
+- **value 변경** 시 기존 SO·routes가 깨질 수 있음
+
+### 2. 런타임 초기화
 
 ```csharp
-inventorySystem.Init(owner, itemDatabaseSO);
+// 권장: InventorySetupSO (ContainerConfigs + DB)
+inventorySystem.Init(owner, setupSO);
+
+// 프로토타입: DB만 넘기면 기본 main 컨테이너(20슬롯) 생성
+inventorySystem.Init(owner, itemDatabase);
+
 inventorySystem.TryAddItem(itemId, count);
-inventorySystem.ExportSaveData();
-inventorySystem.ImportSaveData(saveData);
+inventorySystem.ExportSaveData();           // Primary 컨테이너
+inventorySystem.ExportGroupSaveData();      // 전체 그룹
 ```
 
-### 3. 멀티 인벤토리 (Group)
+### 3. 멀티 컨테이너 + 제작/루팅
 
 ```csharp
-groupSystem.Init(owner, setupSO);
-groupSystem.TryAddItem(itemId, count);
-groupSystem.TryCraft(recipeSO);
-groupSystem.TryGrantLoot(lootTableSO);
-groupSystem.ExportSaveData();
+inventorySystem.TryMoveBetween("main", 0, "equipment", 1);
+inventorySystem.TryCraft(recipeSO);
+inventorySystem.TryGrantLoot(lootTableSO);
 ```
 
 ## 아키텍처
 
 ```
-InventoryGroupSystem
+InventorySystem (MonoBehaviour — 단일 진입점)
   └─ InventoryGroup
        ├─ InventoryContainer ("main")
        ├─ InventoryContainer ("equipment")
@@ -50,6 +66,16 @@ InventoryGroupSystem
 | `ContainerKind` | Main, Equipment, QuickBar… — 라우터 분기 |
 | `ItemDefinitionSO` | 디자이너용 아이템 에셋 |
 | `ItemDefinition` | 런타임 struct |
+
+## API 요약
+
+| 용도 | API |
+|------|-----|
+| 기본 가방 (Main) | `TryAddItem`, `TryMoveSlot`, `ExportSaveData` |
+| 특정 컨테이너 | `TryGetContainer(id, out container)` |
+| 컨테이너 간 이동 | `TryMoveBetween` |
+| 제작/루팅 | `TryCraft`, `TryGrantLoot` |
+| 전체 세이브 | `ExportGroupSaveData` / `ImportGroupSaveData` |
 
 ## 확장 포인트
 

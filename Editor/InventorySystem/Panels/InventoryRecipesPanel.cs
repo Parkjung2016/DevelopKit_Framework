@@ -234,7 +234,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             Context.Setup.RecipeDatabase = InventoryEditorAssetActions.CreateAsset<RecipeDatabaseSO>(
                 Context,
                 "SO_RecipeDatabase",
-                db => db.RebuildCache());
+                db => db.RebuildCache(),
+                Context.GetSetupAssetDirectory());
             Context.MarkDirty(Context.Setup);
             Refresh();
         }
@@ -250,7 +251,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                     asset.Costs = Array.Empty<InventoryRecipeEntry>();
                     asset.Rewards = Array.Empty<InventoryRecipeEntry>();
                 },
-                asset => InventoryEditorAssetNaming.ForRecipe(asset.DisplayName));
+                asset => InventoryEditorAssetNaming.ForRecipe(asset.DisplayName),
+                Context.GetRecipeDatabaseDirectory());
 
             AddRecipeReference(recipe);
             Refresh();
@@ -293,7 +295,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                     asset.RecipeId = source.RecipeId + "_copy";
                     asset.DisplayName = source.DisplayName + " Copy";
                 },
-                asset => InventoryEditorAssetNaming.ForRecipe(asset.DisplayName));
+                asset => InventoryEditorAssetNaming.ForRecipe(asset.DisplayName),
+                Context.GetRecipeDatabaseDirectory());
             if (copy == null)
                 return;
 

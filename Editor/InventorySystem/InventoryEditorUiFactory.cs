@@ -384,7 +384,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             var asset = ScriptableObject.CreateInstance<T>();
             initialize?.Invoke(asset);
 
-            string directory = context.GetAssetDirectory();
+            string directory = context.GetSetupAssetDirectory();
             string path = AssetDatabase.GenerateUniqueAssetPath(Path.Combine(directory, $"{filePrefix}.asset"));
             AssetDatabase.CreateAsset(asset, path);
             AssetDatabase.SaveAssets();
@@ -753,7 +753,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
             if (item != null)
             {
-                Label typeLabel = CreateEllipsisLabel(item.ItemType.ToString(), fontSize: 10);
+                Label typeLabel = CreateEllipsisLabel(InventoryEnumCatalog.GetItemTypeDisplayName(item.ItemType), fontSize: 10);
                 typeLabel.style.opacity = 0.55f;
                 typeLabel.style.marginTop = 1;
                 info.Add(typeLabel);
@@ -781,6 +781,18 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             }
 
             return body;
+        }
+
+        public static string FormatItemListSubtitle(ItemDefinitionSO item)
+        {
+            if (item == null)
+                return string.Empty;
+
+            int stackSize = item.IsStackable
+                ? (item.MaxStackSize > 0 ? item.MaxStackSize : 1)
+                : 1;
+
+            return $"{InventoryEnumCatalog.GetItemTypeDisplayName(item.ItemType)} · stack {stackSize}";
         }
 
         public static VisualElement CreateListRowContent(

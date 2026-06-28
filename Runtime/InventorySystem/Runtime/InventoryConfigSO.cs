@@ -20,11 +20,11 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
     public class InventoryConfigSO : ScriptableObject
     {
         [field: SerializeField] public string ContainerId { get; set; } = "main";
-        [field: SerializeField] public ContainerKind Kind { get; set; } = ContainerKind.Main;
+        [field: SerializeField] public ContainerKind Kind { get; set; } = (ContainerKind)InventoryEnumCore.MainContainerKindValue;
         [field: SerializeField] public int SlotCount { get; set; } = 20;
 
         [field: SerializeField] public InventorySlotRuleMode SlotRuleMode { get; set; } = InventorySlotRuleMode.Any;
-        [field: SerializeField] public ItemType[] AllowedSlotTypes { get; set; } = { ItemType.General };
+        [field: SerializeField] public ItemType[] AllowedSlotTypes { get; set; } = Array.Empty<ItemType>();
 
         [field: SerializeField] public InventoryCapacityRuleMode CapacityRuleMode { get; set; } = InventoryCapacityRuleMode.None;
         [field: SerializeField] public float MaxWeight { get; set; } = 100f;

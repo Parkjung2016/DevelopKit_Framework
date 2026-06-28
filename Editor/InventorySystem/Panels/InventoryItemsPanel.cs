@@ -158,7 +158,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                         item,
                         item.ItemId,
                         item.DisplayName ?? item.name,
-                        $"{item.ItemType} · stack {item.MaxStackSize}"));
+                        InventoryEditorVisuals.FormatItemListSubtitle(item)));
                     scroll.Add(row);
                 }
             });
@@ -210,7 +210,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             Context.Setup.ItemDatabase = InventoryEditorAssetActions.CreateAsset<ItemDatabaseSO>(
                 Context,
                 "SO_ItemDatabase",
-                db => db.RebuildCache());
+                db => db.RebuildCache(),
+                Context.GetSetupAssetDirectory());
             Context.MarkDirty(Context.Setup);
             Refresh();
         }
@@ -224,7 +225,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                     asset.ItemId = GetNextItemId();
                     asset.DisplayName = "New Item";
                 },
-                asset => InventoryEditorAssetNaming.ForItem(asset.DisplayName));
+                asset => InventoryEditorAssetNaming.ForItem(asset.DisplayName),
+                Context.GetItemDatabaseDirectory());
 
             AddItemReference(item);
             selectedIndex = GetItems().Length - 1;
@@ -268,7 +270,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                     asset.ItemId = GetNextItemId();
                     asset.DisplayName = source.DisplayName + " Copy";
                 },
-                asset => InventoryEditorAssetNaming.ForItem(asset.DisplayName));
+                asset => InventoryEditorAssetNaming.ForItem(asset.DisplayName),
+                Context.GetItemDatabaseDirectory());
             if (copy == null)
                 return;
 

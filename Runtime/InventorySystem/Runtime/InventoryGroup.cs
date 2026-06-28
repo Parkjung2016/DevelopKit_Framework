@@ -99,10 +99,10 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 return InventoryChangeResult.Fail(InventoryChangeType.Add, InventoryFailReason.ContainerNotFound, itemId, count);
 
             InventoryChangeResult result = container.TryAddItem(itemId, count);
-            if (result.Remainder <= 0 || container.Kind == ContainerKind.Main)
+            if (result.Remainder <= 0 || container.Kind == (ContainerKind)InventoryEnumCore.MainContainerKindValue)
                 return result;
 
-            if (!TryGetContainerByKind(ContainerKind.Main, out IInventoryContainer fallback))
+            if (!TryGetContainerByKind((ContainerKind)InventoryEnumCore.MainContainerKindValue, out IInventoryContainer fallback))
                 return result;
 
             InventoryChangeResult fallbackResult = fallback.TryAddItem(itemId, result.Remainder);

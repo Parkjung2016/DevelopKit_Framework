@@ -40,7 +40,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
                 out ItemDefinition definition));
 
             Assert.IsTrue(router.TryResolveContainer(group, definition, out IInventoryContainer resolved));
-            Assert.AreEqual(ContainerKind.Quest, resolved.Kind);
+            Assert.AreEqual((ContainerKind)InventoryTestValues.QuestKind, resolved.Kind);
             Assert.AreEqual("quest", resolved.ContainerId);
         }
 
@@ -50,7 +50,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             InventoryTestItemDatabase.Shared.TryGetDefinition(InventoryTestItemDatabase.EquipmentItemId, out ItemDefinition definition);
 
             Assert.IsTrue(router.TryResolveContainer(group, definition, out IInventoryContainer resolved));
-            Assert.AreEqual(ContainerKind.Equipment, resolved.Kind);
+            Assert.AreEqual((ContainerKind)InventoryTestValues.EquipmentKind, resolved.Kind);
         }
 
         [Test]
@@ -60,7 +60,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             InventoryTestItemDatabase.Shared.Register(customDefinition);
 
             Assert.IsTrue(router.TryResolveContainer(group, customDefinition, out IInventoryContainer resolved));
-            Assert.AreEqual(ContainerKind.Main, resolved.Kind);
+            Assert.AreEqual((ContainerKind)InventoryTestValues.MainKind, resolved.Kind);
         }
     }
 }
