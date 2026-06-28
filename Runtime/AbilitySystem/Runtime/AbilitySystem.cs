@@ -8,6 +8,10 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 {
     public class AbilitySystem : MonoBehaviour
     {
+        private readonly Dictionary<GameplayTag, AbilitySO> abilitiyDic = new();
+
+        public AbilityInputBridgeSO InputBridge => abilityInputBridge;
+
         [Header("InputSystem 연동이 필요한 경우에만 사용")] [SerializeField]
         private AbilityInputBridgeSO abilityInputBridge;
 
@@ -16,7 +20,6 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 
         [SerializeField] private GameObjectGameplayTagContainer gamePlayTagContainerCompo;
 
-        private readonly Dictionary<GameplayTag, AbilitySO> abilitiyDic = new();
 
         private IAbilitySystemOwner owner;
 
@@ -26,6 +29,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
             CheckAbilitySetup();
             if (abilityInputBridge != null)
             {
+                abilityInputBridge = abilityInputBridge.Clone();
                 abilityInputBridge.Init(this);
                 abilityInputBridge.Bind();
             }

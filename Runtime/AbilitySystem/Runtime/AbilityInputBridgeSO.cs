@@ -89,5 +89,10 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         {
             return (ctx) => { abilitySystemCompo.TryActivateAbility(info.abilityToActivate, ctx); };
         }
+        
+        public AbilityInputBridgeSO Clone()
+        {
+            return Instantiate(this);
+        }
     }
 }
