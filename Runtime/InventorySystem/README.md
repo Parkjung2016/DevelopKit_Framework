@@ -24,6 +24,9 @@
 설정 파일: `ProjectSettings/InventorySystem/InventoryEnums.json`  
 메뉴: `PJDev → Inventory → Generate Enums`
 
+> 패키지 배포 시 `Runtime/InventorySystem/Runtime/Generated/` 가 포함되어야 합니다.  
+> 최초 설치 후 enum이 없으면 에디터가 자동 생성을 시도합니다.
+
 - **value=0**: ItemType None / ContainerKind Main 관례 (이름은 변경 가능)
 - **itemTypeRoutes**: 아이템 타입 value → 컨테이너 kind value 라우팅
 - **value 변경** 시 기존 SO·routes가 깨질 수 있음
