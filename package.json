@@ -1,7 +1,7 @@
 {
   "name": "com.pjdev.developkit.framework",
   "displayName": "DevelopKit Framework",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "unity": "2021.0",
   "unityRelease": "1f1",
   "description": "Provides core frameworks such as StatSystem and AbilitySystem.",

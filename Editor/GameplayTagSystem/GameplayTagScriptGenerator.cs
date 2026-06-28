@@ -13,7 +13,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
     internal static class GameplayTagScriptGenerator
     {
         private const string OutputAssetPath =
-            "Assets/Framework/Runtime/GameplayTagSystem/Runtime/Generated/GameplayTag.Generated.cs";
+            "Assets/Framework/Runtime/GameplayTagSystem/Runtime/Generated/GameplayTags.Generated.cs";
 
         private static readonly HashSet<string> CSharpKeywords = new(StringComparer.Ordinal)
         {
@@ -92,7 +92,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             source.AppendLine();
             source.AppendLine("namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime");
             source.AppendLine("{");
-            source.AppendLine("    public partial struct GameplayTag");
+            source.AppendLine("    public partial struct GameplayTags");
             source.AppendLine("    {");
 
             if (body.Length == 0)
