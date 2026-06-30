@@ -18,18 +18,6 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             InventoryEnumPaths.TestsAssemblyAssetPath
         };
 
-        public static bool IsGeneratedModeEnabled() =>
-            HasGeneratedAssemblyReference(InventoryEnumPaths.RuntimeAssemblyAssetPath);
-
-        public static bool HasGeneratedEnumFiles()
-        {
-            string generatedRoot = Path.GetFullPath(InventoryEnumPaths.GeneratedRoot);
-            if (!Directory.Exists(generatedRoot))
-                return false;
-
-            return File.Exists(Path.GetFullPath(InventoryEnumPaths.ContainerKindAssetPath));
-        }
-
         public static bool EnableGeneratedMode(bool addDefineSymbol = false)
         {
             bool changed = false;
@@ -39,48 +27,6 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             changed |= WriteGeneratedAssemblyDefinition();
             changed |= SetGeneratedAssemblyReference(true);
             return changed;
-        }
-
-        public static bool DisableGeneratedMode()
-        {
-            bool changed = false;
-            changed |= SetDefineSymbol(InventoryEnumPaths.DefineSymbol, false);
-            changed |= SetGeneratedAssemblyReference(false);
-            return changed;
-        }
-
-        public static bool SyncGeneratedMode()
-        {
-            if (HasGeneratedEnumFiles())
-            {
-                bool changed = false;
-                if (!File.Exists(Path.GetFullPath(InventoryEnumPaths.GeneratedAssemblyAssetPath)))
-                    changed |= WriteGeneratedAssemblyDefinition();
-
-                if (!IsGeneratedModeEnabled())
-                    changed |= SetGeneratedAssemblyReference(true);
-
-                return changed;
-            }
-
-            bool cleaned = false;
-            if (IsGeneratedModeEnabled())
-                cleaned |= SetGeneratedAssemblyReference(false);
-
-            if (HasDefineSymbol(InventoryEnumPaths.DefineSymbol))
-                cleaned |= SetDefineSymbol(InventoryEnumPaths.DefineSymbol, false);
-
-            return cleaned;
-        }
-
-        private static bool HasGeneratedAssemblyReference(string asmdefAssetPath)
-        {
-            string fullPath = Path.GetFullPath(asmdefAssetPath);
-            if (!File.Exists(fullPath))
-                return false;
-
-            string json = File.ReadAllText(fullPath);
-            return json.Contains($"GUID:{InventoryEnumPaths.GeneratedAssemblyGuid}", StringComparison.Ordinal);
         }
 
         private static bool WriteGeneratedAssemblyDefinition()
@@ -187,24 +133,18 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         private static bool SetDefineSymbol(string symbol, bool enabled)
         {
+            if (!enabled)
+                return false;
+
             bool changed = false;
             foreach (BuildTargetGroup group in EnumerateDefineGroups())
             {
                 string defines = GetScriptingDefineSymbols(group);
                 var defineList = defines.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
-                bool contains = defineList.Contains(symbol, StringComparer.Ordinal);
-
-                if (enabled && contains)
+                if (defineList.Contains(symbol, StringComparer.Ordinal))
                     continue;
 
-                if (!enabled && !contains)
-                    continue;
-
-                if (enabled)
-                    defineList.Add(symbol);
-                else
-                    defineList.Remove(symbol);
-
+                defineList.Add(symbol);
                 SetScriptingDefineSymbols(
                     group,
                     string.Join(";", defineList.Where(static value => !string.IsNullOrWhiteSpace(value))));
@@ -212,21 +152,6 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             }
 
             return changed;
-        }
-
-        private static bool HasDefineSymbol(string symbol)
-        {
-            foreach (BuildTargetGroup group in EnumerateDefineGroups())
-            {
-                string defines = GetScriptingDefineSymbols(group);
-                if (defines.Split(';', StringSplitOptions.RemoveEmptyEntries)
-                    .Contains(symbol, StringComparer.Ordinal))
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         private static IEnumerable<BuildTargetGroup> EnumerateDefineGroups()
