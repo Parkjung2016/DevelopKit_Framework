@@ -62,7 +62,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 return false;
             }
 
-            bool changed = InventoryEnumAssemblyConfigurator.EnableGeneratedMode();
+            bool changed = InventoryEnumAssemblyConfigurator.EnableGeneratedMode(addDefineSymbol: true);
             changed |= WriteIfChanged(ItemTypePath, BuildEnumSource("ItemType", document.itemTypes));
             changed |= WriteIfChanged(ContainerKindPath, BuildEnumSource("ContainerKind", document.containerKinds));
             changed |= WriteIfChanged(CatalogPath, BuildCatalogSource(document));
