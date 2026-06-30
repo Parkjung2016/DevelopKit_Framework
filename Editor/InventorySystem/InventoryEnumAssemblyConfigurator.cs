@@ -21,8 +21,14 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         public static bool IsGeneratedModeEnabled() =>
             HasGeneratedAssemblyReference(InventoryEnumPaths.RuntimeAssemblyAssetPath);
 
-        public static bool HasGeneratedEnumFiles() =>
-            File.Exists(Path.GetFullPath(InventoryEnumPaths.ContainerKindAssetPath));
+        public static bool HasGeneratedEnumFiles()
+        {
+            string generatedRoot = Path.GetFullPath(InventoryEnumPaths.GeneratedRoot);
+            if (!Directory.Exists(generatedRoot))
+                return false;
+
+            return File.Exists(Path.GetFullPath(InventoryEnumPaths.ContainerKindAssetPath));
+        }
 
         public static bool EnableGeneratedMode(bool addDefineSymbol = false)
         {
@@ -199,6 +205,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     string.Join(";", defineList.Where(static value => !string.IsNullOrWhiteSpace(value))));
                 changed = true;
             }
+
+            if (changed)
+                EditorUtility.RequestScriptReload();
 
             return changed;
         }
