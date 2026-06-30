@@ -1,12 +1,7 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Text;
 using UnityEditor;
-using UnityEditor.Build;
-using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 {
@@ -20,7 +15,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         };
 
         public static bool IsGeneratedModeEnabled() =>
-            HasDefineSymbol(InventoryEnumPaths.DefineSymbol);
+            HasGeneratedAssemblyReference(InventoryEnumPaths.RuntimeAssemblyAssetPath);
 
         public static bool HasGeneratedEnumFiles() =>
             File.Exists(Path.GetFullPath(InventoryEnumPaths.ContainerKindAssetPath));
@@ -28,7 +23,6 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         public static bool EnableGeneratedMode()
         {
             bool changed = false;
-            changed |= SetDefineSymbol(InventoryEnumPaths.DefineSymbol, true);
             changed |= WriteGeneratedAssemblyDefinition();
             changed |= SetGeneratedAssemblyReference(true);
             return changed;
@@ -37,7 +31,6 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         public static bool DisableGeneratedMode()
         {
             bool changed = false;
-            changed |= SetDefineSymbol(InventoryEnumPaths.DefineSymbol, false);
             changed |= SetGeneratedAssemblyReference(false);
             return changed;
         }
@@ -51,6 +44,16 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 return DisableGeneratedMode();
 
             return false;
+        }
+
+        private static bool HasGeneratedAssemblyReference(string asmdefAssetPath)
+        {
+            string fullPath = Path.GetFullPath(asmdefAssetPath);
+            if (!File.Exists(fullPath))
+                return false;
+
+            string json = File.ReadAllText(fullPath);
+            return json.Contains($"GUID:{InventoryEnumPaths.GeneratedAssemblyGuid}", StringComparison.Ordinal);
         }
 
         private static bool WriteGeneratedAssemblyDefinition()
@@ -136,93 +139,6 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
             File.WriteAllText(fullPath, json, Encoding.UTF8);
             return true;
-        }
-
-        private static bool SetDefineSymbol(string symbol, bool enabled)
-        {
-            bool changed = false;
-            foreach (BuildTargetGroup group in EnumerateDefineGroups())
-            {
-                string defines = GetScriptingDefineSymbols(group);
-                var defineList = defines.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
-                bool contains = defineList.Contains(symbol, StringComparer.Ordinal);
-
-                if (enabled && contains)
-                    continue;
-
-                if (!enabled && !contains)
-                    continue;
-
-                if (enabled)
-                    defineList.Add(symbol);
-                else
-                    defineList.Remove(symbol);
-
-                SetScriptingDefineSymbols(
-                    group,
-                    string.Join(";", defineList.Where(static value => !string.IsNullOrWhiteSpace(value))));
-                changed = true;
-            }
-
-            return changed;
-        }
-
-        private static bool HasDefineSymbol(string symbol)
-        {
-            foreach (BuildTargetGroup group in EnumerateDefineGroups())
-            {
-                string defines = GetScriptingDefineSymbols(group);
-                if (defines.Split(';', StringSplitOptions.RemoveEmptyEntries)
-                    .Contains(symbol, StringComparer.Ordinal))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static IEnumerable<BuildTargetGroup> EnumerateDefineGroups()
-        {
-            var groups = new List<BuildTargetGroup>();
-            foreach (BuildTargetGroup group in Enum.GetValues(typeof(BuildTargetGroup)))
-            {
-                if (group == BuildTargetGroup.Unknown)
-                    continue;
-
-                FieldInfo field = typeof(BuildTargetGroup).GetField(group.ToString());
-                if (field != null && field.IsDefined(typeof(ObsoleteAttribute), false))
-                    continue;
-
-                try
-                {
-                    GetScriptingDefineSymbols(group);
-                    groups.Add(group);
-                }
-                catch (ArgumentException)
-                {
-                }
-            }
-
-            return groups;
-        }
-
-        private static string GetScriptingDefineSymbols(BuildTargetGroup group)
-        {
-#if UNITY_2023_1_OR_NEWER
-            return PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.FromBuildTargetGroup(group));
-#else
-            return PlayerSettings.GetScriptingDefineSymbolsForGroup(group);
-#endif
-        }
-
-        private static void SetScriptingDefineSymbols(BuildTargetGroup group, string defines)
-        {
-#if UNITY_2023_1_OR_NEWER
-            PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.FromBuildTargetGroup(group), defines);
-#else
-            PlayerSettings.SetScriptingDefineSymbolsForGroup(group, defines);
-#endif
         }
 
         private static bool WriteIfChanged(string fullPath, string content)
