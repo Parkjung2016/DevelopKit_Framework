@@ -5,14 +5,14 @@ using UnityEngine;
 namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
 {
     /// <summary>직렬화 + (선택) 암호화 + 스토리지를 묶은 범용 로컬 세이브 API입니다.</summary>
-    public sealed class SaveSystem
+    public sealed class SaveManager
     {
         private readonly ISaveSerializer serializer;
         private readonly ISaveEncryptor encryptor;
         private readonly ISaveStorage storage;
         private readonly bool encryptedPayload;
 
-        public SaveSystem(
+        public SaveManager(
             ISaveSerializer serializer,
             ISaveEncryptor encryptor,
             ISaveStorage storage,
@@ -28,19 +28,19 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
         public ISaveEncryptor Encryptor => encryptor;
         public ISaveStorage Storage => storage;
 
-        public static SaveSystem CreateDefault(string passphrase = null, string rootDirectory = null)
+        public static SaveManager CreateDefault(string passphrase = null, string rootDirectory = null)
         {
             string resolvedPassphrase = string.IsNullOrWhiteSpace(passphrase)
                 ? Application.productName
                 : passphrase;
 
-            return new SaveSystem(
+            return new SaveManager(
                 JsonSaveSerializer.Instance,
                 new AesSaveEncryptor(new PassphraseSaveKeyProvider(resolvedPassphrase)),
                 new LocalFileSaveStorage(rootDirectory));
         }
 
-        public static SaveSystem CreateUnencrypted(string rootDirectory = null) =>
+        public static SaveManager CreateUnencrypted(string rootDirectory = null) =>
             new(
                 JsonSaveSerializer.Instance,
                 NullSaveEncryptor.Instance,
@@ -67,7 +67,7 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
             }
             catch (Exception exception)
             {
-                CDebug.LogWarning($"SaveSystem : failed to save slot '{normalized}'. {exception.Message}");
+                CDebug.LogWarning($"SaveManager : failed to save slot '{normalized}'. {exception.Message}");
                 return SaveResult.Fail(SaveFailReason.SerializationFailed, normalized);
             }
         }

@@ -11,7 +11,7 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
         [field: SerializeField] public string SaveRootDirectory { get; set; } = "";
         [field: SerializeField] public string FileExtension { get; set; } = ".sav";
 
-        public SaveSystem CreateSaveSystem()
+        public SaveManager CreateSaveManager()
         {
             ISaveEncryptor encryptor = UseEncryption
                 ? new AesSaveEncryptor(new PassphraseSaveKeyProvider(ResolvePassphrase()))
@@ -19,7 +19,7 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
 
             string root = string.IsNullOrWhiteSpace(SaveRootDirectory) ? null : SaveRootDirectory;
             var storage = new LocalFileSaveStorage(root, FileExtension);
-            return new SaveSystem(JsonSaveSerializer.Instance, encryptor, storage);
+            return new SaveManager(JsonSaveSerializer.Instance, encryptor, storage);
         }
 
         private string ResolvePassphrase()

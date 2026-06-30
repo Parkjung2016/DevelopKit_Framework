@@ -6,7 +6,7 @@
 
 | 타입 | 역할 |
 |------|------|
-| `SaveSystem` | `Save<T>` / `TryLoad<T>` / `Delete` 진입점 |
+| `SaveManager` | `Save<T>` / `TryLoad<T>` / `Delete` 진입점 |
 | `ISaveSerializer` | 객체 ↔ `byte[]` (`JsonSaveSerializer`) |
 | `ISaveEncryptor` | `byte[]` 암·복호화 (`AesSaveEncryptor`, `NullSaveEncryptor`) |
 | `ISaveStorage` | 슬롯 읽기/쓰기 (`LocalFileSaveStorage`, `InMemorySaveStorage`) |
@@ -16,7 +16,7 @@
 
 ```csharp
 // 기본: persistentDataPath/Saves + AES + JsonUtility
-SaveSystem save = SaveSystem.CreateDefault(passphrase: "my-secret");
+SaveManager save = SaveManager.CreateDefault(passphrase: "my-secret");
 
 var data = new PlayerSaveData { Level = 5, Gold = 1200 };
 save.Save("profile-1", data);
@@ -30,7 +30,7 @@ if (loaded.Success)
 
 1. `Create > PJDev/SO/SaveSystem/Setup` → `SaveSetupSO`
 2. `Passphrase`, `UseEncryption`, 저장 경로 설정
-3. `saveSetup.CreateSaveSystem()` 으로 인스턴스 생성
+3. `saveSetup.CreateSaveManager()` 으로 인스턴스 생성
 
 ## 데이터 타입 요구사항
 
@@ -60,7 +60,7 @@ save.TryLoadRaw("inventory");
 
 - 로컬 세이브 **난독화·변조 방지 보조** 수준입니다. 서버 검증이 필요한 값은 서버에서 재검증하세요.
 - 프로덕션에서는 `SaveSetupSO.Passphrase` 대신 프로젝트별 비밀값·키 유도 로직을 사용하세요.
-- 개발 중 암호화 끄기: `SaveSystem.CreateUnencrypted()` 또는 `UseEncryption = false`
+- 개발 중 암호화 끄기: `SaveManager.CreateUnencrypted()` 또는 `UseEncryption = false`
 
 ## 다른 시스템 연동 예
 

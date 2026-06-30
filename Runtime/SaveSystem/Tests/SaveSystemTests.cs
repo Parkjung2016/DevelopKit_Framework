@@ -2,7 +2,7 @@ using System;
 using NUnit.Framework;
 using PJDev.DevelopKit.Framework.SaveSystem.Runtime;
 
-namespace PJDev.DevelopKit.Framework.SaveSystem.Tests
+namespace PJDev.DevelopKit.Framework.SaveSystemTests
 {
     [Serializable]
     public sealed class TestSavePayload
@@ -40,16 +40,16 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Tests
     }
 
     [TestFixture]
-    public sealed class SaveSystemTests
+    public sealed class SaveManagerTests
     {
         private InMemorySaveStorage storage;
-        private SaveSystem saveSystem;
+        private SaveManager saveManager;
 
         [SetUp]
         public void SetUp()
         {
             storage = new InMemorySaveStorage();
-            saveSystem = new SaveSystem(
+            saveManager = new SaveManager(
                 JsonSaveSerializer.Instance,
                 new AesSaveEncryptor(new PassphraseSaveKeyProvider("unit-test")),
                 storage);
@@ -65,8 +65,8 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Tests
                 Health = 87.5f
             };
 
-            SaveResult saveResult = saveSystem.Save("slot-1", payload);
-            SaveLoadResult<TestSavePayload> loadResult = saveSystem.TryLoad<TestSavePayload>("slot-1");
+            SaveResult saveResult = saveManager.Save("slot-1", payload);
+            SaveLoadResult<TestSavePayload> loadResult = saveManager.TryLoad<TestSavePayload>("slot-1");
 
             Assert.IsTrue(saveResult.Success);
             Assert.IsTrue(loadResult.Success);
@@ -80,8 +80,8 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Tests
         {
             byte[] plain = { 10, 20, 30 };
 
-            Assert.IsTrue(saveSystem.SaveRaw("raw-slot", plain).Success);
-            SaveLoadResult<byte[]> loadResult = saveSystem.TryLoadRaw("raw-slot");
+            Assert.IsTrue(saveManager.SaveRaw("raw-slot", plain).Success);
+            SaveLoadResult<byte[]> loadResult = saveManager.TryLoadRaw("raw-slot");
 
             Assert.IsTrue(loadResult.Success);
             CollectionAssert.AreEqual(plain, loadResult.Value);
@@ -90,7 +90,7 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Tests
         [Test]
         public void TryLoad_MissingSlot_ReturnsSlotNotFound()
         {
-            SaveLoadResult<TestSavePayload> loadResult = saveSystem.TryLoad<TestSavePayload>("missing");
+            SaveLoadResult<TestSavePayload> loadResult = saveManager.TryLoad<TestSavePayload>("missing");
 
             Assert.IsFalse(loadResult.Success);
             Assert.AreEqual(SaveFailReason.SlotNotFound, loadResult.Reason);
@@ -99,28 +99,28 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Tests
         [Test]
         public void Delete_RemovesSlot()
         {
-            saveSystem.Save("delete-me", new TestSavePayload { Level = 1 });
-            Assert.IsTrue(saveSystem.Exists("delete-me"));
+            saveManager.Save("delete-me", new TestSavePayload { Level = 1 });
+            Assert.IsTrue(saveManager.Exists("delete-me"));
 
-            SaveResult deleteResult = saveSystem.Delete("delete-me");
+            SaveResult deleteResult = saveManager.Delete("delete-me");
 
             Assert.IsTrue(deleteResult.Success);
-            Assert.IsFalse(saveSystem.Exists("delete-me"));
+            Assert.IsFalse(saveManager.Exists("delete-me"));
         }
 
         [Test]
         public void Save_InvalidSlotId_ReturnsInvalidSlotId()
         {
-            SaveResult result = saveSystem.Save("", new TestSavePayload());
+            SaveResult result = saveManager.Save("", new TestSavePayload());
 
             Assert.IsFalse(result.Success);
             Assert.AreEqual(SaveFailReason.InvalidSlotId, result.Reason);
         }
 
         [Test]
-        public void UnencryptedSaveSystem_StillUsesFileHeader()
+        public void UnencryptedSaveManager_StillUsesFileHeader()
         {
-            var openSave = new SaveSystem(
+            var openSave = new SaveManager(
                 JsonSaveSerializer.Instance,
                 NullSaveEncryptor.Instance,
                 storage,

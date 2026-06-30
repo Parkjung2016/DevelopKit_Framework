@@ -1,8 +1,8 @@
 {
     "name": "PJDev.DevelopKit.Framework.SaveSystem.Tests",
-    "rootNamespace": "PJDev.DevelopKit.Framework.SaveSystem.Tests",
+    "rootNamespace": "PJDev.DevelopKit.Framework.SaveSystemTests",
     "references": [
-        "GUID:e6f7a8b9c0d1456789012345678abcd",
+        "GUID:a1b2c3d4e5f6478990ab12cd34ef5678",
         "GUID:27619889b8ba8c24980f49ee34dbb44a",
         "GUID:0acc523941302664db1f4e527237feb3",
         "GUID:e0cd26848372d4e5c891c569017e11f1"
