@@ -24,7 +24,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
         public GameplayTagContainerBinds(GameObject gameObject)
         {
-            GameObjectGameplayTagContainer component = gameObject.GetComponent<GameObjectGameplayTagContainer>();
+            ObjectGameplayTagContainer component = gameObject.GetComponent<ObjectGameplayTagContainer>();
             container = component.GameplayTagContainer;
             binds = null;
         }

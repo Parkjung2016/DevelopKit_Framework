@@ -18,7 +18,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         [Header("초기 Ability 등록이 필요한 경우에만 사용")] [SerializeField]
         private AbilitySetupSO abilitySetup;
 
-        [SerializeField] private GameObjectGameplayTagContainer gamePlayTagContainerCompo;
+        [SerializeField] private ObjectGameplayTagContainer playTagContainerCompo;
 
 
         private IAbilitySystemOwner owner;
@@ -73,7 +73,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         {
             if (abilitiyDic.Remove(abilityTag, out AbilitySO removedAbility))
             {
-                gamePlayTagContainerCompo.GameplayTagContainer.RemoveTag(removedAbility.GrantedGamePlayTag);
+                playTagContainerCompo.GameplayTagContainer.RemoveTag(removedAbility.GrantedGamePlayTag);
                 removedAbility.UnRegisteredAbility();
                 if (destroyAfterRemoved)
                     Destroy(removedAbility);
@@ -92,7 +92,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         {
             if (abilitiyDic.Remove(ability.GrantedGamePlayTag, out AbilitySO removedAbility))
             {
-                gamePlayTagContainerCompo.GameplayTagContainer.RemoveTag(removedAbility.GrantedGamePlayTag);
+                playTagContainerCompo.GameplayTagContainer.RemoveTag(removedAbility.GrantedGamePlayTag);
                 removedAbility.UnRegisteredAbility();
                 if (destroyAfterRemoved)
                     Destroy(removedAbility);
@@ -115,7 +115,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
                 return false;
             }
 
-            gamePlayTagContainerCompo.GameplayTagContainer.AddTag(ability.GrantedGamePlayTag);
+            playTagContainerCompo.GameplayTagContainer.AddTag(ability.GrantedGamePlayTag);
 
             if (context.HasValue)
                 foundAbility.ActivateAbility(context.Value);
@@ -124,7 +124,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 
             void OnEnded()
             {
-                gamePlayTagContainerCompo.GameplayTagContainer.RemoveTag(ability.GrantedGamePlayTag);
+                playTagContainerCompo.GameplayTagContainer.RemoveTag(ability.GrantedGamePlayTag);
                 foundAbility.OnAbilityEnded -= OnEnded;
             }
 
@@ -183,7 +183,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         {
             if (ability.IsActivating) return false;
 
-            if (gamePlayTagContainerCompo.GameplayTagContainer.HasTag(ability.BlockedGamePlayTags))
+            if (playTagContainerCompo.GameplayTagContainer.HasTag(ability.BlockedGamePlayTags))
             {
                 CDebug.LogWarning($"{ability.GrantedGamePlayTag} tag could not be found.");
                 return false;
@@ -213,7 +213,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         /// </summary>
         public bool HasAbility(GameplayTag abilityTag)
         {
-            return gamePlayTagContainerCompo.GameplayTagContainer.HasTag(abilityTag);
+            return playTagContainerCompo.GameplayTagContainer.HasTag(abilityTag);
         }
 
         /// <summary>
