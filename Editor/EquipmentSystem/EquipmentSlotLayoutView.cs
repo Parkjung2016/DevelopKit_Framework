@@ -32,7 +32,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
             host.Clear();
 
             var section = InventoryEditorUIFactory.CreateSection("Slot Layout");
-            section.Add(new Label("Each row is one equipment slot. The index (0, 1, 2…) is equipSlotIndex in code / UI.")
+            section.Add(new Label("한 줄이 장비 슬롯 하나입니다. 왼쪽 숫자(0, 1, 2…)가 코드·UI에서 쓰는 equipSlotIndex입니다.")
             {
                 style = { opacity = 0.78f, fontSize = 11, marginBottom = 8, whiteSpace = WhiteSpace.Normal }
             });
@@ -56,8 +56,8 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
             var syncRow = new VisualElement { style = { flexDirection = FlexDirection.Row, marginTop = 6 } };
             syncRow.Add(new Button(onSyncRequested)
             {
-                text = "Sync Slot Array",
-                tooltip = "Resize SlotCategories to match Slot Count when they are out of sync."
+                text = "슬롯 배열 동기화",
+                tooltip = "Slot Count와 SlotCategories 길이가 맞지 않을 때 누르세요."
             });
             section.Add(syncRow);
 

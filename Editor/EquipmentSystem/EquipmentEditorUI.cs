@@ -28,7 +28,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
 
         internal static readonly (string Name, string[] Categories)[] LayoutPresets =
         {
-            ("Default 6", new[]
+            ("기본 6슬롯", new[]
             {
                 EquipmentSlotCategories.Weapon,
                 EquipmentSlotCategories.Head,
@@ -37,7 +37,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
                 EquipmentSlotCategories.Feet,
                 EquipmentSlotCategories.Ring
             }),
-            ("RPG 8", new[]
+            ("RPG 8슬롯", new[]
             {
                 EquipmentSlotCategories.Weapon,
                 EquipmentSlotCategories.OffHand,
@@ -48,17 +48,16 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
                 EquipmentSlotCategories.Ring,
                 EquipmentSlotCategories.Any
             }),
-            ("Weapon Only", new[] { EquipmentSlotCategories.Weapon })
+            ("무기만", new[] { EquipmentSlotCategories.Weapon })
         };
 
         public static VisualElement BuildIntroHelpBox()
         {
             return new HelpBox(
-                "Configures the equipment container (weapon / armor slots).\n\n" +
-                "Workflow\n" +
-                "1. Slot Layout — assign a category per slot (e.g. slot 0 = Weapon, slot 1 = Head)\n" +
-                "2. Item Tags — add equip.Weapon tags on items (or use Overrides below)\n" +
-                "3. Runtime — register via CreateContainer() (see Integration Guide at the bottom)",
+                "장비 슬롯(무기·방어구) 컨테이너를 설정하는 에셋입니다.\n\n" +
+                "1. Slot Layout — 슬롯마다 Weapon, Head 같은 카테고리 지정\n" +
+                "2. Item Tag — 아이템에 equip.Weapon 태그 추가 (또는 Profile Overrides)\n" +
+                "3. 런타임 — 아래 Integration Guide 참고해서 CreateContainer()로 등록",
                 HelpBoxMessageType.Info);
         }
 
@@ -69,7 +68,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
             row.style.flexWrap = Wrap.Wrap;
             row.style.marginBottom = 6;
 
-            var label = new Label("Presets");
+            var label = new Label("프리셋");
             label.style.unityFontStyleAndWeight = FontStyle.Bold;
             label.style.marginRight = 8;
             label.style.alignSelf = Align.Center;
@@ -89,7 +88,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
                 })
                 {
                     text = name,
-                    tooltip = $"{categories.Length} slots · {string.Join(", ", categories)}"
+                    tooltip = $"{categories.Length}슬롯 · {string.Join(", ", categories)}"
                 };
                 button.AddToClassList("inv-btn");
                 row.Add(button);
@@ -113,7 +112,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
                 onChanged?.Invoke();
             })
             {
-                text = "Reset Defaults"
+                text = "기본값"
             };
             resetButton.AddToClassList("inv-btn");
             row.Add(resetButton);
@@ -124,9 +123,9 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
         public static string FormatTagHint(string prefix, string category)
         {
             if (string.IsNullOrEmpty(category))
-                return "→ accepts any item";
+                return "→ 모든 아이템 허용";
 
-            return $"→ tag: {prefix}{category}";
+            return $"→ 태그 {prefix}{category}";
         }
 
         internal static bool ShouldUseCustomCategoryField(string category)
@@ -170,7 +169,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
 
             var customButton = CreateCategoryIconButton(
                 "✎",
-                "Enter a custom slot category",
+                "직접 카테고리 입력",
                 () =>
                 {
                     BuildCustomCategoryControl(host, string.Empty, slotIndex, updateTagHint, onCategoryChanged);
@@ -197,7 +196,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
 
             var backButton = CreateCategoryIconButton(
                 "‹",
-                "Back to preset list",
+                "프리셋 목록으로",
                 () =>
                 {
                     BuildPresetCategoryControl(host, EquipmentSlotCategories.Weapon, slotIndex, updateTagHint, onCategoryChanged);
@@ -210,7 +209,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
                 value = current ?? string.Empty,
                 style = { flexGrow = 1, minWidth = 0, marginTop = 0, marginBottom = 0 }
             };
-            field.tooltip = "Custom category name (e.g. Amulet, Belt)";
+            field.tooltip = "직접 입력 (예: Amulet, Belt)";
 
             field.RegisterValueChangedCallback(evt =>
             {
@@ -279,12 +278,10 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
             string prefix = string.IsNullOrEmpty(setup.EquipmentTagPrefix) ? "equip." : setup.EquipmentTagPrefix;
 
             section.Add(new HelpBox(
-                "Items must carry a gameplay tag on ItemDefinitionSO.Tags:\n\n" +
-                $"Format: {prefix}<category>\n" +
-                $"Examples\n" +
-                $"  · sword → {prefix}{EquipmentSlotCategories.Weapon}\n" +
-                $"  · helmet → {prefix}{EquipmentSlotCategories.Head}\n\n" +
-                "Or assign categories per item in Overrides below (no tag required).",
+                "장착하려면 ItemDefinitionSO의 Tags에 아래 형식으로 넣어주세요.\n\n" +
+                $"형식: {prefix}<카테고리>\n" +
+                $"예) 검 → {prefix}{EquipmentSlotCategories.Weapon}, 투구 → {prefix}{EquipmentSlotCategories.Head}\n\n" +
+                "태그 대신 아래 Profile Overrides에서 아이템별로 지정할 수도 있습니다.",
                 HelpBoxMessageType.None));
 
             return section;
@@ -299,7 +296,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
         {
             var section = InventoryEditorUIFactory.CreateSection("Profile Overrides (Optional)");
 
-            section.Add(new Label("Assign a slot category to specific items without gameplay tags.")
+            section.Add(new Label("태그 없이 특정 아이템의 슬롯 카테고리를 지정할 때 씁니다.")
             {
                 style = { opacity = 0.78f, fontSize = 11, marginBottom = 6, whiteSpace = WhiteSpace.Normal }
             });
@@ -323,7 +320,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
             if (itemDatabase == null)
             {
                 section.Add(new HelpBox(
-                    "Auto-detects Item Database from a nearby Inventory Setup. Assign manually if needed.",
+                    "같은 폴더의 Inventory Setup / Item Database를 자동으로 찾습니다. 없으면 위에서 직접 연결하세요.",
                     HelpBoxMessageType.Info));
             }
 
@@ -434,7 +431,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
                     RebuildList();
                 })
                 {
-                    text = "+ Add Override"
+                    text = "+ Override 추가"
                 };
                 addButton.AddToClassList("inv-btn");
                 listHost.Add(addButton);
@@ -449,36 +446,36 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
             var section = InventoryEditorUIFactory.CreateSection("Integration Guide");
             string assetName = setup.name;
             string snippet =
-                $"// Build equipment container (applies this Setup's slot rules)\n" +
+                $"// 장비 컨테이너 생성 (이 Setup의 슬롯 규칙 적용)\n" +
                 $"var equipContainer = {assetName}.CreateContainer(itemDatabase);\n" +
                 $"inventoryGroup.RegisterContainer(equipContainer);\n\n" +
-                $"// Wire equipment system\n" +
+                $"// EquipmentSystem 연결\n" +
                 $"objectEquipment.Init(owner, inventorySystem, {assetName}, effectApplier);\n\n" +
-                $"// Equip from bag slot to equipment slot\n" +
+                $"// 인벤 → 장비 슬롯 장착\n" +
                 $"objectEquipment.TryEquipFromInventory(bagSlotIndex, equipSlotIndex);";
 
             section.Add(new HelpBox(
-                "Current setup\n" +
-                $"  · ContainerId: \"{setup.ContainerId}\" (lookup key at runtime)\n" +
-                $"  · Slot count: {setup.SlotCount}",
+                "현재 설정\n" +
+                $"  · ContainerId: \"{setup.ContainerId}\" (런타임에서 컨테이너를 찾을 때 쓰는 이름)\n" +
+                $"  · 슬롯 수: {setup.SlotCount}",
                 HelpBoxMessageType.Info));
 
             section.Add(new HelpBox(
-                "Bags and equipment use different config assets.\n\n" +
-                "  · Bag → InventoryConfigSO (same rule for every slot)\n" +
-                "  · Equipment → EquipmentSetupSO (per-slot categories: Weapon, Head, …)\n\n" +
-                "To apply the slot layout above, register with CreateContainer().\n" +
-                "Using InventoryConfigSO for equipment ignores per-slot categories.",
+                "인벤 가방과 장비창은 만드는 에셋이 다릅니다.\n\n" +
+                "  · 가방 → InventoryConfigSO (슬롯마다 같은 규칙)\n" +
+                "  · 장비 → EquipmentSetupSO (슬롯마다 Weapon, Head… 다르게)\n\n" +
+                "위 Slot Layout을 쓰려면 CreateContainer()로 등록하세요.\n" +
+                "InventoryConfigSO로 장비창을 만들면 슬롯별 설정이 적용되지 않습니다.",
                 HelpBoxMessageType.Warning));
 
-            section.Add(new Label("Steps")
+            section.Add(new Label("연동 순서")
             {
                 style = { unityFontStyleAndWeight = FontStyle.Bold, fontSize = 11, marginTop = 4, marginBottom = 4 }
             });
             section.Add(new Label(
-                "1. CreateContainer() — build container from this Setup\n" +
-                "2. RegisterContainer() — add to InventoryGroup\n" +
-                "3. ObjectEquipmentSystem.Init() — enable equip / unequip")
+                "1. CreateContainer() — 이 Setup으로 장비 컨테이너 생성\n" +
+                "2. RegisterContainer() — InventoryGroup에 등록\n" +
+                "3. ObjectEquipmentSystem.Init() — 장착/해제 연결")
             {
                 style = { fontSize = 11, opacity = 0.85f, whiteSpace = WhiteSpace.Normal, marginBottom = 6 }
             });
@@ -487,10 +484,10 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
             copyRow.Add(new Button(() =>
             {
                 EditorGUIUtility.systemCopyBuffer = snippet;
-                Debug.Log("Equipment integration snippet copied to clipboard.");
+                Debug.Log("연동 코드가 클립보드에 복사되었습니다.");
             })
             {
-                text = "Copy Integration Code"
+                text = "코드 복사"
             });
             section.Add(copyRow);
 
@@ -519,10 +516,10 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
             var issues = new List<string>();
 
             if (string.IsNullOrWhiteSpace(setup.ContainerId))
-                issues.Add("ContainerId is empty. Set the runtime lookup id for this equipment container.");
+                issues.Add("ContainerId가 비어 있습니다.");
 
             if (setup.SlotCategories == null || setup.SlotCategories.Length != setup.SlotCount)
-                issues.Add($"Slot count ({setup.SlotCount}) does not match SlotCategories length. Click 'Sync Slot Array' in Slot Layout.");
+                issues.Add($"Slot Count({setup.SlotCount})와 SlotCategories 길이가 맞지 않습니다. Slot Layout에서 '슬롯 배열 동기화'를 누르세요.");
 
             for (int i = 0; i < setup.SlotCount && setup.SlotCategories != null; i++)
             {
@@ -530,12 +527,12 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
                     break;
 
                 if (string.IsNullOrEmpty(setup.SlotCategories[i]))
-                    issues.Add($"Slot {i}: empty category — any item can be placed here.");
+                    issues.Add($"Slot {i}: 카테고리가 비어 있어 어떤 아이템이든 들어갈 수 있습니다.");
             }
 
             if (issues.Count == 0)
             {
-                return new HelpBox("Setup looks good. See Integration Guide below to register at runtime.", HelpBoxMessageType.Info);
+                return new HelpBox("설정이 정상입니다. 아래 Integration Guide를 참고해 런타임에 등록하세요.", HelpBoxMessageType.Info);
             }
 
             return new HelpBox(string.Join("\n", issues), HelpBoxMessageType.Warning);

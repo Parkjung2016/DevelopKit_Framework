@@ -69,7 +69,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
 
             panel.Add(new Label("Slot Count")
             {
-                tooltip = "Number of equipment slots",
+                tooltip = "장비 슬롯 개수",
                 style = { fontSize = 11, marginBottom = 4 }
             });
 
@@ -119,7 +119,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
             row.Add(SlotCountField);
             row.Add(plus);
             panel.Add(row);
-            panel.Add(new Label($"{minSlots}–{maxSlots} slots")
+            panel.Add(new Label($"{minSlots}~{maxSlots}슬롯")
             {
                 style = { fontSize = 10, opacity = 0.7f, marginTop = 4 }
             });
@@ -137,10 +137,10 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
 
             block.Add(new Label("Equipment Item Type")
             {
-                tooltip = "Only items of this ItemType can be placed in equipment slots.",
+                tooltip = "이 ItemType만 장비 슬롯에 넣을 수 있습니다.",
                 style = { unityFontStyleAndWeight = FontStyle.Bold, fontSize = 11, marginBottom = 4 }
             });
-            block.Add(new Label("Usually Equipment. Pick from types defined in Inventory Enums.")
+            block.Add(new Label("보통 Equipment를 선택합니다. Inventory Enum에 정의된 타입 중에서 고르세요.")
             {
                 style = { opacity = 0.78f, fontSize = 11, marginBottom = 6, whiteSpace = WhiteSpace.Normal }
             });
@@ -187,8 +187,8 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
                 {
                     text = InventoryEnumCatalog.GetItemTypeDisplayName(itemType),
                     tooltip = isSelected
-                        ? $"Selected: {InventoryEnumCatalog.GetItemTypeDisplayName(itemType)}"
-                        : $"Set to {InventoryEnumCatalog.GetItemTypeDisplayName(itemType)}"
+                        ? $"선택됨: {InventoryEnumCatalog.GetItemTypeDisplayName(itemType)}"
+                        : $"{InventoryEnumCatalog.GetItemTypeDisplayName(itemType)}(으)로 설정"
                 };
                 chip.AddToClassList(InventoryEditorStyles.TypeChipClass);
                 if (isSelected)
