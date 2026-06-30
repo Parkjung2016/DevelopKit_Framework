@@ -14,6 +14,9 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
     internal static class UIViewIdsScriptGenerator
     {
         private const string GeneratedDirectory =
+            "Assets/Framework/Runtime/UISystem/Generated";
+
+        private const string LegacyGeneratedDirectory =
             "Assets/Framework/Runtime/UISystem/Runtime/Generated";
 
         private const string CodeNamespace = "PJDev.DevelopKit.Framework.UISystem.Runtime";
@@ -106,12 +109,40 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
 
         private static bool RemoveLegacyFile()
         {
-            const string legacyPath = GeneratedDirectory + "/UIViewIds.Generated.cs";
-            if (!File.Exists(Path.GetFullPath(legacyPath)))
+            bool changed = false;
+            changed |= DeleteLegacyAsset(GeneratedDirectory + "/UIViewIds.Generated.cs");
+            changed |= DeleteLegacyDirectoryFiles(LegacyGeneratedDirectory);
+            return changed;
+        }
+
+        private static bool DeleteLegacyAsset(string assetPath)
+        {
+            if (!File.Exists(Path.GetFullPath(assetPath)))
                 return false;
 
-            AssetDatabase.DeleteAsset(legacyPath);
+            AssetDatabase.DeleteAsset(assetPath);
             return true;
+        }
+
+        private static bool DeleteLegacyDirectoryFiles(string directoryAssetPath)
+        {
+            string fullDirectory = Path.GetFullPath(directoryAssetPath);
+            if (!Directory.Exists(fullDirectory))
+                return false;
+
+            bool changed = false;
+            foreach (string file in Directory.GetFiles(fullDirectory))
+            {
+                string assetPath = file.Replace('\\', '/');
+                int assetsIndex = assetPath.IndexOf("Assets/", StringComparison.Ordinal);
+                if (assetsIndex >= 0)
+                    assetPath = assetPath.Substring(assetsIndex);
+
+                AssetDatabase.DeleteAsset(assetPath);
+                changed = true;
+            }
+
+            return changed;
         }
 
         private static bool WriteCategoryFile(

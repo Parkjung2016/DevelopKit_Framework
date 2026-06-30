@@ -87,23 +87,23 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         private static InventoryEnumEntryData[] CreateDefaultItemTypes() =>
             new[]
             {
-                Entry("None", 0, "None", "미지정 / 필터 제외용"),
-                Entry("General", 1, "General", "일반 아이템"),
-                Entry("Consumable", 2, "Consumable", "소비 아이템"),
-                Entry("Equipment", 3, "Equipment", "장비"),
-                Entry("Material", 4, "Material", "재료"),
-                Entry("Quest", 5, "Quest", "퀘스트 아이템"),
-                Entry("Currency", 6, "Currency", "화폐")
+                Entry("None", 0, "Unspecified / excluded from filters"),
+                Entry("General", 1, "General item"),
+                Entry("Consumable", 2, "Consumable item"),
+                Entry("Equipment", 3, "Equipment"),
+                Entry("Material", 4, "Material"),
+                Entry("Quest", 5, "Quest item"),
+                Entry("Currency", 6, "Currency")
             };
 
         private static InventoryEnumEntryData[] CreateDefaultContainerKinds() =>
             new[]
             {
-                Entry("Main", 0, "Main", "기본 인벤토리"),
-                Entry("Equipment", 1, "Equipment", "장비 슬롯"),
-                Entry("QuickBar", 2, "QuickBar", "퀵바"),
-                Entry("Stash", 3, "Stash", "창고"),
-                Entry("Quest", 4, "Quest", "퀘스트 전용")
+                Entry("Main", 0, "Default inventory"),
+                Entry("Equipment", 1, "Equipment slot"),
+                Entry("QuickBar", 2, "Quick bar"),
+                Entry("Stash", 3, "Stash"),
+                Entry("Quest", 4, "Quest-only container")
             };
 
         private static InventoryItemTypeRouteData[] CreateDefaultRoutes() =>
@@ -117,12 +117,12 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 Route(1, 0)
             };
 
-        private static InventoryEnumEntryData Entry(string name, int value, string displayName, string description) =>
+        private static InventoryEnumEntryData Entry(string name, int value, string description) =>
             new()
             {
                 name = name,
                 value = value,
-                displayName = displayName,
+                displayName = name,
                 description = description
             };
 
@@ -132,6 +132,55 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 itemTypeValue = itemTypeValue,
                 containerKindValues = containerKindValues
             };
+
+        public static void RenumberValuesByOrder(InventoryEnumEntryData[] entries, out Dictionary<int, int> oldToNew)
+        {
+            oldToNew = new Dictionary<int, int>();
+            if (entries == null)
+                return;
+
+            for (int i = 0; i < entries.Length; i++)
+            {
+                InventoryEnumEntryData entry = entries[i];
+                if (entry == null)
+                    continue;
+
+                int oldValue = entry.value;
+                if (oldValue != i)
+                    oldToNew[oldValue] = i;
+
+                entry.value = i;
+            }
+        }
+
+        public static void RemapRouteValues(
+            InventoryEnumsDocument document,
+            bool remapItemTypes,
+            bool remapContainerKinds,
+            Dictionary<int, int> oldToNew)
+        {
+            if (document?.itemTypeRoutes == null || oldToNew == null || oldToNew.Count == 0)
+                return;
+
+            for (int i = 0; i < document.itemTypeRoutes.Length; i++)
+            {
+                InventoryItemTypeRouteData route = document.itemTypeRoutes[i];
+                if (route == null)
+                    continue;
+
+                if (remapItemTypes && oldToNew.TryGetValue(route.itemTypeValue, out int newItemType))
+                    route.itemTypeValue = newItemType;
+
+                if (remapContainerKinds && route.containerKindValues != null)
+                {
+                    for (int j = 0; j < route.containerKindValues.Length; j++)
+                    {
+                        if (oldToNew.TryGetValue(route.containerKindValues[j], out int newKind))
+                            route.containerKindValues[j] = newKind;
+                    }
+                }
+            }
+        }
 
         public static bool TryValidate(InventoryEnumsDocument document, out string errorMessage)
         {
@@ -198,7 +247,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 }
 
                 entry.name = sanitized;
-                entry.displayName = string.IsNullOrWhiteSpace(entry.displayName) ? sanitized : entry.displayName.Trim();
+                entry.displayName = sanitized;
                 entry.description ??= string.Empty;
             }
 

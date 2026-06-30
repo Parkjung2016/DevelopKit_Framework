@@ -13,7 +13,10 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
     internal static class GameplayTagScriptGenerator
     {
         private const string OutputAssetPath =
-            "Assets/Framework/Runtime/GameplayTagSystem/Runtime/Generated/GameplayTags.Generated.cs";
+            "Assets/Framework/Runtime/GameplayTagSystem/Generated/GameplayTag.Generated.cs";
+
+        private const string LegacyOutputAssetPath =
+            "Assets/Framework/Runtime/GameplayTagSystem/Runtime/Generated/GameplayTag.Generated.cs";
 
         private static readonly HashSet<string> CSharpKeywords = new(StringComparer.Ordinal)
         {
@@ -41,6 +44,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
         /// <summary>현재 태그 목록으로 생성 파일을 갱신합니다. 변경이 없으면 false를 반환합니다.</summary>
         public static bool Generate()        {
             GameplayTagManager.ReloadTags();
+            DeleteIfExists(LegacyOutputAssetPath);
 
             Dictionary<string, string> tagsByName = new(StringComparer.Ordinal);
             foreach (GameplayTag tag in GameplayTagManager.GetAllTags())
@@ -72,7 +76,16 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
 
             File.WriteAllText(fullPath, output, Encoding.UTF8);
             AssetDatabase.ImportAsset(OutputAssetPath);
+            DeleteIfExists(LegacyOutputAssetPath);
             return true;
+        }
+
+        private static void DeleteIfExists(string assetPath)
+        {
+            if (!File.Exists(Path.GetFullPath(assetPath)))
+                return;
+
+            AssetDatabase.DeleteAsset(assetPath);
         }
 
         private static string BuildSource(IReadOnlyDictionary<string, string> tagsByName)
@@ -92,7 +105,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             source.AppendLine();
             source.AppendLine("namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime");
             source.AppendLine("{");
-            source.AppendLine("    public partial struct GameplayTags");
+            source.AppendLine("    public partial struct GameplayTag");
             source.AppendLine("    {");
 
             if (body.Length == 0)

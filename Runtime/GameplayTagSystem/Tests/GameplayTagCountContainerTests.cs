@@ -11,7 +11,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
     private GameplayTag ability;
 
     [SetUp]
-    public void SetUp()
+    public new void SetUp()
     {
       jump = GameplayTagTestFixtures.Tag("Test.Ability.Jump");
       ability = GameplayTagTestFixtures.Tag("Test.Ability");

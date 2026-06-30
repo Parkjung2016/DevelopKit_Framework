@@ -35,13 +35,10 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             Root.Add(InventoryInspectorUI.BuildHeader("Inventory Enums"));
 
             Root.Add(new HelpBox(
-                "ItemType · ContainerKind 값을 편집한 뒤 Generate Enums로 C# enum을 갱신합니다.",
+                "ItemType · ContainerKind를 편집한 뒤 Generate Enums로 C# enum을 갱신합니다.\n" +
+                "Up/Down은 순서와 Value(0부터)를 함께 갱신합니다. Route 테이블의 value 참조도 맞춰집니다.",
                 HelpBoxMessageType.None));
-
-            Root.Add(new HelpBox(
-                "enum Name은 자유롭게 바꿀 수 있습니다. 프레임워크는 value(정수)와 itemTypeRoutes만 사용합니다. value=0은 ItemType None / ContainerKind Main 관례입니다.",
-                HelpBoxMessageType.Info));
-
+            
             Root.Add(BuildToolbar());
 
             var split = InventoryEditorUIFactory.CreateSplitView(300);
@@ -177,8 +174,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                         RebuildDetail();
                     });
 
-                    string primary = string.IsNullOrWhiteSpace(entry.displayName) ? entry.name : entry.displayName;
-                    string secondary = $"{entry.name} · value {entry.value}";
+                    string primary = entry.name;
+                    string secondary = $"value {entry.value}";
 
                     var inner = new VisualElement();
                     inner.AddToClassList(InventoryEditorStyles.ListRowInnerClass);
@@ -205,11 +202,12 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             }
 
             ScrollView detail = InventoryEditorUIFactory.BeginDetailPanel(detailHost) as ScrollView;
-            detail.Add(InventoryInspectorUI.BuildHeader(entry.displayName ?? entry.name));
+            detail.Add(InventoryInspectorUI.BuildHeader(entry.name));
 
             detail.Add(CreateField("Name (C# identifier)", entry.name, value =>
             {
                 entry.name = value;
+                entry.displayName = value;
                 SaveAndRefresh();
             }, IsProtectedEntry(entry)));
 
@@ -218,12 +216,6 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 entry.value = value;
                 SaveAndRefresh();
             }, IsProtectedEntry(entry)));
-
-            detail.Add(CreateField("Display Name", entry.displayName, value =>
-            {
-                entry.displayName = value;
-                SaveAndRefresh();
-            }));
 
             detail.Add(CreateTextArea("Description", entry.description, value =>
             {
@@ -337,12 +329,25 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
             if (target < 0 || target >= entries.Length)
                 return;
 
-            if (IsProtectedEntry(entries[selectedIndex]) || IsProtectedEntry(entries[target]))
+            if (IsProtectedEntry(entries[selectedIndex]))
+                return;
+
+            if (target == 0 && IsProtectedEntry(entries[0]))
                 return;
 
             var list = new List<InventoryEnumEntryData>(entries);
-            (list[selectedIndex], list[target]) = (list[target], list[selectedIndex]);
-            SetActiveEntries(list.ToArray());
+            InventoryEnumEntryData moving = list[selectedIndex];
+            list.RemoveAt(selectedIndex);
+            list.Insert(target, moving);
+
+            InventoryEnumEntryData[] reordered = list.ToArray();
+            InventoryEnumSettingsStore.RenumberValuesByOrder(reordered, out Dictionary<int, int> oldToNew);
+            SetActiveEntries(reordered);
+            InventoryEnumSettingsStore.RemapRouteValues(
+                document,
+                remapItemTypes: category == EnumCategory.ItemType,
+                remapContainerKinds: category == EnumCategory.ContainerKind,
+                oldToNew);
             selectedIndex = target;
             SaveDocument();
             RebuildList();
