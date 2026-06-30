@@ -236,6 +236,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 "SO_RecipeDatabase",
                 db => db.RebuildCache(),
                 Context.GetSetupAssetDirectory());
+            if (Context.Setup.RecipeDatabase == null)
+                return;
+
             Context.MarkDirty(Context.Setup);
             Refresh();
         }
@@ -252,7 +255,10 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                     asset.Rewards = Array.Empty<InventoryRecipeEntry>();
                 },
                 asset => InventoryEditorAssetNaming.ForRecipe(asset.DisplayName),
-                Context.GetRecipeDatabaseDirectory());
+                Context.GetRecipeDatabaseDirectory(),
+                promptForLocation: false);
+            if (recipe == null)
+                return;
 
             AddRecipeReference(recipe);
             Refresh();

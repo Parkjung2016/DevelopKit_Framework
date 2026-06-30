@@ -1,3 +1,4 @@
+using PJDev.DevelopKit.Framework.Editors;
 using PJDev.DevelopKit.Framework.UISystem.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -36,14 +37,23 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             return AssetDatabase.FindAssets($"t:{typeof(T).Name}").Length;
         }
 
-        public static UIViewCatalog CreateCatalogAsset(string folder = null)
+        public static UIViewCatalog CreateCatalogAsset(string folder = null, bool promptForLocation = true)
         {
-            return CreateAsset<UIViewCatalog>("UIViewCatalog", folder);
+            if (!TryCreateAssetPath("Create UIView Catalog", "UIViewCatalog", folder, promptForLocation, out string path))
+                return null;
+
+            return CreateAssetAtPath<UIViewCatalog>(path);
         }
 
-        public static UILayerSettings CreateLayerSettingsAsset(string folder = null)
+        public static UILayerSettings CreateLayerSettingsAsset(string folder = null, bool promptForLocation = true)
         {
-            UILayerSettings settings = CreateAsset<UILayerSettings>("UILayerSettings", folder);
+            if (!TryCreateAssetPath("Create UI Layer Settings", "UILayerSettings", folder, promptForLocation, out string path))
+                return null;
+
+            UILayerSettings settings = CreateAssetAtPath<UILayerSettings>(path);
+            if (settings == null)
+                return null;
+
             settings.ResetToBuiltInDefaults();
             EditorUtility.SetDirty(settings);
             AssetDatabase.SaveAssets();
@@ -101,10 +111,32 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             EditorPrefs.SetString(prefsKey, AssetDatabase.AssetPathToGUID(path));
         }
 
-        private static T CreateAsset<T>(string defaultName, string folder) where T : ScriptableObject
+        private static bool TryCreateAssetPath(
+            string title,
+            string defaultFileName,
+            string folder,
+            bool promptForLocation,
+            out string assetPath)
         {
+            assetPath = null;
             string directory = string.IsNullOrEmpty(folder) ? "Assets" : folder;
-            string path = AssetDatabase.GenerateUniqueAssetPath($"{directory}/{defaultName}.asset");
+
+            if (promptForLocation)
+            {
+                return PJDevEditorAssetCreationUtility.TryPickAssetPath(
+                    title,
+                    directory,
+                    defaultFileName,
+                    PJDevEditorAssetCreationUtility.UISystemFolderPrefsKey,
+                    out assetPath);
+            }
+
+            assetPath = AssetDatabase.GenerateUniqueAssetPath($"{directory}/{defaultFileName}.asset");
+            return true;
+        }
+
+        private static T CreateAssetAtPath<T>(string path) where T : ScriptableObject
+        {
             var asset = ScriptableObject.CreateInstance<T>();
             AssetDatabase.CreateAsset(asset, path);
             AssetDatabase.SaveAssets();

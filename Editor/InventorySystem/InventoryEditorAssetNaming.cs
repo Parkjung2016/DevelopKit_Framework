@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Text;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
@@ -12,6 +13,12 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         public static string ForRecipe(string displayName) => Build("SO_Recipe", displayName);
         public static string ForLoot(string tableId) => Build("SO_Loot", tableId);
         public static string ForContainer(string containerId) => Build("SO_Container", containerId);
+
+        public static string WithRandomSuffix(string baseName)
+        {
+            string suffix = Guid.NewGuid().ToString("N").Substring(0, 8);
+            return $"{baseName}_{suffix}";
+        }
 
         public static void SyncItemFileName(ItemDefinitionSO item)
         {

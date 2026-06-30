@@ -237,6 +237,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 "SO_LootTableDatabase",
                 db => db.RebuildCache(),
                 Context.GetSetupAssetDirectory());
+            if (Context.Setup.LootTableDatabase == null)
+                return;
+
             Context.MarkDirty(Context.Setup);
             Refresh();
         }
@@ -247,12 +250,15 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 Context,
                 asset =>
                 {
-                    asset.TableId = "new_loot";
+                    asset.TableId = InventoryEditorAssetNaming.WithRandomSuffix("New Loot");
                     asset.RollCount = 1;
                     asset.Entries = Array.Empty<LootEntry>();
                 },
                 asset => InventoryEditorAssetNaming.ForLoot(asset.TableId),
-                Context.GetLootDatabaseDirectory());
+                Context.GetLootDatabaseDirectory(),
+                promptForLocation: false);
+            if (table == null)
+                return;
 
             AddTableReference(table);
             Refresh();

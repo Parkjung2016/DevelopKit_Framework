@@ -212,6 +212,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 "SO_ItemDatabase",
                 db => db.RebuildCache(),
                 Context.GetSetupAssetDirectory());
+            if (Context.Setup.ItemDatabase == null)
+                return;
+
             Context.MarkDirty(Context.Setup);
             Refresh();
         }
@@ -223,10 +226,13 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 asset =>
                 {
                     asset.ItemId = GetNextItemId();
-                    asset.DisplayName = "New Item";
+                    asset.DisplayName = InventoryEditorAssetNaming.WithRandomSuffix("New Item");
                 },
                 asset => InventoryEditorAssetNaming.ForItem(asset.DisplayName),
-                Context.GetItemDatabaseDirectory());
+                Context.GetItemDatabaseDirectory(),
+                promptForLocation: false);
+            if (item == null)
+                return;
 
             AddItemReference(item);
             selectedIndex = GetItems().Length - 1;

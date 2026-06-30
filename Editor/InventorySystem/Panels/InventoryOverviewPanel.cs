@@ -109,6 +109,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 prefix,
                 rebuild,
                 Context.GetSetupAssetDirectory());
+            if (database == null)
+                return;
+
             assign(database);
             Context.MarkDirty(Context.Setup);
             Refresh();

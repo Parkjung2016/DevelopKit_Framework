@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using PJDev.DevelopKit.Framework.Editors;
 using PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 using UnityEditor;
@@ -117,15 +118,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
             root.Q<Button>("save-btn")?.RegisterCallback<ClickEvent>(_ => context.Save());
             root.Q<Button>("create-setup-btn")?.RegisterCallback<ClickEvent>(_ => CreateSetupAsset());
-            root.Q<Button>("create-all-btn")?.RegisterCallback<ClickEvent>(_ =>
-            {
-                if (context.Setup == null)
-                    CreateSetupAsset();
-                else
-                    InventoryEditorAssetActions.CreateAndAssignDatabases(context);
-
-                RefreshActivePanel();
-            });
+            root.Q<Button>("create-all-btn")?.RegisterCallback<ClickEvent>(_ => CreateAll());
             root.Q<Button>("refresh-btn")?.RegisterCallback<ClickEvent>(_ => RefreshActivePanel());
 
             panels.Clear();
@@ -231,12 +224,68 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         private void CreateSetupAsset()
         {
+            string defaultDirectory = context.Setup != null
+                ? context.GetSetupAssetDirectory()
+                : EditorPrefs.GetString(PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey, "Assets");
+
+            if (!PJDevEditorAssetCreationUtility.TryPickAssetPath(
+                    "Create Inventory Setup — InventorySetupSO",
+                    defaultDirectory,
+                    "SO_InventorySetup",
+                    PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey,
+                    out string path,
+                    "Item / Recipe / Loot Database 참조를 묶는 설정 에셋입니다."))
+            {
+                return;
+            }
+
             var setup = CreateInstance<InventorySetupSO>();
-            string path = AssetDatabase.GenerateUniqueAssetPath("Assets/SO_InventorySetup.asset");
             AssetDatabase.CreateAsset(setup, path);
             AssetDatabase.SaveAssets();
             SetSetup(setup);
             EditorGUIUtility.PingObject(setup);
+        }
+
+        private void CreateAll()
+        {
+            if (context.Setup == null)
+            {
+                string setupDefault = EditorPrefs.GetString(
+                    PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey,
+                    "Assets");
+
+                if (!PJDevEditorAssetCreationUtility.TryPickAssetPath(
+                        "Create Inventory Setup — InventorySetupSO",
+                        setupDefault,
+                        "SO_InventorySetup",
+                        PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey,
+                        out string setupPath,
+                        "Item / Recipe / Loot Database 참조를 묶는 설정 에셋입니다."))
+                {
+                    return;
+                }
+
+                var setup = CreateInstance<InventorySetupSO>();
+                AssetDatabase.CreateAsset(setup, setupPath);
+                AssetDatabase.SaveAssets();
+                SetSetup(setup);
+            }
+
+            bool needsDatabases =
+                context.Setup.ItemDatabase == null ||
+                context.Setup.RecipeDatabase == null ||
+                context.Setup.LootTableDatabase == null;
+
+            if (!needsDatabases)
+            {
+                EditorGUIUtility.PingObject(context.Setup);
+                RefreshActivePanel();
+                return;
+            }
+
+            InventoryEditorAssetActions.CreateAndAssignDatabases(context, promptForLocation: true);
+            EditorGUIUtility.PingObject(context.Setup);
+            RefreshActivePanel();
         }
     }
 

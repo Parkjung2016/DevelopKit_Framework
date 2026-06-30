@@ -1,3 +1,4 @@
+using PJDev.DevelopKit.Framework.Editors;
 using PJDev.DevelopKit.Framework.UISystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -160,6 +161,9 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             toolbar.Add(CreateToolbarButton("새 카탈로그", () =>
             {
                 viewCatalog = UISystemEditorAssets.CreateCatalogAsset(GetTargetFolder());
+                if (viewCatalog == null)
+                    return;
+
                 catalogField.SetValueWithoutNotify(viewCatalog);
                 UISystemEditorAssets.Remember(viewCatalog);
                 SelectTab(Tab.ViewCatalog);
@@ -168,6 +172,9 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             toolbar.Add(CreateToolbarButton("새 레이어", () =>
             {
                 layerSettings = UISystemEditorAssets.CreateLayerSettingsAsset(GetTargetFolder());
+                if (layerSettings == null)
+                    return;
+
                 layerSettingsField.SetValueWithoutNotify(layerSettings);
                 UISystemEditorAssets.Remember(layerSettings);
                 SelectTab(Tab.Layers);
@@ -369,9 +376,20 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
 
         private void CreateDefaultPair()
         {
-            string folder = GetTargetFolder();
-            layerSettings = UISystemEditorAssets.CreateLayerSettingsAsset(folder);
-            viewCatalog = UISystemEditorAssets.CreateCatalogAsset(folder);
+            if (!PJDevEditorAssetCreationUtility.TryPickFolder(
+                    "Create UI Settings Assets",
+                    GetTargetFolder(),
+                    PJDevEditorAssetCreationUtility.UISystemFolderPrefsKey,
+                    out string folder))
+            {
+                return;
+            }
+
+            layerSettings = UISystemEditorAssets.CreateLayerSettingsAsset(folder, promptForLocation: false);
+            viewCatalog = UISystemEditorAssets.CreateCatalogAsset(folder, promptForLocation: false);
+            if (layerSettings == null && viewCatalog == null)
+                return;
+
             layerSettingsField.SetValueWithoutNotify(layerSettings);
             catalogField.SetValueWithoutNotify(viewCatalog);
             UISystemEditorAssets.Remember(layerSettings);

@@ -170,6 +170,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 },
                 asset => InventoryEditorAssetNaming.ForContainer(asset.ContainerId),
                 Context.GetSetupAssetDirectory());
+            if (config == null)
+                return;
 
             AddConfigReference(config);
             Refresh();

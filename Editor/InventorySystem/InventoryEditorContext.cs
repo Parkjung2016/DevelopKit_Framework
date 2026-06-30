@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using PJDev.DevelopKit.Framework.Editors;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -130,23 +131,48 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             InventoryEditorContext context,
             string filePrefix,
             Action<T> initialize = null,
-            string directory = null)
+            string directory = null,
+            bool promptForLocation = true,
+            string dialogTitle = null,
+            string dialogMessage = null)
             where T : ScriptableObject =>
-            CreateAsset(context, initialize, _ => filePrefix, directory);
+            CreateAsset(context, initialize, _ => filePrefix, directory, promptForLocation, dialogTitle, dialogMessage);
 
         public static T CreateAsset<T>(
             InventoryEditorContext context,
             Action<T> initialize,
             Func<T, string> filePrefixResolver,
-            string directory = null)
+            string directory = null,
+            bool promptForLocation = true,
+            string dialogTitle = null,
+            string dialogMessage = null)
             where T : ScriptableObject
         {
             var asset = ScriptableObject.CreateInstance<T>();
             initialize?.Invoke(asset);
 
             string filePrefix = filePrefixResolver(asset);
-            string targetDirectory = directory ?? context.GetAssetDirectory();
-            string path = AssetDatabase.GenerateUniqueAssetPath(Path.Combine(targetDirectory, $"{filePrefix}.asset"));
+            string targetDirectory = directory ?? context?.GetAssetDirectory() ?? "Assets";
+            string path;
+
+            if (promptForLocation)
+            {
+                if (!PJDevEditorAssetCreationUtility.TryPickAssetPath(
+                        dialogTitle ?? $"Create {typeof(T).Name}",
+                        targetDirectory,
+                        filePrefix,
+                        PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey,
+                        out path,
+                        dialogMessage ?? string.Empty))
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                path = AssetDatabase.GenerateUniqueAssetPath(Path.Combine(targetDirectory, $"{filePrefix}.asset"));
+            }
+
             AssetDatabase.CreateAsset(asset, path);
             AssetDatabase.SaveAssets();
             return asset;
@@ -238,11 +264,14 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             }
         }
 
-        public static void CreateAndAssignDatabases(InventoryEditorContext context)
+        public static void CreateAndAssignDatabases(
+            InventoryEditorContext context,
+            bool promptForLocation = true)
         {
             if (context.Setup == null)
                 return;
 
+            string defaultDirectory = context.GetSetupAssetDirectory();
             Undo.RecordObject(context.Setup, "Create Inventory Databases");
 
             if (context.Setup.ItemDatabase == null)
@@ -251,7 +280,12 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     context,
                     "SO_ItemDatabase",
                     db => db.RebuildCache(),
-                    context.GetSetupAssetDirectory());
+                    defaultDirectory,
+                    promptForLocation,
+                    "Create Item Database — ItemDatabaseSO",
+                    "아이템 정의(ItemDefinitionSO) 목록을 보관합니다.");
+                if (promptForLocation && context.Setup.ItemDatabase == null)
+                    return;
             }
 
             if (context.Setup.RecipeDatabase == null)
@@ -260,7 +294,12 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     context,
                     "SO_RecipeDatabase",
                     db => db.RebuildCache(),
-                    context.GetSetupAssetDirectory());
+                    defaultDirectory,
+                    promptForLocation,
+                    "Create Recipe Database — RecipeDatabaseSO",
+                    "제작 레시피(RecipeSO) 목록을 보관합니다.");
+                if (promptForLocation && context.Setup.RecipeDatabase == null)
+                    return;
             }
 
             if (context.Setup.LootTableDatabase == null)
@@ -269,7 +308,12 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     context,
                     "SO_LootTableDatabase",
                     db => db.RebuildCache(),
-                    context.GetSetupAssetDirectory());
+                    defaultDirectory,
+                    promptForLocation,
+                    "Create Loot Table Database — LootTableDatabaseSO",
+                    "드롭 테이블(LootTableSO) 목록을 보관합니다.");
+                if (promptForLocation && context.Setup.LootTableDatabase == null)
+                    return;
             }
 
             context.MarkDirty(context.Setup);
