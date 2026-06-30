@@ -105,7 +105,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             source.AppendLine();
             source.AppendLine("namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime");
             source.AppendLine("{");
-            source.AppendLine("    public partial struct GameplayTag");
+            source.AppendLine("    public struct GameplayTags");
             source.AppendLine("    {");
 
             if (body.Length == 0)

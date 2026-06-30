@@ -9,7 +9,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
     /// <summary>게임플레이 태그를 나타내는 값 형식입니다.</summary>
     [Serializable]
     [DebuggerDisplay("{serializedTagName,nq}")]
-    public partial struct GameplayTag : IEquatable<GameplayTag>, ISerializationCallbackReceiver
+    public struct GameplayTag : IEquatable<GameplayTag>, ISerializationCallbackReceiver
     {
         /// <summary>유효하지 않은 태그를 나타냅니다.</summary>
         public static readonly GameplayTag None = new() { definition = GameplayTagDefinition.NoneTagDefinition };
