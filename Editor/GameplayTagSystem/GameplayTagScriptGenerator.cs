@@ -13,10 +13,10 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
     internal static class GameplayTagScriptGenerator
     {
         private const string OutputAssetPath =
-            "Assets/Framework/Runtime/GameplayTagSystem/Generated/GameplayTag.Generated.cs";
+            "Assets/Framework/Runtime/GameplayTagSystem/Generated/GameplayTags.Generated.cs";
 
         private const string LegacyOutputAssetPath =
-            "Assets/Framework/Runtime/GameplayTagSystem/Runtime/Generated/GameplayTag.Generated.cs";
+            "Assets/Framework/Runtime/GameplayTagSystem/Runtime/Generated/GameplayTags.Generated.cs";
 
         private static readonly HashSet<string> CSharpKeywords = new(StringComparer.Ordinal)
         {

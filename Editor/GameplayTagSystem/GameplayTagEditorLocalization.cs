@@ -42,8 +42,8 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
         // 액션
         public const string GenerateTagScripts = "태그 스크립트 생성";
         public const string GenerateTagScriptsTooltip =
-            "GameplayTag.Generated.cs를 갱신합니다. 태그 추가·수정 후 수동으로 실행하세요.";
-        public const string TagScriptGenerateSuccess = "GameplayTag.Generated.cs 스크립트를 생성했습니다.";
+            "GameplayTags.Generated.cs를 갱신합니다. 태그 추가·수정 후 수동으로 실행하세요.";
+        public const string TagScriptGenerateSuccess = "GameplayTags.Generated.cs 스크립트를 생성했습니다.";
         public const string TagScriptGenerateSkipped = "태그 스크립트 변경 사항이 없습니다.";
         public const string Refresh = "새로고침";
         public const string AddTag = "태그 추가";
