@@ -1,0 +1,17 @@
+{
+    "name": "PJDev.DevelopKit.Framework.EquipmentSystem.Runtime",
+    "rootNamespace": "PJDev.DevelopKit.Framework.EquipmentSystem.Runtime",
+    "references": [
+        "GUID:7f4a2b8c9d1e3f5a6b7c8d9e0f1a2b3c",
+        "GUID:406d82ec2f4cd104699d60414ec8fcdb"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -75,9 +75,10 @@ namespace PJDev.DevelopKit.Framework.UISystem.Tests
             UILayerSettings settings = UILayerSettings.CreateBuiltIn();
             List<UILayerDefinition> layers = GetLayers(settings);
             layers.RemoveAll(layer => layer.LayerId == UILayers.Screen);
+            layers.Find(layer => layer.LayerId == UILayers.Overlay)?.SetUseScreenStack(true);
 
             UILayerRegistry registry = new();
-            registry.Initialize(settings);
+            registry.Initialize(settings, ensureDefaults: false);
 
             Assert.AreEqual(UILayers.Overlay, registry.ScreenLayerId);
 

@@ -76,7 +76,7 @@ InventorySystem (MonoBehaviour — 단일 진입점)
 |------|-----|
 | 기본 가방 (Main) | `TryAddItem`, `TryMoveSlot`, `ExportSaveData` |
 | 특정 컨테이너 | `TryGetContainer(id, out container)` |
-| 컨테이너 간 이동 | `TryMoveBetween` |
+| 컨테이너 간 이동 | `TryMoveBetween`, `TrySwapBetween` |
 | 제작/루팅 | `TryCraft`, `TryGrantLoot` |
 | 전체 세이브 | `ExportGroupSaveData` / `ImportGroupSaveData` |
 
@@ -89,6 +89,8 @@ InventorySystem (MonoBehaviour — 단일 진입점)
 | `ISlotRule` | 슬롯 수용 규칙 |
 | `IContainerCapacityRuleEx` | 무게/슬롯 용량 |
 | `IItemUseHandler` | 아이템 사용 |
+| `IItemActionResolver` | itemId → `IItemUseHandler` 조회 |
+| `IItemInstanceStore` | `InstanceId`별 가변 인스턴스 데이터 |
 | `IItemInstanceIdGenerator` | 고유 인스턴스 ID |
 
 ## 테스트

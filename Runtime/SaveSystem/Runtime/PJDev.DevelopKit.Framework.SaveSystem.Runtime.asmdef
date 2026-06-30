@@ -1,0 +1,16 @@
+{
+    "name": "PJDev.DevelopKit.Framework.SaveSystem.Runtime",
+    "rootNamespace": "PJDev.DevelopKit.Framework.SaveSystem.Runtime",
+    "references": [
+        "GUID:406d82ec2f4cd104699d60414ec8fcdb"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

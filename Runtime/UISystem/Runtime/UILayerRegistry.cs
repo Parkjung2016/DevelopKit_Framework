@@ -21,7 +21,9 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
         public IReadOnlyList<string> AllCanvasGroupIds => allCanvasGroupIds;
 
-        public void Initialize(UILayerSettings settings)
+        public void Initialize(UILayerSettings settings) => Initialize(settings, ensureDefaults: true);
+
+        public void Initialize(UILayerSettings settings, bool ensureDefaults)
         {
             definitionsById.Clear();
             canvasGroupsById.Clear();
@@ -31,7 +33,8 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             screenLayerId = UILayers.Screen;
             fallbackCanvasGroupId = UICanvasGroups.Floating;
 
-            settings?.EnsureDefaults();
+            if (ensureDefaults)
+                settings?.EnsureDefaults();
 
             IReadOnlyList<UICanvasGroupDefinition> groupSource = settings != null && settings.CanvasGroups.Count > 0
                 ? settings.CanvasGroups
@@ -136,7 +139,14 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 && screen.UseScreenStack)
                 return UILayers.Screen;
 
-            return !string.IsNullOrEmpty(screenStackCandidate) ? screenStackCandidate : UILayers.Screen;
+            if (!string.IsNullOrEmpty(screenStackCandidate)
+                && definitionsById.ContainsKey(screenStackCandidate))
+                return screenStackCandidate;
+
+            if (definitionsById.ContainsKey(UILayers.Screen))
+                return UILayers.Screen;
+
+            return UILayers.Overlay;
         }
     }
 }

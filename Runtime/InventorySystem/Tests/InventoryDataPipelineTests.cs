@@ -19,6 +19,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             generalItem = ScriptableObject.CreateInstance<ItemDefinitionSO>();
             generalItem.ItemId = InventoryTestItemDatabase.GeneralItemId;
             generalItem.DisplayName = "General";
+            generalItem.ItemType = (ItemType)InventoryTestValues.GeneralType;
             generalItem.Weight = 0f;
 
             heavyItem = ScriptableObject.CreateInstance<ItemDefinitionSO>();

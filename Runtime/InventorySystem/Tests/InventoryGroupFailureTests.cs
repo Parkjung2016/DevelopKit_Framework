@@ -66,7 +66,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         }
 
         [Test]
-        public void TryMoveBetween_MismatchedTargetSlot_ReturnsSlotMismatch()
+        public void TryMoveBetween_MismatchedTargetSlot_ReturnsSlotRuleDeniedOnSwap()
         {
             main.TryAddItemToSlot(0, InventoryTestItemDatabase.GeneralItemId, 1);
             equipment.TryAddItemToSlot(0, InventoryTestItemDatabase.EquipmentItemId, 1);
@@ -74,7 +74,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             InventoryChangeResult result = group.TryMoveBetween("main", 0, "equipment", 0);
 
             Assert.IsFalse(result.Success);
-            Assert.AreEqual(InventoryFailReason.SlotMismatch, result.Reason);
+            Assert.AreEqual(InventoryFailReason.SlotRuleDenied, result.Reason);
         }
 
         [Test]

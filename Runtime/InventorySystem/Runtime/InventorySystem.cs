@@ -153,6 +153,17 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 0,
                 InventoryChangeType.Move);
 
+        public InventoryChangeResult TrySwapBetween(
+            string containerAId,
+            int slotA,
+            string containerBId,
+            int slotB) =>
+            ExecuteGroup(
+                () => group.TrySwapBetween(containerAId, slotA, containerBId, slotB),
+                0,
+                0,
+                InventoryChangeType.Swap);
+
         public InventoryChangeResult ClearSlot(int slotIndex) =>
             ExecuteContainer(() => Primary.ClearSlot(slotIndex), 0, 0, InventoryChangeType.Clear);
 
@@ -260,6 +271,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         public int GetOccupiedSlotCount() =>
             Primary?.GetOccupiedSlotCount() ?? 0;
+
+        /// <summary>InventoryGroup에서 발생한 변경 결과를 UI 이벤트로 전파합니다.</summary>
+        public void NotifyChangeResult(InventoryChangeResult result) => ApplyChangeResult(result);
 
         public void FindSlotsWithItem(int itemId, List<int> results) =>
             Primary?.FindSlotsWithItem(itemId, results);

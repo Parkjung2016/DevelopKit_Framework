@@ -1,0 +1,26 @@
+{
+    "name": "PJDev.DevelopKit.Framework.EquipmentSystem.Tests",
+    "rootNamespace": "PJDev.DevelopKit.Framework.EquipmentSystem.Tests",
+    "references": [
+        "GUID:c4d8e1f2a3b4567890abcdef01234567",
+        "GUID:7f4a2b8c9d1e3f5a6b7c8d9e0f1a2b3c",
+        "GUID:27619889b8ba8c24980f49ee34dbb44a",
+        "GUID:0acc523941302664db1f4e527237feb3",
+        "GUID:e0cd26848372d4e5c891c569017e11f1"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
