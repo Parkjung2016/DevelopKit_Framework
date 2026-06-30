@@ -54,18 +54,23 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             if (HasGeneratedEnumFiles())
             {
                 bool changed = false;
-                changed |= WriteGeneratedAssemblyDefinition();
-                changed |= SetGeneratedAssemblyReference(true);
+                if (!File.Exists(Path.GetFullPath(InventoryEnumPaths.GeneratedAssemblyAssetPath)))
+                    changed |= WriteGeneratedAssemblyDefinition();
+
+                if (!IsGeneratedModeEnabled())
+                    changed |= SetGeneratedAssemblyReference(true);
+
                 return changed;
             }
 
+            bool cleaned = false;
             if (IsGeneratedModeEnabled())
-                return DisableGeneratedMode();
+                cleaned |= SetGeneratedAssemblyReference(false);
 
             if (HasDefineSymbol(InventoryEnumPaths.DefineSymbol))
-                return SetDefineSymbol(InventoryEnumPaths.DefineSymbol, false);
+                cleaned |= SetDefineSymbol(InventoryEnumPaths.DefineSymbol, false);
 
-            return false;
+            return cleaned;
         }
 
         private static bool HasGeneratedAssemblyReference(string asmdefAssetPath)
@@ -205,9 +210,6 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     string.Join(";", defineList.Where(static value => !string.IsNullOrWhiteSpace(value))));
                 changed = true;
             }
-
-            if (changed)
-                EditorUtility.RequestScriptReload();
 
             return changed;
         }

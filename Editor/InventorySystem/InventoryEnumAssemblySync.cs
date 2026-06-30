@@ -6,15 +6,22 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
     [InitializeOnLoad]
     internal static class InventoryEnumAssemblySync
     {
+        private const double SyncCooldownSeconds = 0.75;
+
         private static bool syncScheduled;
+        private static double nextAllowedSyncTime;
 
         static InventoryEnumAssemblySync()
         {
             EditorApplication.delayCall += RequestSync;
-            EditorApplication.projectChanged += OnProjectChanged;
+            EditorApplication.focusChanged += OnFocusChanged;
         }
 
-        private static void OnProjectChanged() => RequestSync();
+        private static void OnFocusChanged(bool hasFocus)
+        {
+            if (hasFocus)
+                RequestSync();
+        }
 
         internal static void RequestSync()
         {
@@ -28,10 +35,26 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         private static void RunSync()
         {
             EditorApplication.delayCall -= RunSync;
-            syncScheduled = false;
 
-            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            if (EditorApplication.isPlayingOrWillChangePlaymode
+                || EditorApplication.isCompiling
+                || EditorApplication.isUpdating)
+            {
+                syncScheduled = false;
+                RequestSync();
                 return;
+            }
+
+            double now = EditorApplication.timeSinceStartup;
+            if (now < nextAllowedSyncTime)
+            {
+                syncScheduled = false;
+                EditorApplication.delayCall += RunSync;
+                return;
+            }
+
+            syncScheduled = false;
+            nextAllowedSyncTime = now + SyncCooldownSeconds;
 
             InventoryEnumAssemblyConfigurator.SyncGeneratedMode();
         }
