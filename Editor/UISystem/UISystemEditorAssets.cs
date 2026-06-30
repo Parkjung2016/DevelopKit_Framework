@@ -12,14 +12,17 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
         internal const string LastTabPrefsKey = "PJDev.UISystemSettings.LastTab";
         internal const string LayerSubTabPrefsKey = "PJDev.UISystemSettings.LayerSubTab";
 
-        public static UIViewCatalog LoadOrFindCatalog()
-        {
-            return LoadOrFind<UIViewCatalog>(CatalogPrefsKey);
-        }
+        public static UIViewCatalog LoadOrFindCatalog() => LoadOrFind<UIViewCatalog>(CatalogPrefsKey);
 
-        public static UILayerSettings LoadOrFindLayerSettings()
+        public static UILayerSettings LoadOrFindLayerSettings() => LoadOrFind<UILayerSettings>(LayerSettingsPrefsKey);
+
+        public static void RestoreAssignedAssets(ref UIViewCatalog catalog, ref UILayerSettings layerSettings)
         {
-            return LoadOrFind<UILayerSettings>(LayerSettingsPrefsKey);
+            if (catalog == null)
+                catalog = LoadOrFindCatalog();
+
+            if (layerSettings == null)
+                layerSettings = LoadOrFindLayerSettings();
         }
 
         public static void Remember(UIViewCatalog catalog)
@@ -84,9 +87,16 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             if (!string.IsNullOrEmpty(savedGuid))
             {
                 string path = AssetDatabase.GUIDToAssetPath(savedGuid);
-                T saved = AssetDatabase.LoadAssetAtPath<T>(path);
-                if (saved != null)
-                    return saved;
+                if (string.IsNullOrEmpty(path))
+                {
+                    EditorPrefs.DeleteKey(prefsKey);
+                }
+                else
+                {
+                    T saved = AssetDatabase.LoadAssetAtPath<T>(path);
+                    if (saved != null)
+                        return saved;
+                }
             }
 
             string[] guids = AssetDatabase.FindAssets($"t:{typeof(T).Name}");

@@ -40,6 +40,10 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
         private void OnDisable()
         {
             UISystemEditorUI.PreferWindowLayout = false;
+            if (viewCatalog != null)
+                UISystemEditorAssets.Remember(viewCatalog);
+            if (layerSettings != null)
+                UISystemEditorAssets.Remember(layerSettings);
             DestroyEmbeddedEditor();
         }
 
@@ -92,19 +96,31 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             root.Add(BuildToolbar());
             root.Add(BuildBody(out navHost, out contentHost));
 
-            if (viewCatalog == null)
-                viewCatalog = UISystemEditorAssets.LoadOrFindCatalog();
-            if (layerSettings == null)
-                layerSettings = UISystemEditorAssets.LoadOrFindLayerSettings();
+            RestoreAssignedAssets();
+
+            BuildNavigation();
+            RefreshContent();
+
+            EditorApplication.delayCall += DelayedRestoreAssignedAssets;
+        }
+
+        private void RestoreAssignedAssets()
+        {
+            UISystemEditorAssets.RestoreAssignedAssets(ref viewCatalog, ref layerSettings);
+
             if (activeTab == Tab.Setup)
                 activeTab = NormalizeTab((Tab)EditorPrefs.GetInt(UISystemEditorAssets.LastTabPrefsKey, (int)Tab.Setup));
 
-            if (catalogField != null)
-                catalogField.SetValueWithoutNotify(viewCatalog);
-            if (layerSettingsField != null)
-                layerSettingsField.SetValueWithoutNotify(layerSettings);
+            catalogField?.SetValueWithoutNotify(viewCatalog);
+            layerSettingsField?.SetValueWithoutNotify(layerSettings);
+        }
 
-            BuildNavigation();
+        private void DelayedRestoreAssignedAssets()
+        {
+            if (this == null)
+                return;
+
+            RestoreAssignedAssets();
             RefreshContent();
         }
 

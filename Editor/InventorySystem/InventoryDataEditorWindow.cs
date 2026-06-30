@@ -132,21 +132,29 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             BuildNavigation();
 
             RestoreSessionState();
+            EditorApplication.delayCall += DelayedRestoreSessionState;
 
             context.Changed += RefreshActivePanel;
         }
 
+        private void DelayedRestoreSessionState()
+        {
+            if (this == null)
+                return;
+
+            RestoreSessionState();
+        }
+
         private void RestoreSessionState()
         {
-            if (context.Setup != null)
+            if (context.Setup == null && !HasStandaloneContext())
             {
-                setupField.SetValueWithoutNotify(context.Setup);
-            }
-            else if (!HasStandaloneContext())
-            {
-                InventorySetupSO restored = InventoryDataEditorSession.LoadLastSetup();
-                if (restored != null)
+                if (InventoryDataEditorSession.TryReloadLastSetup(out InventorySetupSO restored))
                     SetSetup(restored);
+            }
+            else if (context.Setup != null)
+            {
+                setupField?.SetValueWithoutNotify(context.Setup);
             }
 
             if (context.PendingTab.HasValue)
@@ -160,7 +168,12 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             context.StandaloneRecipeDatabase != null ||
             context.StandaloneLootDatabase != null;
 
-        private void OnDisable() => context.Changed -= RefreshActivePanel;
+        private void OnDisable()
+        {
+            context.Changed -= RefreshActivePanel;
+            if (context.Setup != null)
+                InventoryDataEditorSession.SaveLastSetup(context.Setup);
+        }
 
         private void BuildNavigation()
         {
@@ -324,11 +337,13 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 return null;
             }
 
-            var setup = AssetDatabase.LoadAssetAtPath<InventorySetupSO>(path);
-            if (setup == null)
-                EditorPrefs.DeleteKey(LastSetupGuidKey);
+            return AssetDatabase.LoadAssetAtPath<InventorySetupSO>(path);
+        }
 
-            return setup;
+        public static bool TryReloadLastSetup(out InventorySetupSO setup)
+        {
+            setup = LoadLastSetup();
+            return setup != null;
         }
     }
 
