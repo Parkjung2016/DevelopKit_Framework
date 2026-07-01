@@ -287,9 +287,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         private void CreateSetupAsset()
         {
-            string defaultDirectory = context.Setup != null
-                ? context.GetSetupAssetDirectory()
-                : EditorPrefs.GetString(PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey, "Assets");
+            string defaultDirectory = context.GetSetupAssetDirectory();
 
             if (!PJDevEditorAssetCreationUtility.TryPickAssetPath(
                     "Create Inventory Setup — InventorySetupSO",
@@ -311,11 +309,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         private void CreateDatabaseSetupAsset()
         {
-            string defaultDirectory = context.DatabaseSetup != null
-                ? context.GetSetupAssetDirectory()
-                : context.Setup != null
-                    ? context.GetSetupAssetDirectory()
-                    : EditorPrefs.GetString(PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey, "Assets");
+            string defaultDirectory = context.GetSetupAssetDirectory();
 
             if (!PJDevEditorAssetCreationUtility.TryPickAssetPath(
                     "Create Database Setup — InventoryDatabaseSetupSO",
@@ -339,13 +333,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         {
             if (context.Setup == null)
             {
-                string setupDefault = EditorPrefs.GetString(
-                    PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey,
-                    "Assets");
-
                 if (!PJDevEditorAssetCreationUtility.TryPickAssetPath(
                         "Create Inventory Setup — InventorySetupSO",
-                        setupDefault,
+                        context.GetSetupAssetDirectory(),
                         "SO_InventorySetup",
                         PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey,
                         out string setupPath,

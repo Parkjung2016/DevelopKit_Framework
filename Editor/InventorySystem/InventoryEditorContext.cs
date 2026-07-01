@@ -127,7 +127,10 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         public string GetAssetDirectory() => GetSetupAssetDirectory();
 
         public string GetSetupAssetDirectory() =>
-            GetDirectoryForObject(Setup) ?? GetDirectoryForObject(DatabaseSetup) ?? "Assets";
+            GetDirectoryForObject(Setup)
+            ?? GetDirectoryForObject(DatabaseSetup)
+            ?? PJDevEditorAssetCreationUtility.GetLastOrDefaultFolder(
+                PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey);
 
         public string GetItemDatabaseDirectory() =>
             GetDirectoryForObject(ItemDatabase) ?? GetSetupAssetDirectory();
@@ -178,7 +181,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             initialize?.Invoke(asset);
 
             string filePrefix = filePrefixResolver(asset);
-            string targetDirectory = directory ?? context?.GetAssetDirectory() ?? "Assets";
+            string targetDirectory = directory
+                ?? context?.GetAssetDirectory()
+                ?? PJDevEditorAssetCreationUtility.GetDefaultProjectAssetsFolder();
             string path;
 
             if (promptForLocation)

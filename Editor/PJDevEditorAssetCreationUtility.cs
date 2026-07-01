@@ -9,6 +9,23 @@ namespace PJDev.DevelopKit.Framework.Editors
         public const string InventoryFolderPrefsKey = "PJDev.Editor.LastInventoryAssetFolder";
         public const string UISystemFolderPrefsKey = "PJDev.Editor.LastUISystemAssetFolder";
 
+        private const string PreferredProjectAssetsFolder = "Assets/_Game";
+
+        public static string GetDefaultProjectAssetsFolder()
+        {
+            return AssetDatabase.IsValidFolder(PreferredProjectAssetsFolder)
+                ? PreferredProjectAssetsFolder
+                : "Assets";
+        }
+
+        public static string GetLastOrDefaultFolder(string prefsKey, string fallback = null)
+        {
+            fallback = NormalizeAssetsFolder(fallback ?? GetDefaultProjectAssetsFolder());
+            return string.IsNullOrEmpty(prefsKey)
+                ? fallback
+                : NormalizeAssetsFolder(EditorPrefs.GetString(prefsKey, fallback));
+        }
+
         public static bool TryPickFolder(
             string title,
             string defaultFolder,
@@ -17,9 +34,9 @@ namespace PJDev.DevelopKit.Framework.Editors
         {
             assetsFolder = null;
             defaultFolder = NormalizeAssetsFolder(
-                string.IsNullOrEmpty(prefsKey)
-                    ? defaultFolder
-                    : EditorPrefs.GetString(prefsKey, defaultFolder ?? "Assets"));
+                string.IsNullOrWhiteSpace(defaultFolder)
+                    ? GetLastOrDefaultFolder(prefsKey)
+                    : defaultFolder);
 
             string assetsRoot = Application.dataPath.Replace('\\', '/');
             string defaultAbsolute = Path.GetFullPath(
@@ -57,9 +74,9 @@ namespace PJDev.DevelopKit.Framework.Editors
         {
             assetPath = null;
             defaultDirectory = NormalizeAssetsFolder(
-                string.IsNullOrEmpty(prefsKey)
-                    ? defaultDirectory
-                    : EditorPrefs.GetString(prefsKey, defaultDirectory ?? "Assets"));
+                string.IsNullOrWhiteSpace(defaultDirectory)
+                    ? GetLastOrDefaultFolder(prefsKey)
+                    : defaultDirectory);
 
             string suggestedPath = AssetDatabase.GenerateUniqueAssetPath(
                 $"{defaultDirectory}/{defaultFileName}.asset");
