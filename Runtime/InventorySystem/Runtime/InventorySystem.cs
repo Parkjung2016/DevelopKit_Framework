@@ -17,7 +17,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         public event Action<int> OnItemAcquired;
         public event Action<int> OnItemDepleted;
 
-        private const int DefaultMainSlotCount = 20;
 
         [SerializeField] private InventorySetupSO setup;
 
@@ -44,34 +43,24 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             }
         }
 
-        public void Init(IInventoryOwner owner, InventorySetupSO setupAsset, IItemContainerRouter router = null)
+        /// <summary>
+        /// <see cref="InventorySetupSO"/>로 인벤토리를 초기화합니다. setupAsset을 생략하면 Inspector의 <see cref="setup"/>을 사용합니다.
+        /// </summary>
+        public void Init(IInventoryOwner owner, InventorySetupSO setupAsset = null, IItemContainerRouter router = null)
         {
-            if (setupAsset == null)
+            InventorySetupSO resolvedSetup = setupAsset ?? setup;
+            if (resolvedSetup == null)
             {
-                CDebug.LogWarning("InventorySystem : InventorySetupSO is null.");
+                CDebug.LogWarning("InventorySystem : InventorySetupSO is required.");
                 return;
             }
 
-            this.setup = setupAsset;
-            Init(owner, setupAsset.CreateDataProvider(), router);
-        }
-
-        public void Init(IInventoryOwner owner, IInventoryDataProvider dataProvider, IItemContainerRouter router = null)
-        {
-            if (dataProvider == null)
-            {
-                CDebug.LogWarning("InventorySystem : IInventoryDataProvider is null.");
-                return;
-            }
-
-            Init(owner, dataProvider.ItemDatabase, router);
-            group?.SetDataServices(dataProvider.RecipeDatabase, dataProvider.LootTableDatabase);
-        }
-
-        public void Init(IInventoryOwner owner, IItemDatabase itemDatabase, IItemContainerRouter router = null)
-        {
+            setup = resolvedSetup;
             this.owner = owner;
-            RebuildGroup(itemDatabase, router);
+
+            resolvedSetup.RegisterGlobalItemCatalog();
+            IInventoryDataProvider dataProvider = resolvedSetup.CreateDataProvider();
+            RebuildGroup(resolvedSetup.CreateContainerConfigs(), router, dataProvider);
         }
 
         public bool TryGetContainer(string containerId, out IInventoryContainer container)
@@ -312,51 +301,32 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         public float GetTotalWeight() => Primary?.GetTotalWeight() ?? 0f;
 
-        private void RebuildGroup(IItemDatabase itemDatabase, IItemContainerRouter router)
+        private void RebuildGroup(
+            IReadOnlyList<InventoryContainerConfig> containerConfigs,
+            IItemContainerRouter router,
+            IInventoryDataProvider dataProvider = null)
         {
             DisposeGroup();
-            group = new InventoryGroup(itemDatabase, router);
-            primaryContainer = null;
+            group = new InventoryGroup(itemDatabase: null, router);
 
-            InventoryConfigSO[] configs = setup != null
-                ? setup.ContainerConfigs
-                : null;
+            if (dataProvider != null)
+                group.SetDataServices(dataProvider.RecipeDatabase, dataProvider.LootTableDatabase);
 
-            if (configs is { Length: > 0 })
+            IReadOnlyList<InventoryContainerConfig> configs = containerConfigs;
+            if (configs == null || configs.Count == 0)
             {
-                for (int i = 0; i < configs.Length; i++)
-                {
-                    if (configs[i] == null)
-                        continue;
-
-                    RegisterContainer(CreateContainer(configs[i], itemDatabase));
-                }
+                if (setup != null)
+                    configs = setup.CreateContainerConfigs();
             }
 
-            if (primaryContainer != null)
+            if (configs == null || configs.Count == 0)
+            {
+                CDebug.LogWarning("InventorySystem : no container configs. Using default main container.");
+                InventorySessionBuilder.RegisterContainers(group, Array.Empty<InventoryContainerConfig>(), out primaryContainer);
                 return;
+            }
 
-            if (setup != null)
-                CDebug.LogWarning("InventorySystem : Setup has no ContainerConfigs. Using default main container.");
-
-            RegisterContainer(CreateDefaultMainContainer(itemDatabase));
-        }
-
-        private static InventoryContainer CreateContainer(InventoryConfigSO config, IItemDatabase itemDatabase) =>
-            new(config.SlotCount, itemDatabase, config.CreateDescriptor());
-
-        private static InventoryContainer CreateDefaultMainContainer(IItemDatabase itemDatabase) =>
-            new(DefaultMainSlotCount, itemDatabase, InventoryContainerDescriptor.Main());
-
-        private void RegisterContainer(InventoryContainer container)
-        {
-            if (container == null)
-                return;
-
-            group.RegisterContainer(container);
-
-            if (primaryContainer == null || container.Kind == (ContainerKind)InventoryEnumCore.MainContainerKindValue)
-                primaryContainer = container;
+            InventorySessionBuilder.RegisterContainers(group, configs, out primaryContainer);
         }
 
         private void DisposeGroup()
@@ -373,7 +343,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
             if (setup != null)
             {
-                Init(owner, setup);
+                Init(owner);
                 return;
             }
 

@@ -52,9 +52,10 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             }
         }
 
-        public IEquipmentItemProfileSource CreateProfileSource(IItemDatabase itemDatabase)
+        public IEquipmentItemProfileSource CreateProfileSource(IItemDatabase itemDatabase = null)
         {
             Normalize();
+            IItemDatabase resolvedDatabase = ItemCatalog.Resolve(itemDatabase);
 
             var sources = new System.Collections.Generic.List<IEquipmentItemProfileSource>(2);
             if (ItemProfileOverrides is { Length: > 0 })
@@ -73,7 +74,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
                     sources.Add(new DictionaryEquipmentProfileSource(map));
             }
 
-            if (itemDatabase is IItemCatalog catalog)
+            if (resolvedDatabase is IItemCatalog catalog)
                 sources.Add(new CatalogTagEquipmentProfileSource(catalog, EquipmentTagPrefix));
 
             return sources.Count switch
@@ -91,6 +92,9 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             var slotRule = new EquipmentSlotRule(SlotCategories, resolvedProfile, EquipmentItemType);
             return new InventoryContainerDescriptor(ContainerId, Kind, slotRule);
         }
+
+        public InventoryContainer CreateContainer(IEquipmentItemProfileSource profileSource = null) =>
+            CreateContainer(null, profileSource);
 
         public InventoryContainer CreateContainer(IItemDatabase itemDatabase, IEquipmentItemProfileSource profileSource = null)
         {

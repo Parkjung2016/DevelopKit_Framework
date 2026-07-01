@@ -7,22 +7,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
     {
         public static bool CanCraft(
             InventoryGroup group,
-            RecipeSO recipe,
-            out InventoryFailReason reason) =>
-            recipe == null
-                ? Fail(out reason, InventoryFailReason.InvalidCount)
-                : CanCraft(group, recipe.Costs, recipe.Rewards, out reason);
-
-        public static bool CanCraft(
-            InventoryGroup group,
             in RecipeDefinition recipe,
             out InventoryFailReason reason) =>
             CanCraft(group, recipe.Costs, recipe.Rewards, out reason);
-
-        public static InventoryChangeResult TryCraft(InventoryGroup group, RecipeSO recipe) =>
-            recipe == null
-                ? InventoryChangeResult.Fail(InventoryChangeType.Craft, InventoryFailReason.InvalidCount)
-                : TryCraft(group, recipe.Costs, recipe.Rewards);
 
         public static InventoryChangeResult TryCraft(InventoryGroup group, in RecipeDefinition recipe) =>
             TryCraft(group, recipe.Costs, recipe.Rewards);

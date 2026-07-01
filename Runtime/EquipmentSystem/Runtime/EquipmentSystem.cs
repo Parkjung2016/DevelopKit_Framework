@@ -14,20 +14,30 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 
         public EquipmentSystem(
             InventoryGroup group,
-            EquipmentSetupSO setup,
+            string equipmentContainerId,
             IEquipmentEffectApplier effectApplier = null)
         {
             if (group == null)
                 throw new ArgumentNullException(nameof(group));
-            if (setup == null)
-                throw new ArgumentNullException(nameof(setup));
+            if (string.IsNullOrWhiteSpace(equipmentContainerId))
+                throw new ArgumentException("Equipment container id is required.", nameof(equipmentContainerId));
 
             this.group = group;
-            equipmentContainerId = setup.ContainerId;
+            this.equipmentContainerId = equipmentContainerId;
             this.effectApplier = effectApplier ?? NullEquipmentEffectApplier.Instance;
 
             if (!group.TryGetContainer(equipmentContainerId, out _))
                 throw new InvalidOperationException($"InventoryGroup does not contain equipment container '{equipmentContainerId}'.");
+        }
+
+        public EquipmentSystem(
+            InventoryGroup group,
+            EquipmentSetupSO setup,
+            IEquipmentEffectApplier effectApplier = null)
+            : this(group, setup != null ? setup.ContainerId : null, effectApplier)
+        {
+            if (setup == null)
+                throw new ArgumentNullException(nameof(setup));
         }
 
         public string EquipmentContainerId => equipmentContainerId;

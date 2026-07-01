@@ -5,7 +5,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
 {
     public sealed class InventoryTestItemDatabase : IItemDatabase
     {
-        public static readonly InventoryTestItemDatabase Shared = new();
+        public static readonly InventoryTestItemDatabase Shared = CreateSeeded();
 
         public const int GeneralItemId = 1000;
         public const int EquipmentItemId = 2000;
@@ -13,7 +13,11 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         public const int UnknownItemId = 9999;
 
         private readonly Dictionary<int, ItemDefinition> definitions;
-        private InventoryTestItemDatabase()
+
+        public InventoryTestItemDatabase() =>
+            definitions = new Dictionary<int, ItemDefinition>();
+
+        private InventoryTestItemDatabase(bool seedDefaults)
         {
             definitions = new Dictionary<int, ItemDefinition>
             {
@@ -22,6 +26,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
                 [QuestItemId] = new(QuestItemId, maxStackSize: 99, isStackable: true, itemType: (ItemType)InventoryTestValues.QuestType, canDrop: false)
             };
         }
+
+        public static InventoryTestItemDatabase CreateSeeded() => new(true);
 
         public void Register(ItemDefinition definition) => definitions[definition.ItemId] = definition;
 

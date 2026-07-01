@@ -33,38 +33,61 @@
 
 ### 2. 런타임 초기화
 
+**MonoBehaviour (`InventorySystem`)** — `InventorySetupSO` 하나로 DB·컨테이너·레시피·루트를 묶어서 씁니다.
+
 ```csharp
-// 권장: InventorySetupSO (ContainerConfigs + DB)
+// Inspector에 Setup SO 할당 후
+inventorySystem.Init(owner);
+
+// 또는 코드에서 Setup SO 전달
 inventorySystem.Init(owner, setupSO);
+inventorySystem.Init(owner, setupSO, customRouter);
+```
 
-// 프로토타입: DB만 넘기면 기본 main 컨테이너(20슬롯) 생성
-inventorySystem.Init(owner, itemDatabase);
+**순수 C# (테스트·서버·SO 없이)** — `InventorySessionBuilder` + 전역 `ItemCatalog`를 사용합니다.
 
-inventorySystem.TryAddItem(itemId, count);
-inventorySystem.ExportSaveData();           // Primary 컨테이너
-inventorySystem.ExportGroupSaveData();      // 전체 그룹
+```csharp
+ItemCatalog.Set(itemDatabaseSO);
+
+var configs = setupSO.CreateContainerConfigs();
+var group = InventorySessionBuilder.CreateGroup(configs);
+group.TryAddItem(itemId, count);
+```
+
+```csharp
+// 장비 컨테이너 — ItemCatalog 등록 후 DB 인자 생략 가능
+var equip = equipmentSetup.CreateContainer();
+group.RegisterContainer(equip);
 ```
 
 ### 3. 멀티 컨테이너 + 제작/루팅
 
 ```csharp
 inventorySystem.TryMoveBetween("main", 0, "equipment", 1);
-inventorySystem.TryCraft(recipeSO);
+inventorySystem.TryCraft(recipeSO);           // SO는 InventoryAuthoringExtensions 경유
 inventorySystem.TryGrantLoot(lootTableSO);
+
+// 핵심 API는 정의 struct만 사용 (SO 무관)
+group.TryCraft(recipeDefinition);
+group.TryGrantLoot(lootTableDefinition);
 ```
 
 ## 아키텍처
 
 ```
-InventorySystem (MonoBehaviour — 단일 진입점)
-  └─ InventoryGroup
-       ├─ InventoryContainer ("main")
-       ├─ InventoryContainer ("equipment")
-       └─ ...
+ItemCatalog (전역 IItemCatalog — Setup.Init 시 등록)
+    ↑ Resolve()
+InventoryGroup / InventoryContainer (순수 C# — InventorySessionBuilder)
+    ↑
+InventorySystem (MonoBehaviour — InventorySetupSO만으로 Init)
 ```
 
 | 개념 | 설명 |
 |------|------|
+| `ItemCatalog` | 프로젝트 전역 아이템 DB. `null` DB는 여기로 폴백 |
+| `InventorySetupSO` | DB + 컨테이너 config + 레시피/루트 DB 묶음 (MonoBehaviour Init용) |
+| `InventoryContainerConfig` | SO 없이 컨테이너 부트스트랩용 struct |
+| `InventorySessionBuilder` | config 배열 → `InventoryGroup` 생성 |
 | `ContainerId` | UI/세이브/크로스 이동용 문자열 ID |
 | `ContainerKind` | Main, Equipment, QuickBar… — 라우터 분기 |
 | `ItemDefinitionSO` | 디자이너용 아이템 에셋 |
@@ -95,7 +118,4 @@ InventorySystem (MonoBehaviour — 단일 진입점)
 
 ## 테스트
 
-`Tests/` — Unity Edit Mode (NUnit)
-
-Editor 메뉴 자동 실행:
-- `Tools/InventorySystem/Tests/Run EditMode`
+`Tests/` — Unity Edit Mode (NUnit), Test Runner 창에서 실행

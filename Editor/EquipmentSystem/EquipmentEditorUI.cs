@@ -446,8 +446,8 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
             var section = InventoryEditorUIFactory.CreateSection("Integration Guide");
             string assetName = setup.name;
             string snippet =
-                $"// 장비 컨테이너 생성 (이 Setup의 슬롯 규칙 적용)\n" +
-                $"var equipContainer = {assetName}.CreateContainer(itemDatabase);\n" +
+                $"// 장비 컨테이너 생성 (전역 ItemCatalog 사용)\n" +
+                $"var equipContainer = {assetName}.CreateContainer();\n" +
                 $"inventoryGroup.RegisterContainer(equipContainer);\n\n" +
                 $"// EquipmentSystem 연결\n" +
                 $"objectEquipment.Init(owner, inventorySystem, {assetName}, effectApplier);\n\n" +

@@ -35,6 +35,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         public NativeArray<SlotData>.ReadOnly SlotDataReadOnly =>
             slots.IsCreated ? slots.AsReadOnly() : default;
 
+        private IItemDatabase Database => ItemCatalog.Resolve(itemDatabase);
+
         public InventoryContainer(int slotCount, IItemDatabase itemDatabase, InventoryContainerDescriptor descriptor = default)
         {
             if (slotCount < 0)
@@ -91,7 +93,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (isDisposed)
                 return Fail(InventoryChangeType.Add, InventoryFailReason.DatabaseNotReady, itemId, count);
 
-            if (itemDatabase == null)
+            if (!ItemCatalog.IsReady && itemDatabase == null)
                 return Fail(InventoryChangeType.Add, InventoryFailReason.DatabaseNotReady, itemId, count);
 
             if (itemId <= 0)
@@ -149,7 +151,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (isDisposed)
                 return Fail(InventoryChangeType.Add, InventoryFailReason.DatabaseNotReady, itemId, count);
 
-            if (itemDatabase == null)
+            if (!ItemCatalog.IsReady && itemDatabase == null)
                 return Fail(InventoryChangeType.Add, InventoryFailReason.DatabaseNotReady, itemId, count);
 
             if (itemId <= 0)
@@ -662,22 +664,15 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             isDisposed = true;
         }
 
-        private bool TryGetDefinition(int itemId, out ItemDefinition definition)
-        {
-            if (itemDatabase != null && itemDatabase.TryGetDefinition(itemId, out definition))
-                return true;
-
-            CDebug.LogWarning($"InventoryContainer : item id {itemId} was not found in database.");
-            definition = default;
-            return false;
-        }
+        private bool TryGetDefinition(int itemId, out ItemDefinition definition) =>
+            Database.TryGetDefinition(itemId, out definition);
 
         private ItemDefinition ResolveDefinition(int itemId)
         {
-            if (itemId <= 0 || itemDatabase == null)
+            if (itemId <= 0)
                 return default;
 
-            return itemDatabase.TryGetDefinition(itemId, out ItemDefinition definition) ? definition : default;
+            return Database.TryGetDefinition(itemId, out ItemDefinition definition) ? definition : default;
         }
 
         private int GetSlotItemId(int slotIndex) =>

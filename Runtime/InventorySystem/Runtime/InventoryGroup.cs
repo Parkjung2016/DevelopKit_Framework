@@ -9,19 +9,19 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         private readonly Dictionary<string, InventoryContainer> containersById = new();
         private readonly Dictionary<ContainerKind, InventoryContainer> containersByKind = new();
         private readonly List<InventoryContainer> containers = new();
-        private readonly IItemDatabase itemDatabase;
+        private readonly IItemDatabase itemDatabaseOverride;
         private IItemContainerRouter router;
         private IRecipeDatabase recipeDatabase = NullRecipeDatabase.Instance;
         private ILootTableDatabase lootTableDatabase = NullLootTableDatabase.Instance;
 
         public IReadOnlyList<InventoryContainer> Containers => containers;
-        public IItemDatabase ItemDatabase => itemDatabase;
+        public IItemDatabase ItemDatabase => ItemCatalog.Resolve(itemDatabaseOverride);
         public IRecipeDatabase RecipeDatabase => recipeDatabase;
         public ILootTableDatabase LootTableDatabase => lootTableDatabase;
 
-        public InventoryGroup(IItemDatabase itemDatabase, IItemContainerRouter router = null)
+        public InventoryGroup(IItemDatabase itemDatabase = null, IItemContainerRouter router = null)
         {
-            this.itemDatabase = itemDatabase;
+            itemDatabaseOverride = itemDatabase;
             this.router = router ?? DefaultItemContainerRouter.CreateDefault();
         }
 
@@ -89,10 +89,10 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         public InventoryChangeResult TryAddItem(int itemId, int count)
         {
-            if (itemDatabase == null)
+            if (!ItemCatalog.IsReady && itemDatabaseOverride == null)
                 return InventoryChangeResult.Fail(InventoryChangeType.Add, InventoryFailReason.DatabaseNotReady, itemId, count);
 
-            if (!itemDatabase.TryGetDefinition(itemId, out ItemDefinition definition))
+            if (!ItemDatabase.TryGetDefinition(itemId, out ItemDefinition definition))
                 return InventoryChangeResult.Fail(InventoryChangeType.Add, InventoryFailReason.DefinitionNotFound, itemId, count);
 
             if (!router.TryResolveContainer(this, definition, out IInventoryContainer container))
@@ -162,7 +162,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (!toContainer.TryGetSlot(toSlotIndex, out InventorySlot toSlot))
                 return InventoryChangeResult.Fail(InventoryChangeType.Move, InventoryFailReason.InvalidSlotIndex, itemId, secondarySlotIndex: toSlotIndex);
 
-            if (!itemDatabase.TryGetDefinition(itemId, out ItemDefinition definition))
+            if (!ItemDatabase.TryGetDefinition(itemId, out ItemDefinition definition))
                 return InventoryChangeResult.Fail(InventoryChangeType.Move, InventoryFailReason.DefinitionNotFound, itemId);
 
             if (!toSlot.IsEmpty)
@@ -231,10 +231,10 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             int countB = slotBData.Stack.Count;
             long instanceB = slotBData.Stack.InstanceId;
 
-            if (!itemDatabase.TryGetDefinition(itemA, out ItemDefinition definitionA))
+            if (!ItemDatabase.TryGetDefinition(itemA, out ItemDefinition definitionA))
                 return InventoryChangeResult.Fail(InventoryChangeType.Swap, InventoryFailReason.DefinitionNotFound, itemA, primarySlotIndex: slotA, secondarySlotIndex: slotB);
 
-            if (!itemDatabase.TryGetDefinition(itemB, out ItemDefinition definitionB))
+            if (!ItemDatabase.TryGetDefinition(itemB, out ItemDefinition definitionB))
                 return InventoryChangeResult.Fail(InventoryChangeType.Swap, InventoryFailReason.DefinitionNotFound, itemB, primarySlotIndex: slotA, secondarySlotIndex: slotB);
 
             if (!containerB.CanAcceptSlot(slotB, definitionA))
@@ -316,12 +316,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             IReadOnlyList<InventoryRecipeEntry> rewards) =>
             InventoryCrafting.TryCraft(this, costs, rewards);
 
-        public bool CanCraft(RecipeSO recipe, out InventoryFailReason reason) =>
-            InventoryCrafting.CanCraft(this, recipe, out reason);
-
-        public InventoryChangeResult TryCraft(RecipeSO recipe) =>
-            InventoryCrafting.TryCraft(this, recipe);
-
         public bool CanCraft(string recipeId, out InventoryFailReason reason)
         {
             if (!recipeDatabase.TryGetRecipe(recipeId, out RecipeDefinition recipe))
@@ -353,9 +347,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         }
 
         public InventoryChangeResult TryGrantLoot(in LootTableDefinition table, System.Random random = null) =>
-            LootRoller.TryGrantLoot(this, table, random);
-
-        public InventoryChangeResult TryGrantLoot(LootTableSO table, System.Random random = null) =>
             LootRoller.TryGrantLoot(this, table, random);
 
         public InventoryGroupSaveData ExportSaveData() => InventorySerializer.Export(this);

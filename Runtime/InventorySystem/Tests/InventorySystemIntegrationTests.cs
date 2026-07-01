@@ -45,18 +45,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         }
 
         [Test]
-        public void Init_WithoutSetup_UsesDefaultMainContainer()
-        {
-            host = new GameObject("InventorySystemTest");
-            var system = host.AddComponent<global::PJDev.DevelopKit.Framework.InventorySystem.Runtime.InventorySystem>();
-            system.Init(null, InventoryTestItemDatabase.Shared);
-
-            Assert.AreEqual(1, system.Group.Containers.Count);
-            Assert.AreEqual("main", system.ContainerId);
-            Assert.AreEqual(20, system.SlotCount);
-        }
-
-        [Test]
         public void Init_FromSetupWithEmptyConfigs_UsesDefaultMainContainer()
         {
             InventorySetupSO setup = ScriptableObject.CreateInstance<InventorySetupSO>();

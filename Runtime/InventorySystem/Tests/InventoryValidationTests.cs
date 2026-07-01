@@ -9,13 +9,18 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         private InventoryContainer container;
 
         [SetUp]
-        public void SetUp() => container = InventoryTestFixtures.CreateMainContainer();
+        public void SetUp()
+        {
+            ItemCatalog.Clear();
+            container = InventoryTestFixtures.CreateMainContainer();
+        }
 
         [TearDown]
         public void TearDown()
         {
             container?.Dispose();
             container = null;
+            ItemCatalog.Clear();
         }
 
         [Test]

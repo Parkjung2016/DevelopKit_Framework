@@ -5,9 +5,10 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
     public static class LootRoller
     {
-        public static ItemStack[] Roll(in LootTableDefinition table, IItemDatabase database, Random random = null)
+        public static ItemStack[] Roll(in LootTableDefinition table, IItemDatabase database = null, Random random = null)
         {
-            if (database == null || table.Entries == null || table.Entries.Length == 0)
+            database = ItemCatalog.Resolve(database);
+            if (table.Entries == null || table.Entries.Length == 0)
                 return Array.Empty<ItemStack>();
 
             random ??= new Random();
@@ -15,9 +16,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 ? RollWithReplacement(table, database, random)
                 : RollWithoutReplacement(table, database, random);
         }
-
-        public static ItemStack[] Roll(LootTableSO table, IItemDatabase database, Random random = null) =>
-            table == null ? Array.Empty<ItemStack>() : Roll(table.ToDefinition(), database, random);
 
         public static InventoryChangeResult TryGrantLoot(
             InventoryGroup group,
@@ -43,14 +41,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             transaction.Commit();
             return lastResult;
         }
-
-        public static InventoryChangeResult TryGrantLoot(
-            InventoryGroup group,
-            LootTableSO table,
-            Random random = null) =>
-            table == null
-                ? InventoryChangeResult.Fail(InventoryChangeType.Add, InventoryFailReason.InvalidCount)
-                : TryGrantLoot(group, table.ToDefinition(), random);
 
         private static ItemStack[] RollWithReplacement(
             in LootTableDefinition table,

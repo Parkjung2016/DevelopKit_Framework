@@ -115,7 +115,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             table.RollCount = 1;
 
             InventoryGroup group = InventoryTestFixtures.CreateGroup(container);
-            InventoryChangeResult result = LootRoller.TryGrantLoot(group, table, new System.Random(1));
+            InventoryChangeResult result = LootRoller.TryGrantLoot(group, table.ToDefinition(), new System.Random(1));
 
             Object.DestroyImmediate(table);
 
@@ -136,7 +136,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             table.RollCount = 2;
             table.AllowDuplicateRolls = false;
 
-            ItemStack[] loot = LootRoller.Roll(table, InventoryTestItemDatabase.Shared, new System.Random(1));
+            ItemStack[] loot = LootRoller.Roll(table.ToDefinition(), InventoryTestItemDatabase.Shared, new System.Random(1));
 
             Object.DestroyImmediate(table);
 

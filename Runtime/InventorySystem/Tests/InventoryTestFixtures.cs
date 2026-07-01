@@ -5,6 +5,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
 {
     internal static class InventoryTestFixtures
     {
+        public static void UseSharedCatalog() => ItemCatalog.Set(InventoryTestItemDatabase.Shared);
+
         public static InventoryContainer CreateMainContainer(int slotCount = 10, string containerId = "main") =>
             new(slotCount, InventoryTestItemDatabase.Shared, InventoryContainerDescriptor.Main(containerId));
 
