@@ -1,12 +1,18 @@
 using System;
 using System.Collections.Generic;
+#if UNITY_6000_5_OR_NEWER
+using Unity.Scripting.LifecycleManagement;
+#endif
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
     /// <summary>
     /// 프로젝트 전역 아이템 카탈로그입니다. 런타임·테스트·에디터에서 하나의 <see cref="IItemCatalog"/>를 공유할 때 사용합니다.
     /// </summary>
-    public static class ItemCatalog
+#if UNITY_6000_5_OR_NEWER
+    [AutoStaticsCleanup]
+#endif
+    public static partial class ItemCatalog
     {
         private static IItemCatalog current;
 
