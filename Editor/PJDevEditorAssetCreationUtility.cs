@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -9,21 +10,43 @@ namespace PJDev.DevelopKit.Framework.Editors
         public const string InventoryFolderPrefsKey = "PJDev.Editor.LastInventoryAssetFolder";
         public const string UISystemFolderPrefsKey = "PJDev.Editor.LastUISystemAssetFolder";
 
-        private const string PreferredProjectAssetsFolder = "Assets/_Game";
+        private static readonly string[] PreferredProjectAssetsFolders = { "Assets/_Game", "Assets" };
 
         public static string GetDefaultProjectAssetsFolder()
         {
-            return AssetDatabase.IsValidFolder(PreferredProjectAssetsFolder)
-                ? PreferredProjectAssetsFolder
-                : "Assets";
+            foreach (string folder in PreferredProjectAssetsFolders)
+            {
+                if (AssetDatabase.IsValidFolder(folder))
+                    return folder;
+            }
+
+            return "Assets";
         }
 
         public static string GetLastOrDefaultFolder(string prefsKey, string fallback = null)
         {
             fallback = NormalizeAssetsFolder(fallback ?? GetDefaultProjectAssetsFolder());
-            return string.IsNullOrEmpty(prefsKey)
-                ? fallback
-                : NormalizeAssetsFolder(EditorPrefs.GetString(prefsKey, fallback));
+            if (string.IsNullOrEmpty(prefsKey))
+                return EnsureValidAssetsFolder(fallback);
+
+            string fromPrefs = NormalizeAssetsFolder(EditorPrefs.GetString(prefsKey, fallback));
+            return EnsureValidAssetsFolder(fromPrefs, prefsKey);
+        }
+
+        public static string EnsureValidAssetsFolder(string folder, string prefsKey = null)
+        {
+            folder = NormalizeAssetsFolder(folder);
+            if (AssetDatabase.IsValidFolder(folder))
+                return folder;
+
+            if (!string.IsNullOrEmpty(prefsKey))
+            {
+                string stored = EditorPrefs.GetString(prefsKey, string.Empty);
+                if (string.Equals(NormalizeAssetsFolder(stored), folder, StringComparison.OrdinalIgnoreCase))
+                    EditorPrefs.DeleteKey(prefsKey);
+            }
+
+            return GetDefaultProjectAssetsFolder();
         }
 
         public static bool TryPickFolder(
@@ -33,15 +56,19 @@ namespace PJDev.DevelopKit.Framework.Editors
             out string assetsFolder)
         {
             assetsFolder = null;
-            defaultFolder = NormalizeAssetsFolder(
+            defaultFolder = EnsureValidAssetsFolder(
                 string.IsNullOrWhiteSpace(defaultFolder)
                     ? GetLastOrDefaultFolder(prefsKey)
-                    : defaultFolder);
+                    : defaultFolder,
+                prefsKey);
 
             string assetsRoot = Application.dataPath.Replace('\\', '/');
             string defaultAbsolute = Path.GetFullPath(
                 Path.Combine(Path.GetDirectoryName(assetsRoot) ?? assetsRoot, defaultFolder))
                 .Replace('\\', '/');
+
+            if (!Directory.Exists(defaultAbsolute))
+                defaultAbsolute = assetsRoot;
 
             string picked = EditorUtility.OpenFolderPanel(title, defaultAbsolute, string.Empty);
             if (string.IsNullOrEmpty(picked))
@@ -73,10 +100,11 @@ namespace PJDev.DevelopKit.Framework.Editors
             string message = "")
         {
             assetPath = null;
-            defaultDirectory = NormalizeAssetsFolder(
+            defaultDirectory = EnsureValidAssetsFolder(
                 string.IsNullOrWhiteSpace(defaultDirectory)
                     ? GetLastOrDefaultFolder(prefsKey)
-                    : defaultDirectory);
+                    : defaultDirectory,
+                prefsKey);
 
             string suggestedPath = AssetDatabase.GenerateUniqueAssetPath(
                 $"{defaultDirectory}/{defaultFileName}.asset");

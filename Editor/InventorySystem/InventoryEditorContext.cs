@@ -150,7 +150,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             if (string.IsNullOrEmpty(path))
                 return null;
 
-            return Path.GetDirectoryName(path)?.Replace('\\', '/');
+            string directory = Path.GetDirectoryName(path)?.Replace('\\', '/');
+            if (string.IsNullOrEmpty(directory))
+                return null;
+
+            return AssetDatabase.IsValidFolder(directory) ? directory : null;
         }
     }
 
@@ -181,9 +185,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             initialize?.Invoke(asset);
 
             string filePrefix = filePrefixResolver(asset);
-            string targetDirectory = directory
-                ?? context?.GetAssetDirectory()
-                ?? PJDevEditorAssetCreationUtility.GetDefaultProjectAssetsFolder();
+            string targetDirectory = PJDevEditorAssetCreationUtility.EnsureValidAssetsFolder(
+                directory ?? context?.GetAssetDirectory() ?? PJDevEditorAssetCreationUtility.GetDefaultProjectAssetsFolder(),
+                PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey);
             string path;
 
             if (promptForLocation)
