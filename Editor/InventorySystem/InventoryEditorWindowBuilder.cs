@@ -7,6 +7,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
     {
         public static VisualElement Build(
             out ObjectField setupField,
+            out ObjectField databaseSetupField,
             out VisualElement navHost,
             out VisualElement contentHost)
         {
@@ -17,15 +18,26 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             var toolbar = new VisualElement { name = "toolbar" };
             toolbar.AddToClassList("inv-top-toolbar");
 
-            setupField = new ObjectField("Setup") { name = "setup-field" };
-            setupField.style.flexGrow = 1;
-            setupField.style.marginRight = 8;
-            toolbar.Add(setupField);
+            var fieldsHost = new VisualElement { name = "toolbar-fields" };
+            fieldsHost.AddToClassList("inv-top-toolbar-fields");
 
-            toolbar.Add(CreateToolbarButton("create-setup-btn", "New Setup"));
-            toolbar.Add(CreateToolbarButton("create-all-btn", "Create All"));
-            toolbar.Add(CreateToolbarButton("save-btn", "Save", primary: true));
-            toolbar.Add(CreateToolbarButton("refresh-btn", "Refresh"));
+            setupField = new ObjectField("Container Setup") { name = "setup-field" };
+            fieldsHost.Add(setupField);
+
+            databaseSetupField = new ObjectField("Database Setup") { name = "database-setup-field" };
+            fieldsHost.Add(databaseSetupField);
+
+            var actionsHost = new VisualElement { name = "toolbar-actions" };
+            actionsHost.AddToClassList("inv-top-toolbar-actions");
+
+            actionsHost.Add(CreateToolbarButton("create-setup-btn", "New Setup"));
+            actionsHost.Add(CreateToolbarButton("create-database-setup-btn", "New DB Setup"));
+            actionsHost.Add(CreateToolbarButton("create-all-btn", "Create All"));
+            actionsHost.Add(CreateToolbarButton("save-btn", "Save", primary: true));
+            actionsHost.Add(CreateToolbarButton("refresh-btn", "Refresh"));
+
+            toolbar.Add(fieldsHost);
+            toolbar.Add(actionsHost);
             root.Add(toolbar);
 
             var body = new VisualElement();

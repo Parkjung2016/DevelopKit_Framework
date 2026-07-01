@@ -66,15 +66,15 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 allowSceneObjects = false
             };
             dbField.style.flexGrow = 1;
-            dbField.SetEnabled(Context.HasSetup);
+            dbField.SetEnabled(Context.DatabaseSetup != null);
             dbField.RegisterValueChangedCallback(evt =>
             {
-                if (!Context.HasSetup)
+                if (Context.DatabaseSetup == null)
                     return;
 
-                Undo.RecordObject(Context.Setup, "Change Loot Database");
-                Context.Setup.LootTableDatabase = evt.newValue as LootTableDatabaseSO;
-                Context.MarkDirty(Context.Setup);
+                Undo.RecordObject(Context.DatabaseSetup, "Change Loot Database");
+                Context.DatabaseSetup.LootTableDatabase = evt.newValue as LootTableDatabaseSO;
+                Context.MarkDirty(Context.DatabaseSetup);
                 selectedIndex = -1;
                 Refresh();
             });
@@ -228,19 +228,19 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
 
         private void CreateLootDatabase()
         {
-            if (!Context.HasSetup)
+            if (Context.DatabaseSetup == null)
                 return;
 
-            Undo.RecordObject(Context.Setup, "Create Loot Database");
-            Context.Setup.LootTableDatabase = InventoryEditorAssetActions.CreateAsset<LootTableDatabaseSO>(
+            Undo.RecordObject(Context.DatabaseSetup, "Create Loot Database");
+            Context.DatabaseSetup.LootTableDatabase = InventoryEditorAssetActions.CreateAsset<LootTableDatabaseSO>(
                 Context,
                 "SO_LootTableDatabase",
                 db => db.RebuildCache(),
                 Context.GetSetupAssetDirectory());
-            if (Context.Setup.LootTableDatabase == null)
+            if (Context.DatabaseSetup.LootTableDatabase == null)
                 return;
 
-            Context.MarkDirty(Context.Setup);
+            Context.MarkDirty(Context.DatabaseSetup);
             Refresh();
         }
 

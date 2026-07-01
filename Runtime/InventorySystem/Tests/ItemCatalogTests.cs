@@ -6,7 +6,12 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
     public sealed class ItemCatalogTests
     {
         [TearDown]
-        public void TearDown() => ItemCatalog.Clear();
+        public void TearDown()
+        {
+            ItemCatalog.Clear();
+            RecipeCatalog.Clear();
+            LootTableCatalog.Clear();
+        }
 
         [Test]
         public void Resolve_UsesExplicitDatabase_WhenProvided()

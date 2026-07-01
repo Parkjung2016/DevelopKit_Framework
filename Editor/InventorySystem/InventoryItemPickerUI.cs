@@ -23,13 +23,23 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             if (string.IsNullOrEmpty(directory))
                 return null;
 
-            string[] setupGuids = AssetDatabase.FindAssets("t:InventorySetupSO", new[] { directory });
+            string[] setupGuids = AssetDatabase.FindAssets("t:InventoryDatabaseSetupSO", new[] { directory });
+            for (int i = 0; i < setupGuids.Length; i++)
+            {
+                var databaseSetup = AssetDatabase.LoadAssetAtPath<InventoryDatabaseSetupSO>(
+                    AssetDatabase.GUIDToAssetPath(setupGuids[i]));
+                if (databaseSetup?.ItemDatabase != null)
+                    return databaseSetup.ItemDatabase;
+            }
+
+            setupGuids = AssetDatabase.FindAssets("t:InventorySetupSO", new[] { directory });
             for (int i = 0; i < setupGuids.Length; i++)
             {
                 var setup = AssetDatabase.LoadAssetAtPath<InventorySetupSO>(
                     AssetDatabase.GUIDToAssetPath(setupGuids[i]));
-                if (setup?.ItemDatabase != null)
-                    return setup.ItemDatabase;
+                var nearDatabaseSetup = FindDatabaseSetupNear(setup);
+                if (nearDatabaseSetup?.ItemDatabase != null)
+                    return nearDatabaseSetup.ItemDatabase;
             }
 
             string[] dbGuids = AssetDatabase.FindAssets("t:ItemDatabaseSO", new[] { directory });
@@ -37,6 +47,29 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             {
                 return AssetDatabase.LoadAssetAtPath<ItemDatabaseSO>(
                     AssetDatabase.GUIDToAssetPath(dbGuids[0]));
+            }
+
+            return null;
+        }
+
+        public static InventoryDatabaseSetupSO FindDatabaseSetupNear(UnityEngine.Object asset)
+        {
+            if (asset == null)
+                return null;
+
+            string path = AssetDatabase.GetAssetPath(asset);
+            if (string.IsNullOrEmpty(path))
+                return null;
+
+            string directory = System.IO.Path.GetDirectoryName(path);
+            if (string.IsNullOrEmpty(directory))
+                return null;
+
+            string[] guids = AssetDatabase.FindAssets("t:InventoryDatabaseSetupSO", new[] { directory });
+            if (guids.Length > 0)
+            {
+                return AssetDatabase.LoadAssetAtPath<InventoryDatabaseSetupSO>(
+                    AssetDatabase.GUIDToAssetPath(guids[0]));
             }
 
             return null;

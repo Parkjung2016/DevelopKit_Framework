@@ -16,6 +16,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         private VisualElement contentHost;
         private VisualElement navHost;
         private ObjectField setupField;
+        private ObjectField databaseSetupField;
         private InventoryEditorPanelBase activePanel;
 
         [MenuItem("PJDev/Inventory/Data Editor")]
@@ -23,7 +24,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         {
             var window = GetWindow<InventoryDataEditorWindow>();
             window.titleContent = new GUIContent("Inventory Data");
-            window.minSize = new Vector2(960, 560);
+            window.minSize = new Vector2(1024, 560);
             window.Show();
         }
 
@@ -35,12 +36,21 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             window.SelectTab(InventoryEditorTab.Overview);
         }
 
+        public static void Open(InventoryDatabaseSetupSO databaseSetup)
+        {
+            Open();
+            var window = GetWindow<InventoryDataEditorWindow>();
+            window.SetDatabaseSetup(databaseSetup);
+            window.SelectTab(InventoryEditorTab.Items);
+        }
+
         public static void OpenItemDatabase(ItemDatabaseSO database)
         {
             Open();
             var window = GetWindow<InventoryDataEditorWindow>();
             window.context.SetStandaloneItemDatabase(database);
             window.setupField?.SetValueWithoutNotify(null);
+            window.databaseSetupField?.SetValueWithoutNotify(null);
             window.SelectTab(InventoryEditorTab.Items);
         }
 
@@ -50,6 +60,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             var window = GetWindow<InventoryDataEditorWindow>();
             window.context.SetStandaloneRecipeDatabase(database);
             window.setupField?.SetValueWithoutNotify(null);
+            window.databaseSetupField?.SetValueWithoutNotify(null);
             window.SelectTab(InventoryEditorTab.Recipes);
         }
 
@@ -59,6 +70,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             var window = GetWindow<InventoryDataEditorWindow>();
             window.context.SetStandaloneLootDatabase(database);
             window.setupField?.SetValueWithoutNotify(null);
+            window.databaseSetupField?.SetValueWithoutNotify(null);
             window.SelectTab(InventoryEditorTab.Loot);
         }
 
@@ -89,6 +101,10 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     return;
                 }
             }
+
+            InventoryDatabaseSetupSO databaseSetup = InventoryEditorAssetLookup.FindDatabaseSetupNear(asset);
+            if (databaseSetup != null)
+                SetDatabaseSetup(databaseSetup);
         }
 
         public void SetSetup(InventorySetupSO setup)
@@ -100,12 +116,31 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             RefreshActivePanel();
         }
 
+        public void SetDatabaseSetup(InventoryDatabaseSetupSO databaseSetup)
+        {
+            context.AssignDatabaseSetup(databaseSetup);
+            if (databaseSetupField != null)
+                databaseSetupField.SetValueWithoutNotify(databaseSetup);
+
+            RefreshActivePanel();
+        }
+
+        private void SyncToolbarFields()
+        {
+            setupField?.SetValueWithoutNotify(context.Setup);
+            databaseSetupField?.SetValueWithoutNotify(context.DatabaseSetup);
+        }
+
         public void CreateGUI()
         {
             rootVisualElement.style.flexGrow = 1;
             InventoryEditorStyleSheet.Apply(rootVisualElement);
 
-            VisualElement root = InventoryEditorWindowBuilder.Build(out setupField, out navHost, out contentHost);
+            VisualElement root = InventoryEditorWindowBuilder.Build(
+                out setupField,
+                out databaseSetupField,
+                out navHost,
+                out contentHost);
             rootVisualElement.Add(root);
 
             setupField.objectType = typeof(InventorySetupSO);
@@ -113,11 +148,22 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             setupField.RegisterValueChangedCallback(evt =>
             {
                 context.SetSetup(evt.newValue as InventorySetupSO);
+                SyncToolbarFields();
+                RefreshActivePanel();
+            });
+
+            databaseSetupField.objectType = typeof(InventoryDatabaseSetupSO);
+            databaseSetupField.allowSceneObjects = false;
+            databaseSetupField.RegisterValueChangedCallback(evt =>
+            {
+                context.AssignDatabaseSetup(evt.newValue as InventoryDatabaseSetupSO);
+                SyncToolbarFields();
                 RefreshActivePanel();
             });
 
             root.Q<Button>("save-btn")?.RegisterCallback<ClickEvent>(_ => context.Save());
             root.Q<Button>("create-setup-btn")?.RegisterCallback<ClickEvent>(_ => CreateSetupAsset());
+            root.Q<Button>("create-database-setup-btn")?.RegisterCallback<ClickEvent>(_ => CreateDatabaseSetupAsset());
             root.Q<Button>("create-all-btn")?.RegisterCallback<ClickEvent>(_ => CreateAll());
             root.Q<Button>("refresh-btn")?.RegisterCallback<ClickEvent>(_ => RefreshActivePanel());
 
@@ -147,15 +193,16 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         private void RestoreSessionState()
         {
-            if (context.Setup == null && !HasStandaloneContext())
+            if (context.Setup == null && context.DatabaseSetup == null && !HasStandaloneContext())
             {
-                if (InventoryDataEditorSession.TryReloadLastSetup(out InventorySetupSO restored))
-                    SetSetup(restored);
+                if (InventoryDataEditorSession.TryReloadLastSetup(out InventorySetupSO restoredSetup))
+                    context.SetSetup(restoredSetup);
+
+                if (InventoryDataEditorSession.TryReloadLastDatabaseSetup(out InventoryDatabaseSetupSO restoredDatabaseSetup))
+                    context.AssignDatabaseSetup(restoredDatabaseSetup);
             }
-            else if (context.Setup != null)
-            {
-                setupField?.SetValueWithoutNotify(context.Setup);
-            }
+
+            SyncToolbarFields();
 
             if (context.PendingTab.HasValue)
                 SelectTab(context.PendingTab.Value);
@@ -173,6 +220,8 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             context.Changed -= RefreshActivePanel;
             if (context.Setup != null)
                 InventoryDataEditorSession.SaveLastSetup(context.Setup);
+            if (context.DatabaseSetup != null)
+                InventoryDataEditorSession.SaveLastDatabaseSetup(context.DatabaseSetup);
         }
 
         private void BuildNavigation()
@@ -229,6 +278,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             if (contentHost == null || activePanel == null)
                 return;
 
+            SyncToolbarFields();
             contentHost.Clear();
             activePanel.Build(contentHost);
             UpdateNavHighlight();
@@ -247,7 +297,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     "SO_InventorySetup",
                     PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey,
                     out string path,
-                    "Item / Recipe / Loot Database 참조를 묶는 설정 에셋입니다."))
+                    "Container Config 배열을 보관하는 설정 에셋입니다."))
             {
                 return;
             }
@@ -257,6 +307,32 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             AssetDatabase.SaveAssets();
             SetSetup(setup);
             EditorGUIUtility.PingObject(setup);
+        }
+
+        private void CreateDatabaseSetupAsset()
+        {
+            string defaultDirectory = context.DatabaseSetup != null
+                ? context.GetSetupAssetDirectory()
+                : context.Setup != null
+                    ? context.GetSetupAssetDirectory()
+                    : EditorPrefs.GetString(PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey, "Assets");
+
+            if (!PJDevEditorAssetCreationUtility.TryPickAssetPath(
+                    "Create Database Setup — InventoryDatabaseSetupSO",
+                    defaultDirectory,
+                    "SO_InventoryDatabaseSetup",
+                    PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey,
+                    out string path,
+                    "전역 Item / Recipe / Loot Database 참조를 묶는 설정 에셋입니다."))
+            {
+                return;
+            }
+
+            var databaseSetup = CreateInstance<InventoryDatabaseSetupSO>();
+            AssetDatabase.CreateAsset(databaseSetup, path);
+            AssetDatabase.SaveAssets();
+            SetDatabaseSetup(databaseSetup);
+            EditorGUIUtility.PingObject(databaseSetup);
         }
 
         private void CreateAll()
@@ -273,7 +349,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                         "SO_InventorySetup",
                         PJDevEditorAssetCreationUtility.InventoryFolderPrefsKey,
                         out string setupPath,
-                        "Item / Recipe / Loot Database 참조를 묶는 설정 에셋입니다."))
+                        "Container Config 배열을 보관하는 설정 에셋입니다."))
                 {
                     return;
                 }
@@ -284,20 +360,27 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                 SetSetup(setup);
             }
 
+            if (context.DatabaseSetup == null)
+            {
+                CreateDatabaseSetupAsset();
+                if (context.DatabaseSetup == null)
+                    return;
+            }
+
             bool needsDatabases =
-                context.Setup.ItemDatabase == null ||
-                context.Setup.RecipeDatabase == null ||
-                context.Setup.LootTableDatabase == null;
+                context.DatabaseSetup.ItemDatabase == null ||
+                context.DatabaseSetup.RecipeDatabase == null ||
+                context.DatabaseSetup.LootTableDatabase == null;
 
             if (!needsDatabases)
             {
-                EditorGUIUtility.PingObject(context.Setup);
+                EditorGUIUtility.PingObject(context.DatabaseSetup);
                 RefreshActivePanel();
                 return;
             }
 
             InventoryEditorAssetActions.CreateAndAssignDatabases(context, promptForLocation: true);
-            EditorGUIUtility.PingObject(context.Setup);
+            EditorGUIUtility.PingObject(context.DatabaseSetup);
             RefreshActivePanel();
         }
     }
@@ -305,6 +388,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
     internal static class InventoryDataEditorSession
     {
         private const string LastSetupGuidKey = "PJDev.InventoryDataEditor.LastSetupGuid";
+        private const string LastDatabaseSetupGuidKey = "PJDev.InventoryDataEditor.LastDatabaseSetupGuid";
 
         public static void SaveLastSetup(InventorySetupSO setup)
         {
@@ -345,6 +429,46 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             setup = LoadLastSetup();
             return setup != null;
         }
+
+        public static void SaveLastDatabaseSetup(InventoryDatabaseSetupSO databaseSetup)
+        {
+            if (databaseSetup == null)
+            {
+                EditorPrefs.DeleteKey(LastDatabaseSetupGuidKey);
+                return;
+            }
+
+            string path = AssetDatabase.GetAssetPath(databaseSetup);
+            if (string.IsNullOrEmpty(path))
+            {
+                EditorPrefs.DeleteKey(LastDatabaseSetupGuidKey);
+                return;
+            }
+
+            EditorPrefs.SetString(LastDatabaseSetupGuidKey, AssetDatabase.AssetPathToGUID(path));
+        }
+
+        public static InventoryDatabaseSetupSO LoadLastDatabaseSetup()
+        {
+            string guid = EditorPrefs.GetString(LastDatabaseSetupGuidKey, string.Empty);
+            if (string.IsNullOrEmpty(guid))
+                return null;
+
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            if (string.IsNullOrEmpty(path))
+            {
+                EditorPrefs.DeleteKey(LastDatabaseSetupGuidKey);
+                return null;
+            }
+
+            return AssetDatabase.LoadAssetAtPath<InventoryDatabaseSetupSO>(path);
+        }
+
+        public static bool TryReloadLastDatabaseSetup(out InventoryDatabaseSetupSO databaseSetup)
+        {
+            databaseSetup = LoadLastDatabaseSetup();
+            return databaseSetup != null;
+        }
     }
 
     internal static class InventoryDataEditorNavigation
@@ -358,6 +482,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             {
                 case InventorySetupSO setup:
                     InventoryDataEditorWindow.Open(setup);
+                    break;
+                case InventoryDatabaseSetupSO databaseSetup:
+                    InventoryDataEditorWindow.Open(databaseSetup);
                     break;
                 case ItemDatabaseSO itemDatabase:
                     InventoryDataEditorWindow.OpenItemDatabase(itemDatabase);

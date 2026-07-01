@@ -64,15 +64,15 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 allowSceneObjects = false
             };
             dbField.style.flexGrow = 1;
-            dbField.SetEnabled(Context.HasSetup);
+            dbField.SetEnabled(Context.DatabaseSetup != null);
             dbField.RegisterValueChangedCallback(evt =>
             {
-                if (!Context.HasSetup)
+                if (Context.DatabaseSetup == null)
                     return;
 
-                Undo.RecordObject(Context.Setup, "Change Item Database");
-                Context.Setup.ItemDatabase = evt.newValue as ItemDatabaseSO;
-                Context.MarkDirty(Context.Setup);
+                Undo.RecordObject(Context.DatabaseSetup, "Change Item Database");
+                Context.DatabaseSetup.ItemDatabase = evt.newValue as ItemDatabaseSO;
+                Context.MarkDirty(Context.DatabaseSetup);
                 selectedIndex = -1;
                 Refresh();
             });
@@ -203,19 +203,19 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
 
         private void CreateItemDatabase()
         {
-            if (!Context.HasSetup)
+            if (Context.DatabaseSetup == null)
                 return;
 
-            Undo.RecordObject(Context.Setup, "Create Item Database");
-            Context.Setup.ItemDatabase = InventoryEditorAssetActions.CreateAsset<ItemDatabaseSO>(
+            Undo.RecordObject(Context.DatabaseSetup, "Create Item Database");
+            Context.DatabaseSetup.ItemDatabase = InventoryEditorAssetActions.CreateAsset<ItemDatabaseSO>(
                 Context,
                 "SO_ItemDatabase",
                 db => db.RebuildCache(),
                 Context.GetSetupAssetDirectory());
-            if (Context.Setup.ItemDatabase == null)
+            if (Context.DatabaseSetup.ItemDatabase == null)
                 return;
 
-            Context.MarkDirty(Context.Setup);
+            Context.MarkDirty(Context.DatabaseSetup);
             Refresh();
         }
 

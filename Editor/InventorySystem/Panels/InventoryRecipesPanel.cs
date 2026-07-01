@@ -66,15 +66,15 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 allowSceneObjects = false
             };
             dbField.style.flexGrow = 1;
-            dbField.SetEnabled(Context.HasSetup);
+            dbField.SetEnabled(Context.DatabaseSetup != null);
             dbField.RegisterValueChangedCallback(evt =>
             {
-                if (!Context.HasSetup)
+                if (Context.DatabaseSetup == null)
                     return;
 
-                Undo.RecordObject(Context.Setup, "Change Recipe Database");
-                Context.Setup.RecipeDatabase = evt.newValue as RecipeDatabaseSO;
-                Context.MarkDirty(Context.Setup);
+                Undo.RecordObject(Context.DatabaseSetup, "Change Recipe Database");
+                Context.DatabaseSetup.RecipeDatabase = evt.newValue as RecipeDatabaseSO;
+                Context.MarkDirty(Context.DatabaseSetup);
                 selectedIndex = -1;
                 Refresh();
             });
@@ -227,19 +227,19 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
 
         private void CreateRecipeDatabase()
         {
-            if (!Context.HasSetup)
+            if (Context.DatabaseSetup == null)
                 return;
 
-            Undo.RecordObject(Context.Setup, "Create Recipe Database");
-            Context.Setup.RecipeDatabase = InventoryEditorAssetActions.CreateAsset<RecipeDatabaseSO>(
+            Undo.RecordObject(Context.DatabaseSetup, "Create Recipe Database");
+            Context.DatabaseSetup.RecipeDatabase = InventoryEditorAssetActions.CreateAsset<RecipeDatabaseSO>(
                 Context,
                 "SO_RecipeDatabase",
                 db => db.RebuildCache(),
                 Context.GetSetupAssetDirectory());
-            if (Context.Setup.RecipeDatabase == null)
+            if (Context.DatabaseSetup.RecipeDatabase == null)
                 return;
 
-            Context.MarkDirty(Context.Setup);
+            Context.MarkDirty(Context.DatabaseSetup);
             Refresh();
         }
 

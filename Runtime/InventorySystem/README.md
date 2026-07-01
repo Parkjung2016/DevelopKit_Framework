@@ -10,8 +10,9 @@
 |------|------|
 | `SO/InventorySystem/Item` | 아이템 정의 |
 | `SO/InventorySystem/ItemDatabase` | 아이템 DB (IItemDatabase) |
+| `SO/InventorySystem/Database Setup` | 전역 Item / Recipe / Loot DB 묶음 |
 | `SO/InventorySystem/Config` | 컨테이너 설정 (슬롯 수, Kind, 규칙) |
-| `SO/InventorySystem/Setup` | DB + 컨테이너 설정 묶음 |
+| `SO/InventorySystem/Setup` | 컨테이너 config 배열 |
 | `SO/InventorySystem/Recipe` | 제작 레시피 |
 | `SO/InventorySystem/LootTable` | 드롭 테이블 |
 
@@ -33,23 +34,28 @@
 
 ### 2. 런타임 초기화
 
-**MonoBehaviour (`InventorySystem`)** — `InventorySetupSO` 하나로 DB·컨테이너·레시피·루트를 묶어서 씁니다.
+**MonoBehaviour (`InventorySystem`)** — 전역 DB + 컨테이너 Setup을 분리합니다.
 
 ```csharp
-// Inspector에 Setup SO 할당 후
-inventorySystem.Init(owner);
+// 부팅 시 전역 DB 등록 (InventorySystem의 Database Setup 필드 또는 직접 호출)
+databaseSetup.RegisterGlobals();  // ItemCatalog / RecipeCatalog / LootTableCatalog
 
-// 또는 코드에서 Setup SO 전달
-inventorySystem.Init(owner, setupSO);
-inventorySystem.Init(owner, setupSO, customRouter);
+// 컨테이너만 InventorySetupSO로 초기화
+inventorySystem.Init(owner, containerSetupSO);
 ```
 
-**순수 C# (테스트·서버·SO 없이)** — `InventorySessionBuilder` + 전역 `ItemCatalog`를 사용합니다.
+`InventorySystem` Inspector에 `Database Setup`을 넣으면 `Init` 시 자동으로 `RegisterGlobals()`가 호출됩니다.
+
+**순수 C# (테스트·서버)** — `InventorySessionBuilder` + 전역 Catalog를 사용합니다.
 
 ```csharp
+databaseSetup.RegisterGlobals();
+// 또는
 ItemCatalog.Set(itemDatabaseSO);
+RecipeCatalog.Set(recipeDatabaseSO);
+LootTableCatalog.Set(lootTableDatabaseSO);
 
-var configs = setupSO.CreateContainerConfigs();
+var configs = containerSetupSO.CreateContainerConfigs();
 var group = InventorySessionBuilder.CreateGroup(configs);
 group.TryAddItem(itemId, count);
 ```
@@ -75,17 +81,18 @@ group.TryGrantLoot(lootTableDefinition);
 ## 아키텍처
 
 ```
-ItemCatalog (전역 IItemCatalog — Setup.Init 시 등록)
+ItemCatalog / RecipeCatalog / LootTableCatalog (전역 — DatabaseSetup.RegisterGlobals)
     ↑ Resolve()
 InventoryGroup / InventoryContainer (순수 C# — InventorySessionBuilder)
     ↑
-InventorySystem (MonoBehaviour — InventorySetupSO만으로 Init)
+InventorySystem (MonoBehaviour — DatabaseSetup + InventorySetupSO)
 ```
 
 | 개념 | 설명 |
 |------|------|
-| `ItemCatalog` | 프로젝트 전역 아이템 DB. `null` DB는 여기로 폴백 |
-| `InventorySetupSO` | DB + 컨테이너 config + 레시피/루트 DB 묶음 (MonoBehaviour Init용) |
+| `ItemCatalog` / `RecipeCatalog` / `LootTableCatalog` | 프로젝트 전역 DB |
+| `InventoryDatabaseSetupSO` | 전역 DB SO 참조 + `RegisterGlobals()` |
+| `InventorySetupSO` | 컨테이너 config 배열 (MonoBehaviour Init용) |
 | `InventoryContainerConfig` | SO 없이 컨테이너 부트스트랩용 struct |
 | `InventorySessionBuilder` | config 배열 → `InventoryGroup` 생성 |
 | `ContainerId` | UI/세이브/크로스 이동용 문자열 ID |

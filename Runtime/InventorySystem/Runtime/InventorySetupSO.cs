@@ -5,13 +5,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
     [CreateAssetMenu(fileName = "SO_InventorySetup", menuName = "PJDev/SO/InventorySystem/Setup")]
     public class InventorySetupSO : ScriptableObject
     {
-        [field: SerializeField] public ItemDatabaseSO ItemDatabase { get; set; }
-        [field: SerializeField] public RecipeDatabaseSO RecipeDatabase { get; set; }
-        [field: SerializeField] public LootTableDatabaseSO LootTableDatabase { get; set; }
-        [field: SerializeField] public InventoryConfigSO[] ContainerConfigs { get; set; } = System.Array.Empty<InventoryConfigSO>();
-
-        public IInventoryDataProvider CreateDataProvider() =>
-            new ScriptableInventoryDataProvider(this);
+        [field: SerializeField] public InventoryConfigSO[] ContainerConfigs { get; set; } =
+            System.Array.Empty<InventoryConfigSO>();
 
         public InventoryContainerDescriptor[] CreateDescriptors()
         {

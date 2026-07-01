@@ -21,6 +21,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
     internal sealed class InventoryEditorContext
     {
         public InventorySetupSO Setup { get; private set; }
+        public InventoryDatabaseSetupSO DatabaseSetup { get; private set; }
         public InventoryEditorTab? PendingTab { get; set; }
 
         public ItemDatabaseSO StandaloneItemDatabase { get; private set; }
@@ -31,9 +32,12 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         public bool HasSetup => Setup != null;
 
-        public ItemDatabaseSO ItemDatabase => StandaloneItemDatabase ?? (Setup != null ? Setup.ItemDatabase : null);
-        public RecipeDatabaseSO RecipeDatabase => StandaloneRecipeDatabase ?? (Setup != null ? Setup.RecipeDatabase : null);
-        public LootTableDatabaseSO LootTableDatabase => StandaloneLootDatabase ?? (Setup != null ? Setup.LootTableDatabase : null);
+        public ItemDatabaseSO ItemDatabase =>
+            StandaloneItemDatabase ?? DatabaseSetup?.ItemDatabase;
+        public RecipeDatabaseSO RecipeDatabase =>
+            StandaloneRecipeDatabase ?? DatabaseSetup?.RecipeDatabase;
+        public LootTableDatabaseSO LootTableDatabase =>
+            StandaloneLootDatabase ?? DatabaseSetup?.LootTableDatabase;
         public InventoryConfigSO[] ContainerConfigs =>
             Setup != null ? Setup.ContainerConfigs : Array.Empty<InventoryConfigSO>();
 
@@ -45,9 +49,23 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             Changed?.Invoke();
         }
 
+        public void AssignDatabaseSetup(InventoryDatabaseSetupSO databaseSetup)
+        {
+            DatabaseSetup = databaseSetup;
+            ClearStandalone();
+            InventoryDataEditorSession.SaveLastDatabaseSetup(databaseSetup);
+            Changed?.Invoke();
+        }
+
+        public void SetDatabaseSetup(InventoryDatabaseSetupSO databaseSetup)
+        {
+            AssignDatabaseSetup(databaseSetup);
+        }
+
         public void SetStandaloneItemDatabase(ItemDatabaseSO database)
         {
             Setup = null;
+            DatabaseSetup = null;
             StandaloneItemDatabase = database;
             StandaloneRecipeDatabase = null;
             StandaloneLootDatabase = null;
@@ -57,6 +75,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         public void SetStandaloneRecipeDatabase(RecipeDatabaseSO database)
         {
             Setup = null;
+            DatabaseSetup = null;
             StandaloneRecipeDatabase = database;
             StandaloneItemDatabase = InventoryEditorAssetLookup.FindItemDatabaseNear(database);
             StandaloneLootDatabase = null;
@@ -66,6 +85,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         public void SetStandaloneLootDatabase(LootTableDatabaseSO database)
         {
             Setup = null;
+            DatabaseSetup = null;
             StandaloneLootDatabase = database;
             StandaloneItemDatabase = InventoryEditorAssetLookup.FindItemDatabaseNear(database);
             StandaloneRecipeDatabase = null;
@@ -84,6 +104,9 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             if (Setup != null)
                 EditorUtility.SetDirty(Setup);
 
+            if (DatabaseSetup != null)
+                EditorUtility.SetDirty(DatabaseSetup);
+
             if (target != null)
                 EditorUtility.SetDirty(target);
 
@@ -95,13 +118,16 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             if (Setup != null)
                 EditorUtility.SetDirty(Setup);
 
+            if (DatabaseSetup != null)
+                EditorUtility.SetDirty(DatabaseSetup);
+
             AssetDatabase.SaveAssets();
         }
 
         public string GetAssetDirectory() => GetSetupAssetDirectory();
 
         public string GetSetupAssetDirectory() =>
-            GetDirectoryForObject(Setup) ?? "Assets";
+            GetDirectoryForObject(Setup) ?? GetDirectoryForObject(DatabaseSetup) ?? "Assets";
 
         public string GetItemDatabaseDirectory() =>
             GetDirectoryForObject(ItemDatabase) ?? GetSetupAssetDirectory();
@@ -268,15 +294,15 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             InventoryEditorContext context,
             bool promptForLocation = true)
         {
-            if (context.Setup == null)
+            if (context.DatabaseSetup == null)
                 return;
 
             string defaultDirectory = context.GetSetupAssetDirectory();
-            Undo.RecordObject(context.Setup, "Create Inventory Databases");
+            Undo.RecordObject(context.DatabaseSetup, "Create Inventory Databases");
 
-            if (context.Setup.ItemDatabase == null)
+            if (context.DatabaseSetup.ItemDatabase == null)
             {
-                context.Setup.ItemDatabase = CreateAsset<ItemDatabaseSO>(
+                context.DatabaseSetup.ItemDatabase = CreateAsset<ItemDatabaseSO>(
                     context,
                     "SO_ItemDatabase",
                     db => db.RebuildCache(),
@@ -284,13 +310,13 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     promptForLocation,
                     "Create Item Database — ItemDatabaseSO",
                     "아이템 정의(ItemDefinitionSO) 목록을 보관합니다.");
-                if (promptForLocation && context.Setup.ItemDatabase == null)
+                if (promptForLocation && context.DatabaseSetup.ItemDatabase == null)
                     return;
             }
 
-            if (context.Setup.RecipeDatabase == null)
+            if (context.DatabaseSetup.RecipeDatabase == null)
             {
-                context.Setup.RecipeDatabase = CreateAsset<RecipeDatabaseSO>(
+                context.DatabaseSetup.RecipeDatabase = CreateAsset<RecipeDatabaseSO>(
                     context,
                     "SO_RecipeDatabase",
                     db => db.RebuildCache(),
@@ -298,13 +324,13 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     promptForLocation,
                     "Create Recipe Database — RecipeDatabaseSO",
                     "제작 레시피(RecipeSO) 목록을 보관합니다.");
-                if (promptForLocation && context.Setup.RecipeDatabase == null)
+                if (promptForLocation && context.DatabaseSetup.RecipeDatabase == null)
                     return;
             }
 
-            if (context.Setup.LootTableDatabase == null)
+            if (context.DatabaseSetup.LootTableDatabase == null)
             {
-                context.Setup.LootTableDatabase = CreateAsset<LootTableDatabaseSO>(
+                context.DatabaseSetup.LootTableDatabase = CreateAsset<LootTableDatabaseSO>(
                     context,
                     "SO_LootTableDatabase",
                     db => db.RebuildCache(),
@@ -312,11 +338,11 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
                     promptForLocation,
                     "Create Loot Table Database — LootTableDatabaseSO",
                     "드롭 테이블(LootTableSO) 목록을 보관합니다.");
-                if (promptForLocation && context.Setup.LootTableDatabase == null)
+                if (promptForLocation && context.DatabaseSetup.LootTableDatabase == null)
                     return;
             }
 
-            context.MarkDirty(context.Setup);
+            context.MarkDirty(context.DatabaseSetup);
         }
 
         public static bool MoveArrayElement<T>(T[] source, int index, int delta, Action<T[]> apply)

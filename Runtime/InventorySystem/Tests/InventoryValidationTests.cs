@@ -12,6 +12,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         public void SetUp()
         {
             ItemCatalog.Clear();
+            RecipeCatalog.Clear();
+            LootTableCatalog.Clear();
             container = InventoryTestFixtures.CreateMainContainer();
         }
 
@@ -21,6 +23,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             container?.Dispose();
             container = null;
             ItemCatalog.Clear();
+            RecipeCatalog.Clear();
+            LootTableCatalog.Clear();
         }
 
         [Test]

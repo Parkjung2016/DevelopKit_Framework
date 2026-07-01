@@ -16,59 +16,76 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
         {
             Root.Clear();
 
-            if (Context.Setup == null)
+            if (Context.Setup == null && Context.DatabaseSetup == null)
             {
-                Root.Add(CreateMissingSetupMessage("Overview에서 Setup과 DB를 한 번에 관리합니다."));
+                Root.Add(CreateMissingSetupMessage(
+                    "상단 툴바에서 Container Setup과 Database Setup을 각각 선택하거나 생성하세요."));
+                return;
+            }
+
+            if (Context.Setup != null)
+            {
+                Root.Add(InventoryInspectorUI.BuildHeader(
+                    Context.Setup.name,
+                    () => InventoryDataEditorWindow.Open(Context.Setup)));
+
+                SerializedObject setupObject = new SerializedObject(Context.Setup);
+                Root.Add(InventoryInspectorUI.BuildPropertyInspector(
+                    setupObject,
+                    () => Context.MarkDirty(Context.Setup),
+                    "ContainerConfigs"));
+
+                Root.Add(CreateStatRow("Container Configs", Context.ContainerConfigs?.Length ?? 0));
+            }
+
+            if (Context.DatabaseSetup == null)
+            {
+                Root.Add(new HelpBox(
+                    "전역 Item / Recipe / Loot DB는 상단 툴바의 Database Setup에서 선택하세요.",
+                    HelpBoxMessageType.Info));
                 return;
             }
 
             Root.Add(InventoryInspectorUI.BuildHeader(
-                Context.Setup.name,
-                () => InventoryDataEditorWindow.Open(Context.Setup)));
-
-            SerializedObject setupObject = new SerializedObject(Context.Setup);
-            Root.Add(InventoryInspectorUI.BuildPropertyInspector(
-                setupObject,
-                () => Context.MarkDirty(Context.Setup),
-                "ContainerConfigs"));
+                Context.DatabaseSetup.name,
+                () => InventoryDataEditorWindow.Open(Context.DatabaseSetup)));
 
             Root.Add(CreateDatabaseRow<ItemDatabaseSO>(
                 "Item Database",
                 Context.ItemDatabase,
                 value =>
                 {
-                    Undo.RecordObject(Context.Setup, "Change Item Database");
-                    Context.Setup.ItemDatabase = value;
-                    Context.MarkDirty(Context.Setup);
+                    Undo.RecordObject(Context.DatabaseSetup, "Change Item Database");
+                    Context.DatabaseSetup.ItemDatabase = value;
+                    Context.MarkDirty(Context.DatabaseSetup);
                     Refresh();
                 },
-                () => CreateDatabase<ItemDatabaseSO>("SO_ItemDatabase", db => db.RebuildCache(), db => Context.Setup.ItemDatabase = db)));
+                () => CreateDatabase<ItemDatabaseSO>("SO_ItemDatabase", db => db.RebuildCache(), db => Context.DatabaseSetup.ItemDatabase = db)));
 
             Root.Add(CreateDatabaseRow<RecipeDatabaseSO>(
                 "Recipe Database",
                 Context.RecipeDatabase,
                 value =>
                 {
-                    Undo.RecordObject(Context.Setup, "Change Recipe Database");
-                    Context.Setup.RecipeDatabase = value;
-                    Context.MarkDirty(Context.Setup);
+                    Undo.RecordObject(Context.DatabaseSetup, "Change Recipe Database");
+                    Context.DatabaseSetup.RecipeDatabase = value;
+                    Context.MarkDirty(Context.DatabaseSetup);
                     Refresh();
                 },
-                () => CreateDatabase<RecipeDatabaseSO>("SO_RecipeDatabase", db => db.RebuildCache(), db => Context.Setup.RecipeDatabase = db)));
+                () => CreateDatabase<RecipeDatabaseSO>("SO_RecipeDatabase", db => db.RebuildCache(), db => Context.DatabaseSetup.RecipeDatabase = db)));
 
             Root.Add(CreateDatabaseRow<LootTableDatabaseSO>(
                 "Loot Table Database",
                 Context.LootTableDatabase,
                 value =>
                 {
-                    Undo.RecordObject(Context.Setup, "Change Loot Table Database");
-                    Context.Setup.LootTableDatabase = value;
-                    Context.MarkDirty(Context.Setup);
+                    Undo.RecordObject(Context.DatabaseSetup, "Change Loot Table Database");
+                    Context.DatabaseSetup.LootTableDatabase = value;
+                    Context.MarkDirty(Context.DatabaseSetup);
                     Refresh();
                 },
-                () => CreateDatabase<LootTableDatabaseSO>("SO_LootTableDatabase", db => db.RebuildCache(), db => Context.Setup.LootTableDatabase = db)));
+                () => CreateDatabase<LootTableDatabaseSO>("SO_LootTableDatabase", db => db.RebuildCache(), db => Context.DatabaseSetup.LootTableDatabase = db)));
 
-            Root.Add(CreateStatRow("Container Configs", Context.ContainerConfigs?.Length ?? 0));
             Root.Add(CreateStatRow("Items", Context.ItemDatabase?.Items?.Length ?? 0));
             Root.Add(CreateStatRow("Recipes", Context.RecipeDatabase?.Recipes?.Length ?? 0));
             Root.Add(CreateStatRow("Loot Tables", Context.LootTableDatabase?.Tables?.Length ?? 0));
@@ -89,13 +106,16 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 Context.ItemDatabase?.RebuildCache();
                 Context.RecipeDatabase?.RebuildCache();
                 Context.LootTableDatabase?.RebuildCache();
-                Context.MarkDirty(Context.Setup);
+                Context.MarkDirty(Context.DatabaseSetup);
                 Refresh();
             }));
 
-            var deleteSetup = InventoryEditorUIFactory.CreateToolbarButton("Delete Setup Asset", DeleteSetupAsset);
-            deleteSetup.AddToClassList("inv-btn-danger");
-            actions.Add(deleteSetup);
+            if (Context.Setup != null)
+            {
+                var deleteSetup = InventoryEditorUIFactory.CreateToolbarButton("Delete Setup Asset", DeleteSetupAsset);
+                deleteSetup.AddToClassList("inv-btn-danger");
+                actions.Add(deleteSetup);
+            }
 
             Root.Add(actions);
         }
@@ -103,7 +123,10 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
         private void CreateDatabase<T>(string prefix, System.Action<T> rebuild, System.Action<T> assign)
             where T : ScriptableObject
         {
-            Undo.RecordObject(Context.Setup, $"Create {typeof(T).Name}");
+            if (Context.DatabaseSetup == null)
+                return;
+
+            Undo.RecordObject(Context.DatabaseSetup, $"Create {typeof(T).Name}");
             T database = InventoryEditorAssetActions.CreateAsset<T>(
                 Context,
                 prefix,
@@ -113,7 +136,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels
                 return;
 
             assign(database);
-            Context.MarkDirty(Context.Setup);
+            Context.MarkDirty(Context.DatabaseSetup);
             Refresh();
             EditorGUIUtility.PingObject(database);
         }

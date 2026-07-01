@@ -7,6 +7,25 @@ using UnityEngine.UIElements;
 
 namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 {
+    [CustomEditor(typeof(InventoryDatabaseSetupSO))]
+    public sealed class InventoryDatabaseSetupSOEditor : Editor
+    {
+        public override VisualElement CreateInspectorGUI()
+        {
+            var root = new VisualElement();
+            var setup = (InventoryDatabaseSetupSO)target;
+
+            root.Add(InventoryInspectorUI.BuildHeader(
+                "Inventory Database Setup",
+                () => InventoryDataEditorWindow.Open(setup)));
+
+            root.Add(InventoryInspectorUI.BuildFullInspector(serializedObject));
+            root.Add(InventoryEditorUIFactory.CreateToolbarButton("Open Full Editor", () => InventoryDataEditorWindow.Open(setup)));
+            root.Add(InventoryEditorUIFactory.CreateToolbarButton("Register Globals (Play Mode)", () => setup.RegisterGlobals()));
+            return root;
+        }
+    }
+
     [CustomEditor(typeof(InventorySetupSO))]
     public sealed class InventorySetupSOEditor : Editor
     {

@@ -11,13 +11,13 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         private readonly List<InventoryContainer> containers = new();
         private readonly IItemDatabase itemDatabaseOverride;
         private IItemContainerRouter router;
-        private IRecipeDatabase recipeDatabase = NullRecipeDatabase.Instance;
-        private ILootTableDatabase lootTableDatabase = NullLootTableDatabase.Instance;
+        private IRecipeDatabase recipeDatabaseOverride;
+        private ILootTableDatabase lootTableDatabaseOverride;
 
         public IReadOnlyList<InventoryContainer> Containers => containers;
         public IItemDatabase ItemDatabase => ItemCatalog.Resolve(itemDatabaseOverride);
-        public IRecipeDatabase RecipeDatabase => recipeDatabase;
-        public ILootTableDatabase LootTableDatabase => lootTableDatabase;
+        public IRecipeDatabase RecipeDatabase => RecipeCatalog.Resolve(recipeDatabaseOverride);
+        public ILootTableDatabase LootTableDatabase => LootTableCatalog.Resolve(lootTableDatabaseOverride);
 
         public InventoryGroup(IItemDatabase itemDatabase = null, IItemContainerRouter router = null)
         {
@@ -36,8 +36,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             IRecipeDatabase recipes = null,
             ILootTableDatabase lootTables = null)
         {
-            recipeDatabase = recipes ?? NullRecipeDatabase.Instance;
-            lootTableDatabase = lootTables ?? NullLootTableDatabase.Instance;
+            recipeDatabaseOverride = recipes;
+            lootTableDatabaseOverride = lootTables;
         }
 
         public void SetRouter(IItemContainerRouter router) =>
@@ -318,7 +318,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         public bool CanCraft(string recipeId, out InventoryFailReason reason)
         {
-            if (!recipeDatabase.TryGetRecipe(recipeId, out RecipeDefinition recipe))
+            if (!RecipeDatabase.TryGetRecipe(recipeId, out RecipeDefinition recipe))
                 return FailCraftLookup(out reason, InventoryFailReason.RecipeNotFound);
 
             return CanCraft(recipe.Costs, recipe.Rewards, out reason);
@@ -329,7 +329,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         public InventoryChangeResult TryCraft(string recipeId)
         {
-            if (!recipeDatabase.TryGetRecipe(recipeId, out RecipeDefinition recipe))
+            if (!RecipeDatabase.TryGetRecipe(recipeId, out RecipeDefinition recipe))
                 return InventoryChangeResult.Fail(InventoryChangeType.Craft, InventoryFailReason.RecipeNotFound);
 
             return TryCraft(recipe);
@@ -340,7 +340,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         public InventoryChangeResult TryGrantLoot(string tableId, System.Random random = null)
         {
-            if (!lootTableDatabase.TryGetTable(tableId, out LootTableDefinition table))
+            if (!LootTableDatabase.TryGetTable(tableId, out LootTableDefinition table))
                 return InventoryChangeResult.Fail(InventoryChangeType.Add, InventoryFailReason.LootTableNotFound);
 
             return LootRoller.TryGrantLoot(this, table, random);

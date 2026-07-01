@@ -7,10 +7,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
     /// </summary>
     public static class InventoryAuthoringExtensions
     {
-        public static void RegisterGlobalItemCatalog(this InventorySetupSO setup)
+        public static void RegisterGlobals(this InventoryDatabaseSetupSO setup)
         {
-            if (setup?.ItemDatabase != null)
-                ItemCatalog.Set(setup.ItemDatabase);
+            setup?.RegisterGlobals();
         }
 
         public static InventoryContainerConfig[] CreateContainerConfigs(this InventorySetupSO setup)

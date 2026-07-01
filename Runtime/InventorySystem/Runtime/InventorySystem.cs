@@ -19,12 +19,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
 
         [SerializeField] private InventorySetupSO setup;
+        [SerializeField] private InventoryDatabaseSetupSO databaseSetup;
 
         private InventoryGroup group;
         private InventoryContainer primaryContainer;
         private IInventoryOwner owner;
 
         public InventorySetupSO Setup => setup;
+        public InventoryDatabaseSetupSO DatabaseSetup => databaseSetup;
         public InventoryGroup Group => group;
 
         public string ContainerId => Primary.ContainerId;
@@ -58,9 +60,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             setup = resolvedSetup;
             this.owner = owner;
 
-            resolvedSetup.RegisterGlobalItemCatalog();
-            IInventoryDataProvider dataProvider = resolvedSetup.CreateDataProvider();
-            RebuildGroup(resolvedSetup.CreateContainerConfigs(), router, dataProvider);
+            databaseSetup?.RegisterGlobals();
+            RebuildGroup(resolvedSetup.CreateContainerConfigs(), router);
         }
 
         public bool TryGetContainer(string containerId, out IInventoryContainer container)
@@ -303,14 +304,10 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         private void RebuildGroup(
             IReadOnlyList<InventoryContainerConfig> containerConfigs,
-            IItemContainerRouter router,
-            IInventoryDataProvider dataProvider = null)
+            IItemContainerRouter router)
         {
             DisposeGroup();
             group = new InventoryGroup(itemDatabase: null, router);
-
-            if (dataProvider != null)
-                group.SetDataServices(dataProvider.RecipeDatabase, dataProvider.LootTableDatabase);
 
             IReadOnlyList<InventoryContainerConfig> configs = containerConfigs;
             if (configs == null || configs.Count == 0)
