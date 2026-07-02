@@ -93,14 +93,23 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             return new InventoryContainerDescriptor(ContainerId, Kind, slotRule);
         }
 
+        /// <summary>
+        /// 장비 컨테이너를 생성합니다. <paramref name="itemDatabase"/>를 생략하면
+        /// <see cref="ItemCatalog"/>가 등록된 경우 현재 카탈로그를 컨테이너에 고정합니다.
+        /// </summary>
         public InventoryContainer CreateContainer(IEquipmentItemProfileSource profileSource = null) =>
             CreateContainer(null, profileSource);
 
+        /// <summary>
+        /// 장비 컨테이너를 생성합니다. <paramref name="itemDatabase"/>가 null이고 전역 <see cref="ItemCatalog"/>가 준비되면
+        /// <see cref="ItemCatalog.Current"/>를 컨테이너에 고정합니다. 미등록 시 null을 넘겨 런타임 resolve에 맡깁니다.
+        /// </summary>
         public InventoryContainer CreateContainer(IItemDatabase itemDatabase, IEquipmentItemProfileSource profileSource = null)
         {
             Normalize();
-            IEquipmentItemProfileSource resolvedProfile = profileSource ?? CreateProfileSource(itemDatabase);
-            return new InventoryContainer(SlotCount, itemDatabase, CreateDescriptor(resolvedProfile));
+            IItemDatabase resolvedDatabase = ItemCatalog.Resolve(itemDatabase);
+            IEquipmentItemProfileSource resolvedProfile = profileSource ?? CreateProfileSource(resolvedDatabase);
+            return new InventoryContainer(SlotCount, resolvedDatabase, CreateDescriptor(resolvedProfile));
         }
 
         private static string[] DefaultSlotCategories() =>
