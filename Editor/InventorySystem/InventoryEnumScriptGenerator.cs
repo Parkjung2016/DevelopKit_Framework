@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
+using PJDev.DevelopKit.Editors;
 using UnityEditor;
 
 namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
@@ -32,7 +33,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             "void", "volatile", "while"
         };
 
-        [MenuItem("PJDev/Inventory/Generate Enums")]
+        [MenuItem("PJDev/Inventory/Generate Enums", priority = PJDevMenuPriority.Inventory + 1)]
         public static void GenerateFromMenu()
         {
             if (GenerateFromSettings())

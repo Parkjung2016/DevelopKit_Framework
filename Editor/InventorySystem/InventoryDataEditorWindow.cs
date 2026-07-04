@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using PJDev.DevelopKit.Editors;
 using PJDev.DevelopKit.Framework.Editors;
 using PJDev.DevelopKit.Framework.Editors.InventorySystem.Panels;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
@@ -19,7 +20,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
         private ObjectField databaseSetupField;
         private InventoryEditorPanelBase activePanel;
 
-        [MenuItem("PJDev/Inventory/Data Editor")]
+        [MenuItem("PJDev/Inventory/Data Editor", priority = PJDevMenuPriority.Inventory)]
         public static void Open()
         {
             var window = GetWindow<InventoryDataEditorWindow>();

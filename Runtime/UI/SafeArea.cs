@@ -22,7 +22,7 @@ namespace PJDev.UI
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(RectTransform))]
-    [AddComponentMenu("UI/Safe Area")]
+    [AddComponentMenu("PJDev/Safe Area")]
     [ExecuteAlways]
     public sealed class SafeArea : MonoBehaviour
     {

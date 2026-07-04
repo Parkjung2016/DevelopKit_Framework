@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
+using PJDev.DevelopKit.Editors;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 using UnityEditor;
 
@@ -32,7 +33,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
         };
 
         /// <summary>메뉴에서 태그 스크립트 생성을 실행합니다.</summary>
-        [MenuItem("PJDev/Gameplay Tags/Generate Tag Scripts")]
+        [MenuItem("PJDev/Gameplay Tags/Generate Tag Scripts", priority = PJDevMenuPriority.GameplayTags + 1)]
         public static void GenerateFromMenu()
         {
             if (Generate())

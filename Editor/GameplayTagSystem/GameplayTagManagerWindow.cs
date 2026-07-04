@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using PJDev.DevelopKit.Editors;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -22,7 +23,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
         private List<string> lastDisplayedTagNames = new();
 
         /// <summary>태그 관리 에디터 창을 엽니다.</summary>
-        [MenuItem("PJDev/Gameplay Tags/Tag Manager")]
+        [MenuItem("PJDev/Gameplay Tags/Tag Manager", priority = PJDevMenuPriority.GameplayTags)]
         public static void Open()
         {
             var window = GetWindow<GameplayTagManagerWindow>();

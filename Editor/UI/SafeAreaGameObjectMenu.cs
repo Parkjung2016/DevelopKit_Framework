@@ -6,7 +6,7 @@ namespace PJDev.UI.Editor
 {
     internal static class SafeAreaGameObjectMenu
     {
-        private const string MenuPath = "GameObject/UI/Safe Area";
+        private const string MenuPath = "GameObject/PJDev/Safe Area";
         private const int MenuPriority = 2030;
 
         [MenuItem(MenuPath, false, MenuPriority)]
