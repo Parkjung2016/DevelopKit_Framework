@@ -97,7 +97,8 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             if (entry.UseAddressable)
             {
                 GameObject instanceObject = await AddressableManager.Instance
-                    .InstantiateAsync(entry.AddressableKey, parent, cancellationToken);
+                    .InstantiateAsync(entry.AddressableKey, parent)
+                    .WithCancellation(cancellationToken);
 
                 return RegisterAddressableInstance(
                     instanceObject, entry, instancesById, duplicatePoolsByViewId, trackSingleton);

@@ -25,8 +25,10 @@ InventorySystem 위에 슬롯 카테고리(무기/투구/갑옷 등)와 장착 A
         ↑
   EquipmentVisualController
         ├─ slotSocketBindings (EquipSlotIndex → SocketKey)
-        ├─ IEquipmentVisualDataSource (DT_: ItemId → ModelKey)
-        └─ IEquipmentVisualSpawner
+        ├─ IEquipmentVisualResolver (ItemId → ModelKey)
+        └─ IEquipmentVisualSpawner (ModelKey → GameObject)
+              ↓
+        ObjectSocket.ChangeItem(ISocketItem)
 
 장착 슬롯 0 → socket_l   (왼손 무기)
 장착 슬롯 1 → socket_r   (오른손 방패/무기)
@@ -36,7 +38,8 @@ InventorySystem 위에 슬롯 카테고리(무기/투구/갑옷 등)와 장착 A
 |------|------|
 | `EquipmentVisualRecord` | 테이블 1행 (`ModelKey`만) |
 | `EquipmentVisualSlotSocketBinding` | `EquipSlotIndex → SocketKey` |
-| `EquipmentVisualController` | 슬롯 인덱스로 소켓 결정 후 스폰 |
+| `EquipmentVisualController` | Resolver → Spawner → `ObjectSocket.ChangeItem` |
+| `GameObjectSocketItem` | 스폰된 `GameObject`를 `ISocketItem`으로 래핑 |
 | `ObjectEquipmentVisualHost` | Inspector에서 슬롯↔소켓 매핑 |
 
 **Left/Right 예:** 쉴드는 `Weapon`/`OffHand` 카테고리로 슬롯 0·1 모두 허용 → **어느 슬롯에 장착했는지**로 소켓이 결정됩니다. 아이템마다 SocketKey 불필요.

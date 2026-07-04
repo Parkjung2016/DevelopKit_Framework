@@ -6,14 +6,33 @@ namespace PJDev.DevelopKit.Framework.SocketSystem.Runtime
     {
         private ISocketItem item;
 
-        public void ChangeItem(ISocketItem item, Vector3 position, Quaternion rotation)
+        public bool HasItem => item != null;
+
+        public void ChangeItem(ISocketItem item, Vector3 localPosition, Quaternion localRotation)
         {
+            ChangeItem(item, localPosition, localRotation, Vector3.one);
+        }
+
+        public void ChangeItem(
+            ISocketItem item,
+            Vector3 localPosition,
+            Quaternion localRotation,
+            Vector3 localScale)
+        {
+            if (item == null || item.SocketTransform == null)
+            {
+                ClearItem();
+                return;
+            }
+
             item.SocketTransform.SetParent(transform);
-            item.SocketTransform.SetLocalPositionAndRotation(position, rotation);
-            item.SocketTransform.localScale = Vector3.one;
+            item.SocketTransform.SetLocalPositionAndRotation(localPosition, localRotation);
+            item.SocketTransform.localScale = localScale == default ? Vector3.one : localScale;
 
             this.item = item;
         }
+
+        public void ClearItem() => item = null;
 
         public bool TryGetItem<T>(out T result) where T : class, ISocketItem
         {
@@ -24,7 +43,7 @@ namespace PJDev.DevelopKit.Framework.SocketSystem.Runtime
             }
 
             result = item as T;
-            return true;
+            return result != null;
         }
     }
 }

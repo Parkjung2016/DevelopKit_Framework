@@ -1,4 +1,4 @@
-using UnityEngine;
+using PJDev.DevelopKit.Framework.SocketSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
@@ -8,18 +8,18 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         public EquipmentVisualSpawnRequest(
             int equipSlotIndex,
             string slotCategory,
-            Transform parent,
+            ObjectSocket socket,
             in EquipmentVisualDefinition definition)
         {
             EquipSlotIndex = equipSlotIndex;
             SlotCategory = slotCategory;
-            Parent = parent;
+            Socket = socket;
             Definition = definition;
         }
 
         public int EquipSlotIndex { get; }
         public string SlotCategory { get; }
-        public Transform Parent { get; }
+        public ObjectSocket Socket { get; }
         public EquipmentVisualDefinition Definition { get; }
     }
 }

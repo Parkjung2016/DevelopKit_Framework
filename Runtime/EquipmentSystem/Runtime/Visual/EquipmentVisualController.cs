@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
-    /// <summary>슬롯별 장비 비주얼을 <see cref="ObjectSocketSystem"/>에 생성·추적·해제합니다.</summary>
+    /// <summary>슬롯별 장비 비주얼을 <see cref="ObjectSocket.ChangeItem"/>으로 생성·추적·해제합니다.</summary>
     public sealed class EquipmentVisualController : IDisposable
     {
         private readonly ObjectSocketSystem socketSystem;
@@ -59,13 +59,14 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             if (!TryGetSocketKey(equipSlotIndex, out string socketKey))
                 return;
 
-            if (!TryGetAttachPoint(socketKey, out Transform attachPoint))
+            if (!socketSystem.TryGetSocket(socketKey, out ObjectSocket socket) || socket == null)
                 return;
 
             SlotVisualState state = GetOrCreateSlotState(equipSlotIndex);
             int spawnGeneration = ++state.SpawnGeneration;
-            var request = new EquipmentVisualSpawnRequest(equipSlotIndex, slotCategory, attachPoint, visual);
+            state.Socket = socket;
 
+            var request = new EquipmentVisualSpawnRequest(equipSlotIndex, slotCategory, socket, visual);
             spawner.Spawn(request, instance => OnSlotVisualSpawnCompleted(state, spawnGeneration, visual, instance));
         }
 
@@ -74,7 +75,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         public void ClearAll()
         {
             foreach (SlotVisualState state in slotStates.Values)
-                ReleaseInstance(state);
+                ReleaseSlotVisual(state);
 
             slotStates.Clear();
         }
@@ -115,10 +116,16 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
                 return;
             }
 
-            if (instance == null)
+            if (instance == null || state.Socket == null)
                 return;
 
-            ApplyLocalPose(instance.transform, visual);
+            var socketItem = new GameObjectSocketItem(instance);
+            state.Socket.ChangeItem(
+                socketItem,
+                visual.LocalPosition,
+                Quaternion.Euler(visual.LocalEulerAngles),
+                visual.LocalScale == default ? Vector3.one : visual.LocalScale);
+
             state.Instance = instance;
         }
 
@@ -128,28 +135,19 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
                 return;
 
             state.SpawnGeneration++;
-            ReleaseInstance(state);
+            ReleaseSlotVisual(state);
         }
 
-        private static void ApplyLocalPose(Transform instanceTransform, in EquipmentVisualDefinition visual)
+        private void ReleaseSlotVisual(SlotVisualState state)
         {
-            instanceTransform.localPosition = visual.LocalPosition;
-            instanceTransform.localEulerAngles = visual.LocalEulerAngles;
-            instanceTransform.localScale = visual.LocalScale == default ? Vector3.one : visual.LocalScale;
-        }
+            if (state.Instance != null)
+            {
+                spawner.Release(state.Instance);
+                state.Instance = null;
+            }
 
-        private bool TryGetAttachPoint(string socketKey, out Transform attachPoint)
-        {
-            attachPoint = null;
-
-            if (socketSystem == null)
-                return false;
-
-            if (!socketSystem.TryGetSocket(socketKey, out ObjectSocket socket) || socket == null)
-                return false;
-
-            attachPoint = socket.transform;
-            return true;
+            state.Socket?.ClearItem();
+            state.Socket = null;
         }
 
         private void RebuildSlotSocketBindings(EquipmentVisualSlotSocketBinding[] slotSocketBindings)
@@ -192,18 +190,10 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             return state;
         }
 
-        private void ReleaseInstance(SlotVisualState state)
-        {
-            if (state.Instance == null)
-                return;
-
-            spawner.Release(state.Instance);
-            state.Instance = null;
-        }
-
         private sealed class SlotVisualState
         {
             public int SpawnGeneration;
+            public ObjectSocket Socket;
             public GameObject Instance;
         }
     }

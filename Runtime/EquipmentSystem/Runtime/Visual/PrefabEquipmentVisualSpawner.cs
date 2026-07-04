@@ -5,7 +5,7 @@ using Object = UnityEngine.Object;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
-    /// <summary>AssetKey → Prefab 매핑으로 동기 스폰합니다.</summary>
+    /// <summary>AssetKey → Prefab 매핑으로 동기 스폰합니다. 부착은 <see cref="ObjectSocket.ChangeItem"/>에서 처리합니다.</summary>
     public sealed class PrefabEquipmentVisualSpawner : IEquipmentVisualSpawner
     {
         private readonly IReadOnlyDictionary<string, GameObject> prefabsByKey;
@@ -18,7 +18,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         public void Spawn(in EquipmentVisualSpawnRequest request, EquipmentVisualSpawnCompletedHandler OnSpawnCompleted)
         {
             if (prefabsByKey.TryGetValue(request.Definition.AssetKey, out GameObject prefab) && prefab != null)
-                OnSpawnCompleted?.Invoke(Object.Instantiate(prefab, request.Parent));
+                OnSpawnCompleted?.Invoke(Object.Instantiate(prefab));
             else
                 OnSpawnCompleted?.Invoke(null);
         }

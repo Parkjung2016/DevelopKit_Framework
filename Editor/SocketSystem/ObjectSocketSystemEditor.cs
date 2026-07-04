@@ -340,8 +340,10 @@ namespace PJDev.DevelopKit.Framework.Editors.SocketSystem
 
         private static string GetAttachedLabel(ObjectSocket socket)
         {
-            int childCount = socket.transform.childCount;
-            return childCount == 0 ? "—" : $"{childCount} child";
+            if (socket.HasItem && socket.TryGetItem<GameObjectSocketItem>(out GameObjectSocketItem socketItem))
+                return socketItem.GameObject != null ? socketItem.GameObject.name : "item";
+
+            return "—";
         }
 
         private static bool IsSocketSelected(ObjectSocket socket)
