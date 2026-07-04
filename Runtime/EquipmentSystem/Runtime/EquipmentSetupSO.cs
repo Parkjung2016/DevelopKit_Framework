@@ -112,6 +112,20 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             return new InventoryContainer(SlotCount, resolvedDatabase, CreateDescriptor(resolvedProfile));
         }
 
+        public bool TryGetSlotCategory(int equipSlotIndex, out string slotCategory)
+        {
+            Normalize();
+
+            if (equipSlotIndex >= 0 && equipSlotIndex < SlotCategories.Length)
+            {
+                slotCategory = SlotCategories[equipSlotIndex];
+                return true;
+            }
+
+            slotCategory = EquipmentSlotCategories.Any;
+            return false;
+        }
+
         private static string[] DefaultSlotCategories() =>
             new[]
             {

@@ -119,6 +119,25 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Tests
             Assert.AreNotEqual(equipment.GetSlot(0).Stack.InstanceId, equipment.GetSlot(5).Stack.InstanceId);
         }
 
+        [Test]
+        public void CompositeEffectApplier_ForwardsToAllAppliers()
+        {
+            var applierA = new RecordingEffectApplier();
+            var applierB = new RecordingEffectApplier();
+            var composite = new CompositeEquipmentEffectApplier(applierA, applierB);
+
+            group.ItemDatabase.TryGetDefinition(EquipmentTestValues.WeaponItemId, out ItemDefinition definition);
+            var stack = new ItemStack(EquipmentTestValues.WeaponItemId, 1);
+
+            composite.OnEquipped(0, stack, definition);
+            composite.OnUnequipped(0, stack, definition);
+
+            Assert.AreEqual(1, applierA.EquipCount);
+            Assert.AreEqual(1, applierB.EquipCount);
+            Assert.AreEqual(1, applierA.UnequipCount);
+            Assert.AreEqual(1, applierB.UnequipCount);
+        }
+
         private sealed class RecordingEffectApplier : IEquipmentEffectApplier
         {
             public int EquipCount { get; private set; }
