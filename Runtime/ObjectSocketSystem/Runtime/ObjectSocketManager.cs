@@ -6,27 +6,37 @@ namespace PJDev.DevelopKit.Framework.ObjectSocketSystem.Runtime
     [DefaultExecutionOrder(-10000)]
     public class ObjectSocketManager : MonoBehaviour
     {
-        private readonly Dictionary<string, ObjectSocket> _sockets = new();
+        private readonly Dictionary<string, ObjectSocket> sockets = new();
 
-        private void Awake()
-        {
-            InitializeSocketCache();
-        }
+        private void Awake() => RebuildSocketCache();
 
-        private void InitializeSocketCache()
+        public void RebuildSocketCache()
         {
-            _sockets.Clear();
-            ObjectSocket[] characterSockets = GetComponentsInChildren<ObjectSocket>();
+            sockets.Clear();
+            ObjectSocket[] characterSockets = GetComponentsInChildren<ObjectSocket>(true);
+
             for (int i = 0; i < characterSockets.Length; i++)
             {
                 ObjectSocket socket = characterSockets[i];
-                if (!_sockets.TryAdd(socket.name.Replace("Socket_", ""), socket))
-                {
+                string socketKey = socket.name;
+
+                if (string.IsNullOrEmpty(socketKey))
+                    continue;
+
+                if (!sockets.TryAdd(socketKey, socket))
                     Debug.LogWarning($"{socket.name} is already registered!");
-                }
             }
         }
 
-        public ObjectSocket GetSocket(string socketName) => _sockets[socketName];
+        public bool TryGetSocket(string socketKey, out ObjectSocket socket)
+        {
+            if (string.IsNullOrEmpty(socketKey))
+            {
+                socket = null;
+                return false;
+            }
+
+            return sockets.TryGetValue(socketKey, out socket);
+        }
     }
 }

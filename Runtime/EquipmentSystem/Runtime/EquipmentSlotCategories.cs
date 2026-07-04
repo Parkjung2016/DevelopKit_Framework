@@ -10,5 +10,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         public const string Feet = "Feet";
         public const string Ring = "Ring";
         public const string OffHand = "OffHand";
+        public const string LeftHand = "LeftHand";
+        public const string RightHand = "RightHand";
     }
 }

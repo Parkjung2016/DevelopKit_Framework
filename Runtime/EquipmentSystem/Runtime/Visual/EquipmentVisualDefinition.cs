@@ -12,10 +12,10 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 
         public readonly bool IsEmpty => string.IsNullOrEmpty(AssetKey);
 
-        public static EquipmentVisualDefinition FromAssetKey(string assetKey) =>
+        public static EquipmentVisualDefinition FromModelKey(string modelKey) =>
             new()
             {
-                AssetKey = assetKey,
+                AssetKey = modelKey,
                 LocalScale = Vector3.one
             };
     }

@@ -1,23 +1,30 @@
 using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
+using PJDev.DevelopKit.Framework.ObjectSocketSystem.Runtime;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
-    /// <summary>슬롯별 장비 비주얼 인스턴스를 생성·추적·해제합니다.</summary>
-    public sealed class EquipmentVisualController : MonoBehaviour
+    /// <summary>슬롯별 장비 비주얼을 <see cref="ObjectSocketManager"/>에 생성·추적·해제합니다.</summary>
+    public sealed class EquipmentVisualController : IDisposable
     {
-        [SerializeField] private EquipmentVisualSocketBinding[] socketBindings = Array.Empty<EquipmentVisualSocketBinding>();
-        [SerializeField] private Transform fallbackSocket;
-
+        private readonly ObjectSocketManager socketManager;
+        private readonly Dictionary<int, string> socketKeyByEquipSlot = new();
         private readonly Dictionary<int, SlotVisualState> slotStates = new();
-        private readonly Dictionary<string, Transform> socketsByCategory = new(StringComparer.Ordinal);
 
         private string[] slotCategories = Array.Empty<string>();
         private IEquipmentVisualResolver resolver = NullEquipmentVisualResolver.Instance;
         private IEquipmentVisualSpawner spawner = NullEquipmentVisualSpawner.Instance;
         private bool isInitialized;
+
+        public EquipmentVisualController(
+            ObjectSocketManager socketManager,
+            EquipmentVisualSlotSocketBinding[] slotSocketBindings = null)
+        {
+            this.socketManager = socketManager ?? throw new ArgumentNullException(nameof(socketManager));
+            RebuildSlotSocketBindings(slotSocketBindings);
+        }
 
         public void Initialize(
             EquipmentSetupSO setup,
@@ -31,21 +38,9 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             IEquipmentVisualSpawner spawner) =>
             Configure(slotCategories, resolver, spawner, setup: null);
 
-        public bool TryGetAttachPoint(int equipSlotIndex, out Transform attachPoint)
-        {
-            attachPoint = null;
-
-            if (!TryGetSlotCategory(equipSlotIndex, out string slotCategory))
-                return false;
-
-            if (!string.IsNullOrEmpty(slotCategory)
-                && socketsByCategory.TryGetValue(slotCategory, out attachPoint)
-                && attachPoint != null)
-                return true;
-
-            attachPoint = fallbackSocket != null ? fallbackSocket : transform;
-            return attachPoint != null;
-        }
+        public bool TryGetSocketKey(int equipSlotIndex, out string socketKey) =>
+            socketKeyByEquipSlot.TryGetValue(equipSlotIndex, out socketKey)
+            && !string.IsNullOrEmpty(socketKey);
 
         public void Equip(int equipSlotIndex, in ItemStack stack, in ItemDefinition definition)
         {
@@ -61,7 +56,10 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
                 || visual.IsEmpty)
                 return;
 
-            if (!TryGetAttachPoint(equipSlotIndex, out Transform attachPoint))
+            if (!TryGetSocketKey(equipSlotIndex, out string socketKey))
+                return;
+
+            if (!TryGetAttachPoint(socketKey, out Transform attachPoint))
                 return;
 
             SlotVisualState state = GetOrCreateSlotState(equipSlotIndex);
@@ -81,6 +79,8 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             slotStates.Clear();
         }
 
+        public void Dispose() => ClearAll();
+
         private void Configure(
             string[] slotCategories,
             IEquipmentVisualResolver resolver,
@@ -99,8 +99,6 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 
             this.resolver = resolver ?? NullEquipmentVisualResolver.Instance;
             this.spawner = spawner ?? NullEquipmentVisualSpawner.Instance;
-
-            RebuildSocketLookup();
             isInitialized = true;
         }
 
@@ -110,7 +108,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             in EquipmentVisualDefinition visual,
             GameObject instance)
         {
-            if (!isActiveAndEnabled || spawnGeneration != state.SpawnGeneration)
+            if (spawnGeneration != state.SpawnGeneration)
             {
                 if (instance != null)
                     spawner.Release(instance);
@@ -140,20 +138,34 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             instanceTransform.localScale = visual.LocalScale == default ? Vector3.one : visual.LocalScale;
         }
 
-        private void RebuildSocketLookup()
+        private bool TryGetAttachPoint(string socketKey, out Transform attachPoint)
         {
-            socketsByCategory.Clear();
+            attachPoint = null;
 
-            if (socketBindings == null)
+            if (socketManager == null)
+                return false;
+
+            if (!socketManager.TryGetSocket(socketKey, out ObjectSocket socket) || socket == null)
+                return false;
+
+            attachPoint = socket.transform;
+            return true;
+        }
+
+        private void RebuildSlotSocketBindings(EquipmentVisualSlotSocketBinding[] slotSocketBindings)
+        {
+            socketKeyByEquipSlot.Clear();
+
+            if (slotSocketBindings == null)
                 return;
 
-            for (int i = 0; i < socketBindings.Length; i++)
+            for (int i = 0; i < slotSocketBindings.Length; i++)
             {
-                EquipmentVisualSocketBinding binding = socketBindings[i];
-                if (string.IsNullOrEmpty(binding.SlotCategory) || binding.Socket == null)
+                EquipmentVisualSlotSocketBinding binding = slotSocketBindings[i];
+                if (binding.EquipSlotIndex < 0 || string.IsNullOrEmpty(binding.SocketKey))
                     continue;
 
-                socketsByCategory[binding.SlotCategory] = binding.Socket;
+                socketKeyByEquipSlot[binding.EquipSlotIndex] = binding.SocketKey;
             }
         }
 
@@ -188,8 +200,6 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             spawner.Release(state.Instance);
             state.Instance = null;
         }
-
-        private void OnDestroy() => ClearAll();
 
         private sealed class SlotVisualState
         {

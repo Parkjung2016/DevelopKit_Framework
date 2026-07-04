@@ -4,7 +4,7 @@ namespace PJDev.DevelopKit.Framework.ObjectSocketSystem.Runtime
 {
     public class ObjectSocket : MonoBehaviour
     {
-        private ISocketItem _item;
+        private ISocketItem item;
 
         public void ChangeItem(ISocketItem item, Vector3 position, Quaternion rotation)
         {
@@ -12,12 +12,19 @@ namespace PJDev.DevelopKit.Framework.ObjectSocketSystem.Runtime
             item.SocketTransform.SetLocalPositionAndRotation(position, rotation);
             item.SocketTransform.localScale = Vector3.one;
 
-            _item = item;
+            this.item = item;
         }
 
-        public T GetItem<T>() where T : class, ISocketItem
+        public bool TryGetItem<T>(out T result) where T : class, ISocketItem
         {
-            return _item as T;
+            if (item == null)
+            {
+                result = null;
+                return false;
+            }
+
+            result = item as T;
+            return true;
         }
     }
 }

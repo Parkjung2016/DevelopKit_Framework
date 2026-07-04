@@ -11,65 +11,89 @@ InventorySystem 위에 슬롯 카테고리(무기/투구/갑옷 등)와 장착 A
 | `EquipmentSystem` | `TryEquipFromContainer`, `TryUnequipToContainer`, `TrySwapEquippedSlots` |
 | `ObjectEquipmentSystem` | `InventorySystem`과 연동하는 MonoBehaviour 진입점 |
 | `IEquipmentEffectApplier` | 장착/해제 시 스탯·비주얼 등 게임 로직 훅 |
-| `EquipmentVisualController` | 슬롯별 비주얼 인스턴스 생성·추적·해제 |
+| `EquipmentVisualController` | 슬롯별 비주얼 생성·추적·해제 (순수 C#) |
+| `ObjectEquipmentVisualHost` | Inspector fallback + Controller 생성 (MonoBehaviour) |
 | `CompositeEquipmentEffectApplier` | 스탯 + 비주얼 등 여러 applier 조합 |
 
 ## EquipmentVisual (비주얼 분리)
 
-장비 **효과(스탯)** 와 **비주얼(모델)** 을 분리합니다. Addressable·테이블·소켓 배치는 게임/템플릿 측에서 교체합니다.
+테이블은 **ModelKey만**. Left/Right 등 착용 위치는 **장비 슬롯 인덱스 → ObjectSocket** 매핑으로 고정합니다.
 
 ```
-EquipmentSystem
-    └─ IEquipmentEffectApplier
-           ├─ StatEquipmentEffectApplier      (게임 — StatSystem)
-           └─ EquipmentVisualEffectApplier
-                  └─ EquipmentVisualController
-                         ├─ IEquipmentVisualResolver   (itemId → AssetKey)
-                         └─ IEquipmentVisualSpawner     (AssetKey → GameObject)
+캐릭터
+  ObjectSocketManager + socket_l, socket_r …
+        ↑
+  EquipmentVisualController
+        ├─ slotSocketBindings (EquipSlotIndex → SocketKey)
+        ├─ IEquipmentVisualDataSource (DT_: ItemId → ModelKey)
+        └─ IEquipmentVisualSpawner
+
+장착 슬롯 0 → socket_l   (왼손 무기)
+장착 슬롯 1 → socket_r   (오른손 방패/무기)
 ```
 
 | 타입 | 역할 |
 |------|------|
-| `EquipmentVisualDefinition` | `AssetKey`, 로컬 포즈 |
-| `IEquipmentVisualResolver` | 아이템 → 비주얼 정의 (테이블/SO/태그) |
-| `IEquipmentVisualSpawner` | 비주얼 에셋 스폰/해제 (Addressable, 풀 등) |
-| `EquipmentVisualSocketBinding` | `SlotCategory → Transform` 소켓 |
-| `EquipmentVisualController` | 슬롯별 인스턴스 관리, async stale load 방지 |
-| `EquipmentVisualEffectApplier` | Controller를 `IEquipmentEffectApplier`에 연결 |
-| `DelegateEquipmentVisualResolver` | `OnResolve` 핸들러로 resolver 구성 |
-| `DelegateEquipmentVisualSpawner` | `OnSpawn` / `OnRelease` 핸들러로 spawner 구성 |
-| `PrefabEquipmentVisualSpawner` | AssetKey → Prefab 동기 스폰 |
-| `EquipmentVisualHandlers` | `OnSpawnCompleted`, `OnResolve` 등 공통 delegate |
+| `EquipmentVisualRecord` | 테이블 1행 (`ModelKey`만) |
+| `EquipmentVisualSlotSocketBinding` | `EquipSlotIndex → SocketKey` |
+| `EquipmentVisualController` | 슬롯 인덱스로 소켓 결정 후 스폰 |
+| `ObjectEquipmentVisualHost` | Inspector에서 슬롯↔소켓 매핑 |
 
-### 빠른 시작
+**Left/Right 예:** 쉴드는 `Weapon`/`OffHand` 카테고리로 슬롯 0·1 모두 허용 → **어느 슬롯에 장착했는지**로 소켓이 결정됩니다. 아이템마다 SocketKey 불필요.
 
-```csharp
-var visualController = character.GetComponent<EquipmentVisualController>();
+### DT_Equipment
 
-var resolver = new DelegateEquipmentVisualResolver((slotIndex, category, stack, definition) =>
-{
-    if (!equipmentTable.TryGet(stack.ItemId, out var data))
-        return default;
-
-    return EquipmentVisualDefinition.FromAssetKey(data.ModelKey);
-});
-
-// A) Prefab 직접 참조
-var spawner = new PrefabEquipmentVisualSpawner(prefabRegistry);
-
-// B) Addressable / async
-var spawner = new DelegateEquipmentVisualSpawner(
-    OnSpawn: (request, OnSpawnCompleted) => LoadVisualAsync(request, OnSpawnCompleted).Forget());
-
-visualController.Initialize(equipmentSetup, resolver, spawner);
-
-var effectApplier = new CompositeEquipmentEffectApplier(
-    statApplier,
-    new EquipmentVisualEffectApplier(visualController));
-
-objectEquipmentSystem.Init(owner, inventorySystem, equipmentSetup, effectApplier);
+```csv
+ItemId,ModelKey
+1001,Weapon_Sword_01
+1002,Weapon_Shield_01
 ```
 
+### EquipmentSetupSO + 소켓 매핑 예
+
+`SlotCategories` (슬롯 규칙):
+
+| Index | Category |
+|---|---|
+| 0 | LeftHand |
+| 1 | RightHand |
+| 2 | Head |
+
+`ObjectEquipmentVisualHost` (비주얼 소켓):
+
+| EquipSlotIndex | SocketKey |
+|---|---|
+| 0 | socket_l |
+| 1 | socket_r |
+| 2 | socket_head |
+
+### 코드
+
+```csharp
+public sealed class EquipmentTableDataSource : IEquipmentVisualDataSource
+{
+    public bool TryGetByItemId(int itemId, out EquipmentVisualRecord record)
+    {
+        if (!equipmentTable.TryGetByItemId(itemId, out var row))
+        {
+            record = default;
+            return false;
+        }
+
+        record = new EquipmentVisualRecord { ModelKey = row.ModelKey };
+        return !record.IsEmpty;
+    }
+}
+
+var host = character.GetComponent<ObjectEquipmentVisualHost>();
+host.Initialize(
+    equipmentSetup,
+    new DataSourceEquipmentVisualResolver(new EquipmentTableDataSource()),
+    spawner);
+
+objectEquipmentSystem.Init(owner, inventory, equipmentSetup,
+    new EquipmentVisualEffectApplier(host.Controller));
+```
 ## 아이템 카테고리 지정
 
 1. **태그** — `ItemDefinitionSO`에 `equip.Weapon` 형태 태그 (`CatalogTagEquipmentProfileSource`)
