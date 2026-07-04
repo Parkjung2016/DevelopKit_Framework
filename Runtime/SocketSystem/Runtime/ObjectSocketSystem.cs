@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace PJDev.DevelopKit.Framework.ObjectSocketSystem.Runtime
+namespace PJDev.DevelopKit.Framework.SocketSystem.Runtime
 {
     [DefaultExecutionOrder(-10000)]
-    public class ObjectSocketManager : MonoBehaviour
+    public class ObjectSocketSystem : MonoBehaviour
     {
         private readonly Dictionary<string, ObjectSocket> sockets = new();
 

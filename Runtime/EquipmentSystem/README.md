@@ -21,7 +21,7 @@ InventorySystem 위에 슬롯 카테고리(무기/투구/갑옷 등)와 장착 A
 
 ```
 캐릭터
-  ObjectSocketManager + socket_l, socket_r …
+  ObjectSocketSystem + socket_l, socket_r …
         ↑
   EquipmentVisualController
         ├─ slotSocketBindings (EquipSlotIndex → SocketKey)

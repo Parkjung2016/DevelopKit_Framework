@@ -1,15 +1,15 @@
 using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
-using PJDev.DevelopKit.Framework.ObjectSocketSystem.Runtime;
+using PJDev.DevelopKit.Framework.SocketSystem.Runtime;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
-    /// <summary>슬롯별 장비 비주얼을 <see cref="ObjectSocketManager"/>에 생성·추적·해제합니다.</summary>
+    /// <summary>슬롯별 장비 비주얼을 <see cref="ObjectSocketSystem"/>에 생성·추적·해제합니다.</summary>
     public sealed class EquipmentVisualController : IDisposable
     {
-        private readonly ObjectSocketManager socketManager;
+        private readonly ObjectSocketSystem socketSystem;
         private readonly Dictionary<int, string> socketKeyByEquipSlot = new();
         private readonly Dictionary<int, SlotVisualState> slotStates = new();
 
@@ -19,10 +19,10 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         private bool isInitialized;
 
         public EquipmentVisualController(
-            ObjectSocketManager socketManager,
+            ObjectSocketSystem socketSystem,
             EquipmentVisualSlotSocketBinding[] slotSocketBindings = null)
         {
-            this.socketManager = socketManager ?? throw new ArgumentNullException(nameof(socketManager));
+            this.socketSystem = socketSystem ?? throw new ArgumentNullException(nameof(socketSystem));
             RebuildSlotSocketBindings(slotSocketBindings);
         }
 
@@ -142,10 +142,10 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         {
             attachPoint = null;
 
-            if (socketManager == null)
+            if (socketSystem == null)
                 return false;
 
-            if (!socketManager.TryGetSocket(socketKey, out ObjectSocket socket) || socket == null)
+            if (!socketSystem.TryGetSocket(socketKey, out ObjectSocket socket) || socket == null)
                 return false;
 
             attachPoint = socket.transform;

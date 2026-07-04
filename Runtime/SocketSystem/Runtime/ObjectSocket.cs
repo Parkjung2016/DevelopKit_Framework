@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace PJDev.DevelopKit.Framework.ObjectSocketSystem.Runtime
+namespace PJDev.DevelopKit.Framework.SocketSystem.Runtime
 {
     public class ObjectSocket : MonoBehaviour
     {
