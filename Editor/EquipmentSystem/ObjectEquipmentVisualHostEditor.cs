@@ -6,7 +6,6 @@ using PJDev.DevelopKit.Framework.EquipmentSystem.Runtime;
 using PJDev.DevelopKit.Framework.SocketSystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
-using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
