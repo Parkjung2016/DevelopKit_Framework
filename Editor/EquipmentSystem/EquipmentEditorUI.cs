@@ -23,7 +23,9 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
             ("Hands", EquipmentSlotCategories.Hands),
             ("Feet", EquipmentSlotCategories.Feet),
             ("Ring", EquipmentSlotCategories.Ring),
-            ("OffHand", EquipmentSlotCategories.OffHand)
+            ("OffHand", EquipmentSlotCategories.OffHand),
+            ("LeftHand", EquipmentSlotCategories.LeftHand),
+            ("RightHand", EquipmentSlotCategories.RightHand)
         };
 
         internal static readonly (string Name, string[] Categories)[] LayoutPresets =

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.Editors.InventorySystem;
 using PJDev.DevelopKit.Framework.EquipmentSystem.Runtime;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
@@ -44,7 +45,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
 
             slotLayoutHost = new VisualElement();
             root.Add(slotLayoutHost);
-            slotLayoutView = new EquipmentSlotLayoutView(OnSlotCategoryChanged, SyncSlotArray);
+            slotLayoutView = new EquipmentSlotLayoutView(OnSlotCategoryChanged, SyncSlotArray, OnSlotMove);
             slotLayoutView.Mount(slotLayoutHost);
 
             var tagSection = InventoryEditorUIFactory.CreateSection("Tag Prefix");
@@ -157,6 +158,35 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
             setup.Normalize();
             serializedObject.Update();
             EditorUtility.SetDirty(setup);
+            RefreshValidation();
+        }
+
+        private void OnSlotMove(int fromIndex, int toIndex)
+        {
+            if (isRefreshing || fromIndex == toIndex)
+                return;
+
+            var setup = (EquipmentSetupSO)target;
+            serializedObject.Update();
+            setup.Normalize();
+
+            if (fromIndex < 0 || toIndex < 0 || fromIndex >= setup.SlotCount || toIndex >= setup.SlotCount)
+                return;
+
+            string[] categories = setup.SlotCategories;
+            if (categories == null || categories.Length <= fromIndex || categories.Length <= toIndex)
+                return;
+
+            Undo.RecordObject(setup, "Move Equipment Slot");
+            string movedCategory = categories[fromIndex];
+            var reordered = new List<string>(categories);
+            reordered.RemoveAt(fromIndex);
+            reordered.Insert(toIndex, movedCategory);
+            setup.SlotCategories = reordered.ToArray();
+            setup.Normalize();
+            serializedObject.Update();
+            EditorUtility.SetDirty(setup);
+            slotLayoutView.Sync(setup);
             RefreshValidation();
         }
 
