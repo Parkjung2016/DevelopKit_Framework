@@ -32,6 +32,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (factory == null || !factory.TryCreate(itemId, out data))
                 return false;
 
+            ItemInstanceData.BindIfSupported(data, itemId, instanceId);
             store?.Set(instanceId, data);
             return true;
         }

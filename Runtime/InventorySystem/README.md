@@ -50,6 +50,11 @@ inventorySystem.Init(owner, containerSetupSO, instanceFactory: new WeaponInstanc
 정적 정의는 `ItemCatalog`, 인스턴스별 데이터는 `ItemInstanceCatalog`입니다.
 
 ```csharp
+public sealed class WeaponInstanceData : ItemInstanceData
+{
+    public int EnhanceLevel;
+}
+
 // 1) Factory 등록 (Init 시 또는 Configure)
 public sealed class WeaponInstanceFactory : IItemInstanceFactory
 {
@@ -66,7 +71,7 @@ public sealed class WeaponInstanceFactory : IItemInstanceFactory
     }
 }
 
-// 2) 어디서든 조회
+// 2) 어디서든 조회 — ItemId / InstanceId는 Register 시 자동 바인딩
 if (ItemInstanceCatalog.TryGet<WeaponInstanceData>(instanceId, out var weapon))
     ApplyEnhance(weapon.EnhanceLevel);
 

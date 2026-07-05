@@ -12,7 +12,10 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 return;
 
             if (factory != null && factory.TryCreate(itemId, out IItemInstanceData data))
+            {
+                ItemInstanceData.BindIfSupported(data, itemId, instanceId);
                 store.Set(instanceId, data);
+            }
         }
 
         public static void Release(IItemInstanceStore store, long instanceId)
