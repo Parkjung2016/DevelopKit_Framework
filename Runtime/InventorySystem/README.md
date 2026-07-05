@@ -86,9 +86,10 @@ IItemInstanceFactory factory = ItemInstanceFactoryBuilder.Create()
     .ConfigureEquipment(equipmentSetup.CreateProfileSource(), equip => equip
         .Set(EquipmentSlotCategories.Weapon, () => new WeaponInstanceData())
         .Set(EquipmentSlotCategories.Head, () => new HeadInstanceData())
-        .SetFallback<DefaultEquipmentInstanceData>())
+        .SetFallback())
     .For(ItemType.Consumable, () => new ConsumableInstanceData())
     .For(ItemType.Quest, id => new QuestInstanceData { ItemId = id })
+    .Fallback()
     .Build();
 
 inventorySystem.Init(owner, setup, factory);

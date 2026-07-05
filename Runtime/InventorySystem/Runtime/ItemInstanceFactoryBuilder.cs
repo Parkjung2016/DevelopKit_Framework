@@ -52,6 +52,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             return this;
         }
 
+        public ItemInstanceFactoryBuilder Fallback() => Fallback<EmptyItemInstanceData>();
+
         public IItemInstanceFactory Build() => root;
     }
 }

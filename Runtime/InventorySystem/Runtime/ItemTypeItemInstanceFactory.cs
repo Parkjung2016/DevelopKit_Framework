@@ -39,6 +39,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         public ItemTypeItemInstanceFactory SetFallback(Func<IItemInstanceData> create) =>
             SetFallback(ItemInstanceFactories.Create(create));
 
+        public ItemTypeItemInstanceFactory SetFallback() => SetFallback<EmptyItemInstanceData>();
+
         public bool TryCreate(int itemId, out IItemInstanceData data)
         {
             data = null;
