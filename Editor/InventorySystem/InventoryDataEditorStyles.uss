@@ -19,6 +19,7 @@
     flex-basis: 0;
     min-width: 360px;
     margin-right: 8px;
+    gap: 8px;
 }
 
 .inv-top-toolbar-fields ObjectField {
@@ -26,11 +27,6 @@
     flex-shrink: 1;
     flex-basis: 0;
     min-width: 0;
-    margin-right: 8px;
-}
-
-.inv-top-toolbar-fields ObjectField:last-child {
-    margin-right: 0;
 }
 
 .inv-top-toolbar-actions {
@@ -43,7 +39,6 @@
 
 .inv-top-toolbar ObjectField {
     flex-grow: 1;
-    margin-right: 8px;
 }
 
 .inv-body {
