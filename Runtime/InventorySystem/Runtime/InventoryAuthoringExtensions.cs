@@ -1,4 +1,5 @@
 using System;
+using PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
@@ -48,12 +49,12 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 ? InventoryChangeResult.Fail(InventoryChangeType.Craft, InventoryFailReason.InvalidCount)
                 : group.TryCraft(recipe.ToDefinition());
 
-        public static InventoryChangeResult TryGrantLoot(this InventoryGroup group, LootTableSO table, Random random = null) =>
+        public static InventoryChangeResult TryGrantLoot(this InventoryGroup group, LootTableSO table, IRandomSource random = null) =>
             table == null
                 ? InventoryChangeResult.Fail(InventoryChangeType.Add, InventoryFailReason.InvalidCount)
                 : group.TryGrantLoot(table.ToDefinition(), random);
 
-        public static ItemStack[] RollLoot(this LootTableSO table, Random random = null) =>
+        public static ItemStack[] RollLoot(this LootTableSO table, IRandomSource random = null) =>
             table == null ? Array.Empty<ItemStack>() : LootRoller.Roll(table.ToDefinition(), null, random);
 
         private static bool FailCraft(out InventoryFailReason reason, InventoryFailReason value)

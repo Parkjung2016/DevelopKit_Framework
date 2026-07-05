@@ -1,17 +1,21 @@
 using System;
 using System.Collections.Generic;
+using PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
     public static class LootRoller
     {
-        public static ItemStack[] Roll(in LootTableDefinition table, IItemDatabase database = null, Random random = null)
+        public static ItemStack[] Roll(
+            in LootTableDefinition table,
+            IItemDatabase database = null,
+            IRandomSource random = null)
         {
             database = ItemCatalog.Resolve(database);
             if (table.Entries == null || table.Entries.Length == 0)
                 return Array.Empty<ItemStack>();
 
-            random ??= new Random();
+            random ??= RandomSources.System();
             return table.AllowDuplicateRolls
                 ? RollWithReplacement(table, database, random)
                 : RollWithoutReplacement(table, database, random);
@@ -20,7 +24,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         public static InventoryChangeResult TryGrantLoot(
             InventoryGroup group,
             in LootTableDefinition table,
-            Random random = null)
+            IRandomSource random = null)
         {
             if (group == null)
                 return InventoryChangeResult.Fail(InventoryChangeType.Add, InventoryFailReason.DatabaseNotReady);
@@ -45,7 +49,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         private static ItemStack[] RollWithReplacement(
             in LootTableDefinition table,
             IItemDatabase database,
-            Random random)
+            IRandomSource random)
         {
             var results = new List<ItemStack>(table.RollCount);
 
@@ -66,7 +70,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         private static ItemStack[] RollWithoutReplacement(
             in LootTableDefinition table,
             IItemDatabase database,
-            Random random)
+            IRandomSource random)
         {
             LootEntry[] entries = table.Entries;
             var candidates = new List<int>(entries.Length);
@@ -99,7 +103,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         private static bool TryCreateStack(
             LootEntry entry,
             IItemDatabase database,
-            Random random,
+            IRandomSource random,
             out ItemStack stack)
         {
             stack = default;
@@ -114,7 +118,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             return true;
         }
 
-        private static bool TryPickEntry(LootEntry[] entries, Random random, out LootEntry picked)
+        private static bool TryPickEntry(LootEntry[] entries, IRandomSource random, out LootEntry picked)
         {
             picked = default;
             if (entries == null || entries.Length == 0)
@@ -137,56 +141,15 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         private static bool TryPickEntryIndex(
             LootEntry[] entries,
             IReadOnlyList<int> candidateIndices,
-            Random random,
-            out int pickedIndex)
-        {
-            pickedIndex = -1;
-            if (entries == null || candidateIndices == null || candidateIndices.Count == 0)
-                return false;
+            IRandomSource random,
+            out int pickedIndex) =>
+            RandomUtility.TryPickWeightedIndex(
+                candidateIndices,
+                index => entries[index].Weight,
+                random,
+                out pickedIndex);
 
-            float totalWeight = 0f;
-            for (int i = 0; i < candidateIndices.Count; i++)
-            {
-                LootEntry entry = entries[candidateIndices[i]];
-                if (entry.Weight > 0f)
-                    totalWeight += entry.Weight;
-            }
-
-            if (totalWeight <= 0f)
-                return false;
-
-            float roll = (float)(random.NextDouble() * totalWeight);
-            float cumulative = 0f;
-
-            for (int i = 0; i < candidateIndices.Count; i++)
-            {
-                int entryIndex = candidateIndices[i];
-                LootEntry entry = entries[entryIndex];
-                if (entry.Weight <= 0f)
-                    continue;
-
-                cumulative += entry.Weight;
-                if (roll <= cumulative)
-                {
-                    pickedIndex = entryIndex;
-                    return true;
-                }
-            }
-
-            for (int i = candidateIndices.Count - 1; i >= 0; i--)
-            {
-                int entryIndex = candidateIndices[i];
-                if (entries[entryIndex].Weight > 0f)
-                {
-                    pickedIndex = entryIndex;
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static int RollCount(LootEntry entry, ItemDefinition definition, Random random)
+        private static int RollCount(LootEntry entry, ItemDefinition definition, IRandomSource random)
         {
             int min = entry.MinCount <= 0 ? 1 : entry.MinCount;
             int max = entry.MaxCount < min ? min : entry.MaxCount;
@@ -194,7 +157,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (!definition.IsStackable)
                 return 1;
 
-            return random.Next(min, max + 1);
+            return random.NextInt(min, max + 1);
         }
     }
 }

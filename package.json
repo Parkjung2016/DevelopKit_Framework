@@ -4,7 +4,7 @@
   "version": "1.4.1",
   "unity": "2021.0",
   "unityRelease": "1f1",
-  "description": "Provides core frameworks such as StatSystem, AbilitySystem, InventorySystem, EquipmentSystem, and SaveSystem.",
+  "description": "Provides core frameworks such as StatSystem, AbilitySystem, InventorySystem, EquipmentSystem, SaveSystem, and DeterministicSimulation.",
   "author": {
     "name": "PJDev",
     "email": "bagj21563@gmail.com"

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
@@ -52,7 +53,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 0,
                 InventoryChangeType.Craft);
 
-        public InventoryChangeResult TryGrantLoot(string tableId, System.Random random = null) =>
+        public InventoryChangeResult TryGrantLoot(string tableId, IRandomSource random = null) =>
             ExecuteGroup(
                 () => group == null
                     ? InventoryChangeResult.Fail(InventoryChangeType.Add, InventoryFailReason.DatabaseNotReady)
@@ -61,7 +62,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 0,
                 InventoryChangeType.Add);
 
-        public InventoryChangeResult TryGrantLoot(LootTableSO table, System.Random random = null) =>
+        public InventoryChangeResult TryGrantLoot(LootTableSO table, IRandomSource random = null) =>
             ExecuteGroup(
                 () => group == null
                     ? InventoryChangeResult.Fail(InventoryChangeType.Add, InventoryFailReason.DatabaseNotReady)

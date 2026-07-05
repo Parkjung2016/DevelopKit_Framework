@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
+using PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
@@ -345,7 +346,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         public InventoryChangeResult TryCraft(in RecipeDefinition recipe) =>
             InventoryCrafting.TryCraft(this, recipe);
 
-        public InventoryChangeResult TryGrantLoot(string tableId, System.Random random = null)
+        public InventoryChangeResult TryGrantLoot(string tableId, IRandomSource random = null)
         {
             if (!LootTableDatabase.TryGetTable(tableId, out LootTableDefinition table))
                 return InventoryChangeResult.Fail(InventoryChangeType.Add, InventoryFailReason.LootTableNotFound);
@@ -353,7 +354,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             return LootRoller.TryGrantLoot(this, table, random);
         }
 
-        public InventoryChangeResult TryGrantLoot(in LootTableDefinition table, System.Random random = null) =>
+        public InventoryChangeResult TryGrantLoot(in LootTableDefinition table, IRandomSource random = null) =>
             LootRoller.TryGrantLoot(this, table, random);
 
         public InventoryGroupSaveData ExportSaveData() => InventorySerializer.Export(this);

@@ -151,6 +151,9 @@ inventorySystem.TryGrantLoot(lootTableSO);
 // 핵심 API는 정의 struct만 사용 (SO 무관)
 group.TryCraft(recipeDefinition);
 group.TryGrantLoot(lootTableDefinition);
+
+// 결정론 드랍 (같은 seed → 같은 결과) — DeterministicSimulation.IRandomSource
+group.TryGrantLoot(lootTableDefinition, RandomSources.Deterministic(2024));
 ```
 
 ## 아키텍처
