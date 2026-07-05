@@ -45,6 +45,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         public ItemInstanceFactoryRegistry SetFallback(Func<int, IItemInstanceData> create) =>
             SetFallback(ItemInstanceFactories.Delegate(create));
 
+        public ItemInstanceFactoryRegistry SetFallback<T>() where T : class, IItemInstanceData, new() =>
+            SetFallback(ItemInstanceFactories.Create<T>());
+
+        public ItemInstanceFactoryRegistry SetFallback(Func<IItemInstanceData> create) =>
+            SetFallback(ItemInstanceFactories.Create(create));
+
+        public ItemInstanceFactoryRegistry SetFallback() => SetFallback<EmptyItemInstanceData>();
+
         public bool TryCreate(int itemId, out IItemInstanceData data)
         {
             if (factoriesByItemId.TryGetValue(itemId, out IItemInstanceFactory factory)

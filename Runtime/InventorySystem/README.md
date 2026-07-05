@@ -89,7 +89,7 @@ IItemInstanceFactory factory = ItemInstanceFactoryBuilder.Create()
         .SetFallback())
     .For(ItemType.Consumable, () => new ConsumableInstanceData())
     .For(ItemType.Quest, id => new QuestInstanceData { ItemId = id })
-    .Fallback()
+    .SetFallback()
     .Build();
 
 inventorySystem.Init(owner, setup, factory);
