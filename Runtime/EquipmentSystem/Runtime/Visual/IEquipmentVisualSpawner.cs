@@ -1,14 +1,13 @@
-using System;
-using UnityEngine;
+using PJDev.DevelopKit.Framework.SocketSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
-    /// <summary>비주얼 에셋을 GameObject로 생성/해제합니다.</summary>
+    /// <summary>비주얼 에셋을 <see cref="ISocketItem"/>으로 생성/해제합니다.</summary>
     public interface IEquipmentVisualSpawner
     {
         void Spawn(in EquipmentVisualSpawnRequest request, EquipmentVisualSpawnCompletedHandler OnSpawnCompleted);
 
-        void Release(GameObject instance);
+        void Release(ISocketItem socketItem);
     }
 
     public sealed class NullEquipmentVisualSpawner : IEquipmentVisualSpawner
@@ -18,7 +17,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         public void Spawn(in EquipmentVisualSpawnRequest request, EquipmentVisualSpawnCompletedHandler OnSpawnCompleted) =>
             OnSpawnCompleted?.Invoke(null);
 
-        public void Release(GameObject instance)
+        public void Release(ISocketItem socketItem)
         {
         }
     }

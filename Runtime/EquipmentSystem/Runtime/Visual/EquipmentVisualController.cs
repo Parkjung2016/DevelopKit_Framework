@@ -68,7 +68,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             state.Socket = socket;
 
             var request = new EquipmentVisualSpawnRequest(equipSlotIndex, slotCategory, socket, visual);
-            spawner.Spawn(request, instance => OnSlotVisualSpawnCompleted(state, spawnGeneration, visual, instance));
+            spawner.Spawn(request, socketItem => OnSlotVisualSpawnCompleted(state, spawnGeneration, visual, socketItem));
         }
 
         public void Unequip(int equipSlotIndex) => ClearSlot(equipSlotIndex);
@@ -108,28 +108,25 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             SlotVisualState state,
             int spawnGeneration,
             in EquipmentVisualDefinition visual,
-            GameObject instance)
+            ISocketItem socketItem)
         {
             if (spawnGeneration != state.SpawnGeneration)
             {
-                if (instance != null)
-                    spawner.Release(instance);
+                if (socketItem != null)
+                    spawner.Release(socketItem);
                 return;
             }
 
-            if (instance == null || state.Socket == null)
+            if (socketItem == null || socketItem.SocketTransform == null || state.Socket == null)
                 return;
 
-            if (instance.TryGetComponent(out ISocketItem socketItem) == false)
-                socketItem = new GameObjectSocketItem(instance);
-            
             state.Socket.ChangeItem(
                 socketItem,
                 visual.LocalPosition,
                 Quaternion.Euler(visual.LocalEulerAngles),
                 visual.LocalScale == default ? Vector3.one : visual.LocalScale);
 
-            state.Instance = instance;
+            state.SocketItem = socketItem;
         }
 
         private void ClearSlot(int equipSlotIndex)
@@ -143,10 +140,10 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 
         private void ReleaseSlotVisual(SlotVisualState state)
         {
-            if (state.Instance != null)
+            if (state.SocketItem != null)
             {
-                spawner.Release(state.Instance);
-                state.Instance = null;
+                spawner.Release(state.SocketItem);
+                state.SocketItem = null;
             }
 
             state.Socket?.ClearItem();
@@ -197,7 +194,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         {
             public int SpawnGeneration;
             public ObjectSocket Socket;
-            public GameObject Instance;
+            public ISocketItem SocketItem;
         }
     }
 }

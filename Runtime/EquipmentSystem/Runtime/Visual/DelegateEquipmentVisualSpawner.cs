@@ -1,6 +1,5 @@
 using System;
-using UnityEngine;
-using Object = UnityEngine.Object;
+using PJDev.DevelopKit.Framework.SocketSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
@@ -15,18 +14,12 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             EquipmentVisualReleaseHandler OnRelease = null)
         {
             this.OnSpawn = OnSpawn ?? throw new ArgumentNullException(nameof(OnSpawn));
-            this.OnRelease = OnRelease ?? ReleaseDefault;
+            this.OnRelease = OnRelease ?? SocketItemUtility.ReleaseDestroy;
         }
 
         public void Spawn(in EquipmentVisualSpawnRequest request, EquipmentVisualSpawnCompletedHandler OnSpawnCompleted) =>
             OnSpawn(request, OnSpawnCompleted);
 
-        public void Release(GameObject instance) => OnRelease(instance);
-
-        private static void ReleaseDefault(GameObject instance)
-        {
-            if (instance != null)
-                Object.Destroy(instance);
-        }
+        public void Release(ISocketItem socketItem) => OnRelease(socketItem);
     }
 }

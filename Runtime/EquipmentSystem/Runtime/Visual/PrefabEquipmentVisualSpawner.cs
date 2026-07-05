@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using PJDev.DevelopKit.Framework.SocketSystem.Runtime;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -17,16 +18,20 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 
         public void Spawn(in EquipmentVisualSpawnRequest request, EquipmentVisualSpawnCompletedHandler OnSpawnCompleted)
         {
-            if (prefabsByKey.TryGetValue(request.Definition.AssetKey, out GameObject prefab) && prefab != null)
-                OnSpawnCompleted?.Invoke(Object.Instantiate(prefab));
-            else
+            if (!prefabsByKey.TryGetValue(request.Definition.AssetKey, out GameObject prefab) || prefab == null)
+            {
                 OnSpawnCompleted?.Invoke(null);
+                return;
+            }
+
+            GameObject instance = Object.Instantiate(prefab);
+            ISocketItem socketItem = instance.TryGetComponent(out ISocketItem existing)
+                ? existing
+                : new GameObjectSocketItem(instance);
+
+            OnSpawnCompleted?.Invoke(socketItem);
         }
 
-        public void Release(GameObject instance)
-        {
-            if (instance != null)
-                Object.Destroy(instance);
-        }
+        public void Release(ISocketItem socketItem) => SocketItemUtility.ReleaseDestroy(socketItem);
     }
 }

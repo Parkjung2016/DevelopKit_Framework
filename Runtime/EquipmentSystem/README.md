@@ -26,7 +26,7 @@ InventorySystem 위에 슬롯 카테고리(무기/투구/갑옷 등)와 장착 A
   EquipmentVisualController
         ├─ slotSocketBindings (EquipSlotIndex → SocketKey)
         ├─ IEquipmentVisualResolver (ItemId → ModelKey)
-        └─ IEquipmentVisualSpawner (ModelKey → GameObject)
+        └─ IEquipmentVisualSpawner (ModelKey → ISocketItem)
               ↓
         ObjectSocket.ChangeItem(ISocketItem)
 
@@ -39,7 +39,9 @@ InventorySystem 위에 슬롯 카테고리(무기/투구/갑옷 등)와 장착 A
 | `EquipmentVisualRecord` | 테이블 1행 (`ModelKey`만) |
 | `EquipmentVisualSlotSocketBinding` | `EquipSlotIndex → SocketKey` |
 | `EquipmentVisualController` | Resolver → Spawner → `ObjectSocket.ChangeItem` |
-| `GameObjectSocketItem` | 스폰된 `GameObject`를 `ISocketItem`으로 래핑 |
+| `ISocketItem` / `GameObjectSocketItem` | 소켓에 부착할 대상 (Transform 제공) |
+| `SocketItemComponent` | 커스텀 비주얼용 `MonoBehaviour` + `ISocketItem` 베이스 |
+| `SocketItemUtility` | Component → ISocketItem 변환, 기본 Release |
 | `ObjectEquipmentVisualHost` | Inspector에서 슬롯↔소켓 매핑 |
 
 **Left/Right 예:** 쉴드는 `Weapon`/`OffHand` 카테고리로 슬롯 0·1 모두 허용 → **어느 슬롯에 장착했는지**로 소켓이 결정됩니다. 아이템마다 SocketKey 불필요.
@@ -92,11 +94,25 @@ var host = character.GetComponent<ObjectEquipmentVisualHost>();
 host.Initialize(
     equipmentSetup,
     new DataSourceEquipmentVisualResolver(new EquipmentTableDataSource()),
-    spawner);
+    new DelegateEquipmentVisualSpawner((request, onCompleted) =>
+    {
+        AddressableManager.Instance
+            .InstantiateAsync(request.Definition.AssetKey)
+            .OnCompleted(go =>
+            {
+                ISocketItem item = go.TryGetComponent(out ISocketItem existing)
+                    ? existing
+                    : new GameObjectSocketItem(go);
+                onCompleted(item);
+            })
+            .Run();
+    }));
 
 objectEquipmentSystem.Init(owner, inventory, equipmentSetup,
     new EquipmentVisualEffectApplier(host.Controller));
 ```
+
+커스텀 비주얼(애니·VFX 등)은 프리팹에 `SocketItemComponent`를 상속한 컴포넌트를 붙이고 Spawner가 그 `ISocketItem`을 반환하면 됩니다.
 ## 아이템 카테고리 지정
 
 1. **태그** — `ItemDefinitionSO`에 `equip.Weapon` 형태 태그 (`CatalogTagEquipmentProfileSource`)
