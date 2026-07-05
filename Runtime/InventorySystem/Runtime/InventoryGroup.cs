@@ -18,6 +18,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         public IItemInstanceFactory ItemInstanceFactory { get; set; }
 
+        public IItemInstanceIdGenerator InstanceIdGenerator { get; set; }
+
         public IReadOnlyList<InventoryContainer> Containers => containers;
         public IItemDatabase ItemDatabase => ItemCatalog.Resolve(itemDatabaseOverride);
         public IRecipeDatabase RecipeDatabase => RecipeCatalog.Resolve(recipeDatabaseOverride);
@@ -60,7 +62,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
             containersById.Add(container.ContainerId, container);
             containers.Add(container);
-            container.BindInstanceServices(ItemInstanceStore, ItemInstanceFactory);
+            container.BindInstanceServices(ItemInstanceStore, ItemInstanceFactory, InstanceIdGenerator);
 
             if (!containersByKind.ContainsKey(container.Kind))
                 containersByKind.Add(container.Kind, container);

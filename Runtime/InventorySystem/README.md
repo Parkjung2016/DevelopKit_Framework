@@ -77,6 +77,13 @@ if (ItemInstanceCatalog.TryGet<WeaponInstanceData>(instanceId, out var weapon))
 
 // 3) itemId fallback (Store miss 시 Factory로 생성·캐시)
 ItemInstanceQueries.TryGet(ItemInstanceCatalog.Current, instanceId, itemId, out IItemInstanceData data);
+
+// 4) 인벤 밖에서 ID + payload 생성
+if (ItemInstanceCatalog.TryCreateRegistered(itemId, out long instanceId, out IItemInstanceData instance))
+    RewardUniqueItem(itemId, instanceId);
+
+// 5) ID만 필요할 때
+long instanceId = ItemInstanceCatalog.Generate(itemId);
 ```
 
 고유 아이템이 인벤에 **처음 들어갈 때** Factory가 자동 호출됩니다. 슬롯에서 **완전히 제거되면** Store에서도 삭제됩니다.
@@ -189,10 +196,12 @@ InventorySystem (MonoBehaviour — DatabaseSetup + InventorySetupSO)
 | `IItemUseHandler` | 아이템 사용 |
 | `IItemActionResolver` | itemId → `IItemUseHandler` 조회 |
 | `IItemInstanceStore` | `InstanceId`별 가변 인스턴스 데이터 |
-| `ItemInstanceCatalog` | 전역 Store 접근 (`ItemCatalog`와 동일 패턴) |
+| `ItemInstanceCatalog` | 전역 Store / Factory / IdGenerator (`Generate`, `TryCreateRegistered`, `TryGet`) |
 | `IItemInstanceFactory` | 고유 아이템 생성 시 기본 인스턴스 데이터 |
 | `ItemInstanceQueries` | `TryGet` / fallback 조회 헬퍼 |
 | `IItemInstanceIdGenerator` | 고유 인스턴스 ID |
+| `SnowflakeItemInstanceIdGenerator` | 기본 ID 생성 (timestamp + itemId fragment + sequence) |
+| `ItemInstanceIdUtility` | InstanceId → 생성 시각 / fragment 디코딩 |
 
 ## 테스트
 

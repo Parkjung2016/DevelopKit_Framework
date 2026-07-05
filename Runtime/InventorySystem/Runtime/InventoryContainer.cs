@@ -18,7 +18,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         private readonly IContainerCapacityRule capacityRule;
         private readonly bool usesCustomSlotRule;
         private readonly bool usesItemTypeSlotRule;
-        private IItemInstanceIdGenerator instanceIdGenerator = DefaultItemInstanceIdGenerator.Instance;
+        private IItemInstanceIdGenerator instanceIdGeneratorOverride;
         private bool isDisposed;
         private int revision;
 
@@ -29,8 +29,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         public int Revision => revision;
         public IItemInstanceIdGenerator InstanceIdGenerator
         {
-            get => instanceIdGenerator;
-            set => instanceIdGenerator = value ?? DefaultItemInstanceIdGenerator.Instance;
+            get => ItemInstanceCatalog.ResolveIdGenerator(instanceIdGeneratorOverride);
+            set => instanceIdGeneratorOverride = value;
         }
         public NativeArray<SlotData>.ReadOnly SlotDataReadOnly =>
             slots.IsCreated ? slots.AsReadOnly() : default;

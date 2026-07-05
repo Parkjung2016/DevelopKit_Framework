@@ -53,7 +53,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             IInventoryOwner owner,
             InventorySetupSO setupAsset = null,
             IItemContainerRouter router = null,
-            IItemInstanceFactory instanceFactory = null)
+            IItemInstanceFactory instanceFactory = null,
+            IItemInstanceIdGenerator instanceIdGenerator = null)
         {
             InventorySetupSO resolvedSetup = setupAsset ?? setup;
             if (resolvedSetup == null)
@@ -71,7 +72,13 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (instanceFactory != null)
                 group.ItemInstanceFactory = instanceFactory;
 
-            ItemInstanceCatalog.Configure(group.ItemInstanceStore, group.ItemInstanceFactory);
+            if (instanceIdGenerator != null)
+                group.InstanceIdGenerator = instanceIdGenerator;
+
+            ItemInstanceCatalog.Configure(
+                group.ItemInstanceStore,
+                group.ItemInstanceFactory,
+                group.InstanceIdGenerator);
         }
 
         public bool TryGetContainer(string containerId, out IInventoryContainer container)

@@ -595,7 +595,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             };
         }
 
-        private long GenerateInstanceId(int itemId) => instanceIdGenerator.Generate(itemId);
+        private long GenerateInstanceId(int itemId) => InstanceIdGenerator.Generate(itemId);
 
         #endregion
     }

@@ -19,10 +19,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             set => instanceFactory = value;
         }
 
-        internal void BindInstanceServices(IItemInstanceStore store, IItemInstanceFactory factory)
+        internal void BindInstanceServices(
+            IItemInstanceStore store,
+            IItemInstanceFactory factory,
+            IItemInstanceIdGenerator idGenerator = null)
         {
             instanceStore = store;
             instanceFactory = factory;
+            instanceIdGeneratorOverride = idGenerator;
         }
 
         private long AllocateInstanceId(int itemId)
