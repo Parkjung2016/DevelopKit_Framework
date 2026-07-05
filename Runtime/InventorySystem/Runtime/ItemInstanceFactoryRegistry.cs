@@ -3,21 +3,29 @@ using System.Collections.Generic;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
-    /// <summary><paramref name="itemId"/>별 <see cref="IItemInstanceFactory"/>를 등록합니다.</summary>
+    /// <summary><paramref name="itemId"/>별 <see cref="IItemInstanceFactory"/> 레지스트리입니다.</summary>
     public sealed class ItemInstanceFactoryRegistry : IItemInstanceFactory
     {
         private readonly Dictionary<int, IItemInstanceFactory> factoriesByItemId = new();
         private IItemInstanceFactory fallback;
 
-        public void Register(int itemId, IItemInstanceFactory factory)
+        public ItemInstanceFactoryRegistry Register(int itemId, IItemInstanceFactory factory)
         {
             if (itemId <= 0)
                 throw new ArgumentOutOfRangeException(nameof(itemId));
-            if (factory == null)
-                throw new ArgumentNullException(nameof(factory));
 
-            factoriesByItemId[itemId] = factory;
+            factoriesByItemId[itemId] = factory ?? throw new ArgumentNullException(nameof(factory));
+            return this;
         }
+
+        public ItemInstanceFactoryRegistry Register(int itemId, Func<int, IItemInstanceData> create) =>
+            Register(itemId, ItemInstanceFactories.Delegate(create));
+
+        public ItemInstanceFactoryRegistry Register<T>(int itemId) where T : class, IItemInstanceData, new() =>
+            Register(itemId, ItemInstanceFactories.Create<T>());
+
+        public ItemInstanceFactoryRegistry Register(int itemId, Func<IItemInstanceData> create) =>
+            Register(itemId, ItemInstanceFactories.Create(create));
 
         public void RegisterRange(IReadOnlyDictionary<int, IItemInstanceFactory> factories)
         {
@@ -28,7 +36,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 Register(pair.Key, pair.Value);
         }
 
-        public void SetFallback(IItemInstanceFactory factory) => fallback = factory;
+        public ItemInstanceFactoryRegistry SetFallback(IItemInstanceFactory factory)
+        {
+            fallback = factory;
+            return this;
+        }
+
+        public ItemInstanceFactoryRegistry SetFallback(Func<int, IItemInstanceData> create) =>
+            SetFallback(ItemInstanceFactories.Delegate(create));
 
         public bool TryCreate(int itemId, out IItemInstanceData data)
         {

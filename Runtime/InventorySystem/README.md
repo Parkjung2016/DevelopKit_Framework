@@ -76,6 +76,38 @@ ItemInstanceQueries.TryGet(ItemInstanceCatalog.Current, instanceId, itemId, out 
 
 고유 아이템이 인벤에 **처음 들어갈 때** Factory가 자동 호출됩니다. 슬롯에서 **완전히 제거되면** Store에서도 삭제됩니다.
 
+**ItemType → Equipment SlotCategory 2단 라우팅 (클래스 없이):**
+
+```csharp
+using PJDev.DevelopKit.Framework.EquipmentSystem.Runtime;
+using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
+
+IItemInstanceFactory factory = ItemInstanceFactoryBuilder.Create()
+    .ConfigureEquipment(equipmentSetup.CreateProfileSource(), equip => equip
+        .Set(EquipmentSlotCategories.Weapon, () => new WeaponInstanceData())
+        .Set(EquipmentSlotCategories.Head, () => new HeadInstanceData())
+        .SetFallback<DefaultEquipmentInstanceData>())
+    .For(ItemType.Consumable, () => new ConsumableInstanceData())
+    .For(ItemType.Quest, id => new QuestInstanceData { ItemId = id })
+    .Build();
+
+inventorySystem.Init(owner, setup, factory);
+```
+
+특정 ItemId만 예외 처리:
+
+```csharp
+var overrides = new ItemInstanceFactoryRegistry()
+    .Register(9001, () => new LegendWeaponInstanceData())
+    .SetFallback(ItemInstanceFactoryBuilder.Create()...Build());
+
+ItemInstanceFactoryBuilder.Create()
+    .For(ItemType.Equipment, overrides)
+    ...
+```
+
+SlotCategory는 `equip.Weapon` 태그·`EquipmentSetupSO` 오버라이드와 **동일한 ProfileSource**를 씁니다.
+
 **순수 C# (테스트·서버)** — `InventorySessionBuilder` + 전역 Catalog를 사용합니다.
 
 ```csharp
