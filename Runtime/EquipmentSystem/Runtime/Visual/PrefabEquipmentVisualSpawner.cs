@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.SocketSystem.Runtime;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
