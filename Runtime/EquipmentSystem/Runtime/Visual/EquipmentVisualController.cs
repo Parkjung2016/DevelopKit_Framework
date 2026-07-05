@@ -52,7 +52,8 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             if (!TryGetSlotCategory(equipSlotIndex, out string slotCategory))
                 return;
 
-            if (!resolver.TryResolve(equipSlotIndex, slotCategory, stack, definition, out EquipmentVisualDefinition visual)
+            if (!resolver.TryResolve(equipSlotIndex, slotCategory, stack, definition,
+                    out EquipmentVisualDefinition visual)
                 || visual.IsEmpty)
                 return;
 
@@ -119,7 +120,9 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             if (instance == null || state.Socket == null)
                 return;
 
-            var socketItem = new GameObjectSocketItem(instance);
+            if (instance.TryGetComponent(out ISocketItem socketItem) == false)
+                socketItem = new GameObjectSocketItem(instance);
+            
             state.Socket.ChangeItem(
                 socketItem,
                 visual.LocalPosition,
