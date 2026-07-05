@@ -389,6 +389,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (!CanAcceptSlot(slotIndex, definition))
                 return Fail(InventoryChangeType.Add, ResolveSlotRuleDeniedReason(definition), itemId, count, primarySlotIndex: slotIndex);
 
+            EnsureInstanceRegistered(itemId, instanceId);
+
             int totalBefore = GetItemCount(itemId);
             changedSlots.Clear();
             slotSnapshotsBefore.Clear();
@@ -430,7 +432,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 if (!slots[i].IsEmpty || !CanAcceptSlot(i, definition))
                     continue;
 
-                long instanceId = GenerateInstanceId(itemId);
+                long instanceId = AllocateInstanceId(itemId);
                 if (!InventoryBurstOperations.TryPlaceItemInEmptySlot(
                         ref slots, i, itemId, 1, instanceId, ref changedSlots, ref slotSnapshotsBefore, false))
                     continue;

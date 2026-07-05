@@ -41,10 +41,40 @@
 databaseSetup.RegisterGlobals();  // ItemCatalog / RecipeCatalog / LootTableCatalog
 
 // 컨테이너만 InventorySetupSO로 초기화
-inventorySystem.Init(owner, containerSetupSO);
+inventorySystem.Init(owner, containerSetupSO, instanceFactory: new WeaponInstanceFactory());
+// → ItemInstanceCatalog.Configure(...) 자동 호출
 ```
 
-`InventorySystem` Inspector에 `Database Setup`을 넣으면 `Init` 시 자동으로 `RegisterGlobals()`가 호출됩니다.
+### ItemInstance (가변 데이터)
+
+정적 정의는 `ItemCatalog`, 인스턴스별 데이터는 `ItemInstanceCatalog`입니다.
+
+```csharp
+// 1) Factory 등록 (Init 시 또는 Configure)
+public sealed class WeaponInstanceFactory : IItemInstanceFactory
+{
+    public bool TryCreate(int itemId, out IItemInstanceData data)
+    {
+        if (!ItemCatalog.TryGetDefinition(itemId, out _))
+        {
+            data = null;
+            return false;
+        }
+
+        data = new WeaponInstanceData();
+        return true;
+    }
+}
+
+// 2) 어디서든 조회
+if (ItemInstanceCatalog.TryGet<WeaponInstanceData>(instanceId, out var weapon))
+    ApplyEnhance(weapon.EnhanceLevel);
+
+// 3) itemId fallback (Store miss 시 Factory로 생성·캐시)
+ItemInstanceQueries.TryGet(ItemInstanceCatalog.Current, instanceId, itemId, out IItemInstanceData data);
+```
+
+고유 아이템이 인벤에 **처음 들어갈 때** Factory가 자동 호출됩니다. 슬롯에서 **완전히 제거되면** Store에서도 삭제됩니다.
 
 **순수 C# (테스트·서버)** — `InventorySessionBuilder` + 전역 Catalog를 사용합니다.
 
@@ -121,6 +151,9 @@ InventorySystem (MonoBehaviour — DatabaseSetup + InventorySetupSO)
 | `IItemUseHandler` | 아이템 사용 |
 | `IItemActionResolver` | itemId → `IItemUseHandler` 조회 |
 | `IItemInstanceStore` | `InstanceId`별 가변 인스턴스 데이터 |
+| `ItemInstanceCatalog` | 전역 Store 접근 (`ItemCatalog`와 동일 패턴) |
+| `IItemInstanceFactory` | 고유 아이템 생성 시 기본 인스턴스 데이터 |
+| `ItemInstanceQueries` | `TryGet` / fallback 조회 헬퍼 |
 | `IItemInstanceIdGenerator` | 고유 인스턴스 ID |
 
 ## 테스트

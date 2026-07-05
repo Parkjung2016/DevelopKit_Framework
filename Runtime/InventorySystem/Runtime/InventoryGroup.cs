@@ -14,6 +14,10 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         private IRecipeDatabase recipeDatabaseOverride;
         private ILootTableDatabase lootTableDatabaseOverride;
 
+        public IItemInstanceStore ItemInstanceStore { get; } = new InMemoryItemInstanceStore();
+
+        public IItemInstanceFactory ItemInstanceFactory { get; set; }
+
         public IReadOnlyList<InventoryContainer> Containers => containers;
         public IItemDatabase ItemDatabase => ItemCatalog.Resolve(itemDatabaseOverride);
         public IRecipeDatabase RecipeDatabase => RecipeCatalog.Resolve(recipeDatabaseOverride);
@@ -56,6 +60,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
             containersById.Add(container.ContainerId, container);
             containers.Add(container);
+            container.BindInstanceServices(ItemInstanceStore, ItemInstanceFactory);
 
             if (!containersByKind.ContainsKey(container.Kind))
                 containersByKind.Add(container.Kind, container);

@@ -183,7 +183,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 if (count != 1 || !slots[slotIndex].IsEmpty)
                     return Fail(InventoryChangeType.Add, InventoryFailReason.NoSpace, itemId, count, totalBefore, slotIndex);
 
-                long instanceId = GenerateInstanceId(itemId);
+                long instanceId = AllocateInstanceId(itemId);
                 changedSlots.Clear();
                 slotSnapshotsBefore.Clear();
                 bool placed = InventoryBurstOperations.TryPlaceItemInEmptySlot(
@@ -258,6 +258,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (removedCount <= 0)
                 return Fail(InventoryChangeType.Remove, InventoryFailReason.InsufficientItemCount, itemId, count, totalBefore);
 
+            ProcessReleasedInstances();
+
             return CreateSuccess(
                 InventoryChangeType.Remove,
                 itemId,
@@ -298,6 +300,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
             if (!removed)
                 return Fail(InventoryChangeType.Remove, InventoryFailReason.InsufficientItemCount, itemId, count, totalBefore, slotIndex);
+
+            ProcessReleasedInstances();
 
             return CreateSuccess(
                 InventoryChangeType.Remove,
@@ -428,6 +432,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (!cleared)
                 return Fail(InventoryChangeType.Clear, InventoryFailReason.NoChange, itemId, requestedCount, totalBefore, slotIndex);
 
+            ProcessReleasedInstances();
+
             return CreateSuccess(
                 InventoryChangeType.Clear,
                 itemId,
@@ -448,6 +454,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             int clearedCount = InventoryBurstOperations.ClearAll(ref slots, ref changedSlots, ref slotSnapshotsBefore);
             if (clearedCount <= 0)
                 return Fail(InventoryChangeType.Clear, InventoryFailReason.NoChange);
+
+            ProcessReleasedInstances();
 
             return CreateSuccess(
                 InventoryChangeType.Clear,

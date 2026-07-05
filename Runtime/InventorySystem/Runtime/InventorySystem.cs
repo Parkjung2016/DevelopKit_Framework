@@ -28,6 +28,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         public InventorySetupSO Setup => setup;
         public InventoryDatabaseSetupSO DatabaseSetup => databaseSetup;
         public InventoryGroup Group => group;
+        public IItemInstanceStore ItemInstanceStore => group?.ItemInstanceStore;
 
         public string ContainerId => Primary.ContainerId;
         public ContainerKind Kind => Primary.Kind;
@@ -48,7 +49,11 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         /// <summary>
         /// <see cref="InventorySetupSO"/>로 인벤토리를 초기화합니다. setupAsset을 생략하면 Inspector의 <see cref="setup"/>을 사용합니다.
         /// </summary>
-        public void Init(IInventoryOwner owner, InventorySetupSO setupAsset = null, IItemContainerRouter router = null)
+        public void Init(
+            IInventoryOwner owner,
+            InventorySetupSO setupAsset = null,
+            IItemContainerRouter router = null,
+            IItemInstanceFactory instanceFactory = null)
         {
             InventorySetupSO resolvedSetup = setupAsset ?? setup;
             if (resolvedSetup == null)
@@ -62,6 +67,11 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
             databaseSetup?.RegisterGlobals();
             RebuildGroup(resolvedSetup.CreateContainerConfigs(), router);
+
+            if (instanceFactory != null)
+                group.ItemInstanceFactory = instanceFactory;
+
+            ItemInstanceCatalog.Configure(group.ItemInstanceStore, group.ItemInstanceFactory);
         }
 
         public bool TryGetContainer(string containerId, out IInventoryContainer container)
@@ -328,6 +338,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         private void DisposeGroup()
         {
+            if (group != null && ReferenceEquals(ItemInstanceCatalog.Current, group.ItemInstanceStore))
+                ItemInstanceCatalog.Clear();
+
             group?.Dispose();
             group = null;
             primaryContainer = null;

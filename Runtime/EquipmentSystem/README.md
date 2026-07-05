@@ -100,7 +100,7 @@ host.Initialize(
             .InstantiateAsync<BaseWeaponVisual>(request.AssetKey)
             .OnCompleted(visual =>
             {
-                visual.Setup(request.ItemId, request.EquipSlotIndex, request.InstanceId);
+                visual.Setup(request);
                 onCompleted(visual);
             })
             .Run();
@@ -111,6 +111,15 @@ objectEquipmentSystem.Init(owner, inventory, equipmentSetup,
 ```
 
 커스텀 비주얼(애니·VFX 등)은 프리팹에 `SocketItemComponent`를 상속한 컴포넌트를 붙이고 Spawner가 그 `ISocketItem`을 반환하면 됩니다.
+
+```csharp
+public void Setup(in EquipmentVisualSpawnRequest request)
+{
+    var staticData = WeaponTable.Get(request.ItemId);
+    ItemInstanceCatalog.TryGet<WeaponInstanceData>(request.InstanceId, out var instance);
+    Apply(staticData, instance);
+}
+```
 ## 아이템 카테고리 지정
 
 1. **태그** — `ItemDefinitionSO`에 `equip.Weapon` 형태 태그 (`CatalogTagEquipmentProfileSource`)
@@ -128,6 +137,7 @@ objectEquipmentSystem.Init(owner, inventory, equipmentSetup,
 | 타입 | 역할 |
 |------|------|
 | `IItemInstanceStore` / `InMemoryItemInstanceStore` | `InstanceId`별 가변 데이터 저장 |
+| `ItemInstanceCatalog` | 전역 Store — 비주얼/UI 등 어디서든 `TryGet` |
 | `IItemActionResolver` / `ItemActionResolver` | `itemId` → `IItemUseHandler` 조회 |
 | `InventoryGroup.TrySwapBetween` | 컨테이너 간 스왑 (장비 교체) |
 | `InventoryGroup.TryMoveBetween` | 고유 인스턴스 `InstanceId` 보존 이동 |
