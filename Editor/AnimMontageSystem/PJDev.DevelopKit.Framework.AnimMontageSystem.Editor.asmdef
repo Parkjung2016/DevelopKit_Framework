@@ -1,0 +1,20 @@
+{
+    "name": "PJDev.DevelopKit.Framework.AnimMontageSystem.Editor",
+    "rootNamespace": "PJDev.DevelopKit.Framework.Editors.AnimMontageSystem",
+    "references": [
+        "GUID:d4e5f6a7b8c9402091ab23cd45ef6789",
+        "GUID:cb245d9e3f5b39946b271b70d3e6cced",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
