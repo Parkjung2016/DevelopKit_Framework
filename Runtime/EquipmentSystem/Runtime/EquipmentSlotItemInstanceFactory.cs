@@ -49,6 +49,9 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         public EquipmentSlotItemInstanceFactory SetFallback<T>() where T : class, IItemInstanceData, new() =>
             SetFallback(ItemInstanceFactories.Create<T>());
 
+        public EquipmentSlotItemInstanceFactory SetFallback(Func<IItemInstanceData> create) =>
+            SetFallback(ItemInstanceFactories.Create(create));
+
         public EquipmentSlotItemInstanceFactory SetFallback() => SetFallback<EmptyItemInstanceData>();
 
         public bool TryCreate(int itemId, out IItemInstanceData data)

@@ -34,25 +34,31 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             return this;
         }
 
-        public ItemInstanceFactoryBuilder Fallback(IItemInstanceFactory factory)
+        public ItemInstanceFactoryBuilder SetFallback(IItemInstanceFactory factory)
         {
             root.SetFallback(factory);
             return this;
         }
 
-        public ItemInstanceFactoryBuilder Fallback(Func<int, IItemInstanceData> create)
+        public ItemInstanceFactoryBuilder SetFallback(Func<int, IItemInstanceData> create)
         {
             root.SetFallback(create);
             return this;
         }
 
-        public ItemInstanceFactoryBuilder Fallback<T>() where T : class, IItemInstanceData, new()
+        public ItemInstanceFactoryBuilder SetFallback<T>() where T : class, IItemInstanceData, new()
         {
             root.SetFallback<T>();
             return this;
         }
 
-        public ItemInstanceFactoryBuilder Fallback() => Fallback<EmptyItemInstanceData>();
+        public ItemInstanceFactoryBuilder SetFallback(Func<IItemInstanceData> create)
+        {
+            root.SetFallback(create);
+            return this;
+        }
+
+        public ItemInstanceFactoryBuilder SetFallback() => SetFallback<EmptyItemInstanceData>();
 
         public IItemInstanceFactory Build() => root;
     }
