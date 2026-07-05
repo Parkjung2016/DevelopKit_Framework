@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using PJDev.DevelopKit.Framework.Shared.Runtime;
 #if UNITY_6000_5_OR_NEWER
 using Unity.Scripting.LifecycleManagement;
 #endif
@@ -14,29 +15,22 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 #endif
     public static partial class ItemCatalog
     {
-        private static IItemCatalog current;
+        public static bool IsReady => GlobalRegistry<IItemCatalog>.IsReady;
 
-        public static bool IsReady => current != null;
+        public static IItemCatalog Current =>
+            GlobalRegistry<IItemCatalog>.ResolveOrDefault(null, NullItemCatalog.Instance);
 
-        public static IItemCatalog Current => current ?? NullItemCatalog.Instance;
-
-        public static void Set(IItemCatalog catalog)
-        {
-            if (catalog == null)
-                throw new ArgumentNullException(nameof(catalog));
-
-            current = catalog;
-        }
+        public static void Set(IItemCatalog catalog) => GlobalRegistry<IItemCatalog>.Set(catalog);
 
         public static void Set(IItemDatabase database)
         {
             if (database == null)
                 throw new ArgumentNullException(nameof(database));
 
-            current = database as IItemCatalog ?? new ItemDatabaseCatalogAdapter(database);
+            Set(database as IItemCatalog ?? new ItemDatabaseCatalogAdapter(database));
         }
 
-        public static void Clear() => current = null;
+        public static void Clear() => GlobalRegistry<IItemCatalog>.Clear();
 
         public static IItemDatabase Resolve(IItemDatabase database = null) =>
             database ?? Current;

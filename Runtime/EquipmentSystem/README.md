@@ -1,6 +1,6 @@
 # EquipmentSystem
 
-InventorySystem 위에 슬롯 카테고리(무기/투구/갑옷 등)와 장착 API를 제공하는 모듈입니다.
+ObjectInventorySystem 위에 슬롯 카테고리(무기/투구/갑옷 등)와 장착 API를 제공하는 모듈입니다.
 
 ## 구성
 
@@ -9,7 +9,7 @@ InventorySystem 위에 슬롯 카테고리(무기/투구/갑옷 등)와 장착 A
 | `EquipmentSetupSO` | 장비 컨테이너 설정, 슬롯 카테고리 배열, 태그/오버라이드 프로필 |
 | `EquipmentSlotRule` | `ISlotRule` — 슬롯 인덱스별 카테고리 검증 |
 | `EquipmentSystem` | `TryEquipFromContainer`, `TryUnequipToContainer`, `TrySwapEquippedSlots` |
-| `ObjectEquipmentSystem` | `InventorySystem`과 연동하는 MonoBehaviour 진입점 |
+| `ObjectEquipmentSystem` | `ObjectInventorySystem`과 연동하는 MonoBehaviour 진입점 |
 | `IEquipmentEffectApplier` | 장착/해제 시 스탯·비주얼 등 게임 로직 훅 |
 | `EquipmentVisualController` | 슬롯별 비주얼 생성·추적·해제 (순수 C#) |
 | `ObjectEquipmentVisualHost` | Inspector fallback + Controller 생성 (MonoBehaviour) |

@@ -34,14 +34,14 @@
 
 ### 2. 런타임 초기화
 
-**MonoBehaviour (`InventorySystem`)** — 전역 DB + 컨테이너 Setup을 분리합니다.
+**MonoBehaviour (`ObjectInventorySystem`)** — 전역 DB + 컨테이너 Setup을 분리합니다.
 
 ```csharp
-// 부팅 시 전역 DB 등록 (InventorySystem의 Database Setup 필드 또는 직접 호출)
+// 부팅 시 전역 DB 등록 (ObjectInventorySystem의 Database Setup 필드 또는 직접 호출)
 databaseSetup.RegisterGlobals();  // ItemCatalog / RecipeCatalog / LootTableCatalog
 
 // 컨테이너만 InventorySetupSO로 초기화
-inventorySystem.Init(owner, containerSetupSO, instanceFactory: new WeaponInstanceFactory());
+inventory.Init(owner, containerSetupSO, instanceFactory: new WeaponInstanceFactory());
 // → ItemInstanceCatalog.Configure(...) 자동 호출
 ```
 
@@ -163,7 +163,7 @@ ItemCatalog / RecipeCatalog / LootTableCatalog (전역 — DatabaseSetup.Registe
     ↑ Resolve()
 InventoryGroup / InventoryContainer (순수 C# — InventorySessionBuilder)
     ↑
-InventorySystem (MonoBehaviour — DatabaseSetup + InventorySetupSO)
+ObjectInventorySystem (MonoBehaviour — DatabaseSetup + InventorySetupSO)
 ```
 
 | 개념 | 설명 |

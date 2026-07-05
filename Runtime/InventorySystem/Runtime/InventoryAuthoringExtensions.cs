@@ -8,11 +8,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
     /// </summary>
     public static class InventoryAuthoringExtensions
     {
-        public static void RegisterGlobals(this InventoryDatabaseSetupSO setup)
-        {
-            setup?.RegisterGlobals();
-        }
-
         public static InventoryContainerConfig[] CreateContainerConfigs(this InventorySetupSO setup)
         {
             if (setup == null)

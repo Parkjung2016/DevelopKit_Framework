@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
+    [AddComponentMenu("PJDev/Framework/Object Stat System")]
     public class ObjectStatSystem : MonoBehaviour
     {
         [SerializeField] private StatSetupSO statSetup;
@@ -34,16 +35,16 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
         }
 
         public void Init(IStatDataProvider dataProvider, StatOverrideListSO overrideList = null) =>
-            collection.Init(dataProvider, ToOverrideEntries(overrideList));
+            collection.Init(dataProvider ?? CreateDefaultProvider(), ToOverrideEntries(overrideList));
 
         public void Init(IStatCatalog statDatabase, StatOverrideListSO overrideList = null) =>
-            collection.Init(statDatabase, ToOverrideEntries(overrideList));
+            collection.Init(ResolveCatalog(statDatabase), ToOverrideEntries(overrideList));
 
         public void Init(StatOverrideListSO overrideList) =>
             collection.Init(ToOverrideEntries(overrideList));
 
         public void Init(IStatCatalog statDatabase, IReadOnlyList<StatOverrideEntry> overrides) =>
-            collection.Init(statDatabase, overrides);
+            collection.Init(ResolveCatalog(statDatabase), overrides);
 
         public void Init(IReadOnlyList<StatOverrideEntry> overrides) =>
             collection.Init(overrides);
@@ -114,6 +115,19 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
         public void ClearAllStatValueModifier() => collection.ClearAllStatValueModifier();
 
         public void ClearAllStatValuePercentModifier() => collection.ClearAllStatValuePercentModifier();
+
+        public StatCollection Collection => collection;
+
+        private static IStatCatalog ResolveCatalog(IStatCatalog statDatabase) =>
+            statDatabase ?? (StatCatalog.IsReady ? StatCatalog.Current : null);
+
+        private static IStatDataProvider CreateDefaultProvider()
+        {
+            if (StatCatalog.IsReady)
+                return new StatDataProvider(StatCatalog.Current);
+
+            return null;
+        }
 
         private static IReadOnlyList<StatOverrideEntry> ToOverrideEntries(StatOverrideListSO overrideList)
         {

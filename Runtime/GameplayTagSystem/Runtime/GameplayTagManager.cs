@@ -4,13 +4,19 @@ using System.Linq;
 using System.Reflection;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
+#if UNITY_6000_5_OR_NEWER
+using Unity.Scripting.LifecycleManagement;
+#endif
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 {
     /// <summary>
     /// 게임플레이 태그 등록·조회·리로드를 담당하는 정적 매니저입니다.
     /// </summary>
-    public static class GameplayTagManager
+#if UNITY_6000_5_OR_NEWER
+    [AutoStaticsCleanup]
+#endif
+    public static partial class GameplayTagManager
     {
         private static Dictionary<string, GameplayTagDefinition> tagDefinitionsByName = new();
         private static GameplayTagDefinition[] tagDefinitions;

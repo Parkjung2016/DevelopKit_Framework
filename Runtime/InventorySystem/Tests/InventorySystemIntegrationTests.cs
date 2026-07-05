@@ -32,7 +32,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             setup.ContainerConfigs = new[] { mainConfig, equipmentConfig };
 
             host = new GameObject("InventorySystemTest");
-            var system = host.AddComponent<global::PJDev.DevelopKit.Framework.InventorySystem.Runtime.InventorySystem>();
+            var system = host.AddComponent<ObjectInventorySystem>();
             system.Init(null, setup);
 
             Assert.IsNotNull(system.Group);
@@ -51,7 +51,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             setup.ContainerConfigs = System.Array.Empty<InventoryConfigSO>();
 
             host = new GameObject("InventorySystemTest");
-            var system = host.AddComponent<global::PJDev.DevelopKit.Framework.InventorySystem.Runtime.InventorySystem>();
+            var system = host.AddComponent<ObjectInventorySystem>();
             system.Init(null, setup);
 
             Assert.AreEqual(1, system.Group.Containers.Count);

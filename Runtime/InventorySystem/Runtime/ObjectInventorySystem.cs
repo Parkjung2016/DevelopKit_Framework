@@ -1,14 +1,16 @@
 using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
+using PJDev.DevelopKit.Framework.Shared.Runtime;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
     /// <summary>
-    /// 플레이어·UI용 인벤토리 진입점입니다. 단일/멀티 컨테이너와 제작·루팅을 모두 처리합니다.
+    /// 플레이어·UI용 인벤토리 MonoBehaviour 어댑터. Domain은 <see cref="InventoryGroup"/>입니다.
     /// </summary>
-    public partial class InventorySystem : MonoBehaviour, IInventoryContainer
+    [AddComponentMenu("PJDev/Framework/Object Inventory System")]
+    public partial class ObjectInventorySystem : MonoBehaviour, IInventoryContainer
     {
         public delegate void SlotChangeHandler(int slotIndex, InventorySlot slot);
 
@@ -54,19 +56,24 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             InventorySetupSO setupAsset = null,
             IItemContainerRouter router = null,
             IItemInstanceFactory instanceFactory = null,
-            IItemInstanceIdGenerator instanceIdGenerator = null)
+            IItemInstanceIdGenerator instanceIdGenerator = null,
+            FrameworkInitOptions initOptions = null)
         {
             InventorySetupSO resolvedSetup = setupAsset ?? setup;
             if (resolvedSetup == null)
             {
-                CDebug.LogWarning("InventorySystem : InventorySetupSO is required.");
+                CDebug.LogWarning("ObjectInventorySystem : InventorySetupSO is required.");
                 return;
             }
+
+            FrameworkInitOptions resolvedInit = initOptions ?? FrameworkInitOptions.Default;
 
             setup = resolvedSetup;
             this.owner = owner;
 
-            databaseSetup?.RegisterGlobals();
+            if (resolvedInit.RegisterGlobalCatalogs)
+                databaseSetup?.RegisterGlobals();
+
             RebuildGroup(resolvedSetup.CreateContainerConfigs(), router);
 
             if (instanceFactory != null)
@@ -256,14 +263,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         {
             if (Primary == null)
             {
-                CDebug.LogWarning("InventorySystem : not initialized.");
+                CDebug.LogWarning("ObjectInventorySystem : not initialized.");
                 slot = default;
                 return false;
             }
 
             if (!Primary.TryGetSlot(slotIndex, out slot))
             {
-                CDebug.LogWarning($"InventorySystem : invalid slot index {slotIndex}");
+                CDebug.LogWarning($"ObjectInventorySystem : invalid slot index {slotIndex}");
                 return false;
             }
 
@@ -303,7 +310,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         {
             if (Primary == null)
             {
-                CDebug.LogWarning("InventorySystem : not initialized.");
+                CDebug.LogWarning("ObjectInventorySystem : not initialized.");
                 return new InventoryImportReport
                 {
                     LastResult = InventoryChangeResult.Fail(InventoryChangeType.Clear, InventoryFailReason.DatabaseNotReady)
@@ -335,7 +342,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
             if (configs == null || configs.Count == 0)
             {
-                CDebug.LogWarning("InventorySystem : no container configs. Using default main container.");
+                CDebug.LogWarning("ObjectInventorySystem : no container configs. Using default main container.");
                 InventorySessionBuilder.RegisterContainers(group, Array.Empty<InventoryContainerConfig>(), out primaryContainer);
                 return;
             }
@@ -364,7 +371,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 return;
             }
 
-            CDebug.LogWarning("InventorySystem : not initialized.");
+            CDebug.LogWarning("ObjectInventorySystem : not initialized.");
         }
 
         private InventoryChangeResult ExecuteContainer(
@@ -375,7 +382,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         {
             if (Primary == null)
             {
-                CDebug.LogWarning("InventorySystem : not initialized.");
+                CDebug.LogWarning("ObjectInventorySystem : not initialized.");
                 return InventoryChangeResult.Fail(changeType, InventoryFailReason.DatabaseNotReady, itemId, count);
             }
 
@@ -392,7 +399,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         {
             if (group == null)
             {
-                CDebug.LogWarning("InventorySystem : not initialized.");
+                CDebug.LogWarning("ObjectInventorySystem : not initialized.");
                 return InventoryChangeResult.Fail(changeType, InventoryFailReason.DatabaseNotReady, itemId, count);
             }
 

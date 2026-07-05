@@ -1,6 +1,7 @@
 #if UNITY_6000_5_OR_NEWER
 using Unity.Scripting.LifecycleManagement;
 #endif
+using PJDev.DevelopKit.Framework.Shared.Runtime;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
@@ -9,21 +10,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 #endif
     public static partial class RecipeCatalog
     {
-        private static IRecipeDatabase current;
+        public static bool IsReady => GlobalRegistry<IRecipeDatabase>.IsReady;
 
-        public static bool IsReady => current != null;
+        public static IRecipeDatabase Current =>
+            GlobalRegistry<IRecipeDatabase>.ResolveOrDefault(null, NullRecipeDatabase.Instance);
 
-        public static IRecipeDatabase Current => current ?? NullRecipeDatabase.Instance;
+        public static void Set(IRecipeDatabase database) => GlobalRegistry<IRecipeDatabase>.Set(database);
 
-        public static void Set(IRecipeDatabase database)
-        {
-            if (database == null)
-                throw new System.ArgumentNullException(nameof(database));
-
-            current = database;
-        }
-
-        public static void Clear() => current = null;
+        public static void Clear() => GlobalRegistry<IRecipeDatabase>.Clear();
 
         public static IRecipeDatabase Resolve(IRecipeDatabase database = null) =>
             database ?? Current;

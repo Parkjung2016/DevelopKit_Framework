@@ -1,9 +1,18 @@
+#if UNITY_6000_5_OR_NEWER
+using Unity.Scripting.LifecycleManagement;
+#endif
+
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
     /// <summary>Snowflake 기반 기본 <see cref="IItemInstanceIdGenerator"/>입니다.</summary>
-    public sealed class DefaultItemInstanceIdGenerator : IItemInstanceIdGenerator
+#if UNITY_6000_5_OR_NEWER
+    [AutoStaticsCleanup]
+#endif
+    public sealed partial class DefaultItemInstanceIdGenerator : IItemInstanceIdGenerator
     {
-        public static readonly DefaultItemInstanceIdGenerator Instance = new();
+        private static DefaultItemInstanceIdGenerator instance = new();
+
+        public static DefaultItemInstanceIdGenerator Instance => instance;
 
         private readonly SnowflakeItemInstanceIdGenerator snowflake = SnowflakeItemInstanceIdGenerator.Instance;
 

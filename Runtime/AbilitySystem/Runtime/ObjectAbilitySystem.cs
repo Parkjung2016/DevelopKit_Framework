@@ -6,7 +6,8 @@ using UnityEngine.InputSystem;
 
 namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 {
-    public class AbilitySystem : MonoBehaviour
+    [AddComponentMenu("PJDev/Framework/Object Ability System")]
+    public class ObjectAbilitySystem : MonoBehaviour
     {
         private readonly Dictionary<GameplayTag, AbilitySO> abilitiyDic = new();
 

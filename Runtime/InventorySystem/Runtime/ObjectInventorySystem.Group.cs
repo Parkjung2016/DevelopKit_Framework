@@ -4,7 +4,7 @@ using PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
-    public partial class InventorySystem
+    public partial class ObjectInventorySystem
     {
         public bool CanCraft(
             IReadOnlyList<InventoryRecipeEntry> costs,
@@ -76,7 +76,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         public InventoryGroupTransaction BeginTransaction() =>
             group?.BeginTransaction()
-            ?? throw new InvalidOperationException("InventorySystem : not initialized.");
+            ?? throw new InvalidOperationException("ObjectInventorySystem : not initialized.");
 
         public InventoryGroupSaveData ExportGroupSaveData() =>
             group == null ? new InventoryGroupSaveData() : InventorySerializer.Export(group);

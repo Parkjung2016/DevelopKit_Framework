@@ -1,4 +1,7 @@
 using System;
+#if UNITY_6000_5_OR_NEWER
+using Unity.Scripting.LifecycleManagement;
+#endif
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
@@ -6,9 +9,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
     /// 64-bit Snowflake 스타일 InstanceId를 생성합니다.
     /// timestamp(41) + itemId fragment(10) + sequence(12)
     /// </summary>
-    public sealed class SnowflakeItemInstanceIdGenerator : IItemInstanceIdGenerator
+#if UNITY_6000_5_OR_NEWER
+    [AutoStaticsCleanup]
+#endif
+    public sealed partial class SnowflakeItemInstanceIdGenerator : IItemInstanceIdGenerator
     {
-        public static readonly SnowflakeItemInstanceIdGenerator Instance = new();
+        private static SnowflakeItemInstanceIdGenerator instance = new();
+
+        public static SnowflakeItemInstanceIdGenerator Instance => instance;
 
         private const int SequenceBits = 12;
         private const int ItemIdBits = 10;

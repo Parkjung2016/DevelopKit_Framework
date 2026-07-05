@@ -3,7 +3,6 @@
     "rootNamespace": "PJDev.DevelopKit.Framework.AbilitySystem.Runtime",
     "references": [
         "GUID:75469ad4d38634e559750d17036d5f7c",
-        "GUID:98c318d9b99c5944ab6a8e81f28f698c",
         "GUID:406d82ec2f4cd104699d60414ec8fcdb",
         "GUID:f4e8d2c6b0a9471e8c3d5f9a2b6e7c4d"
     ],

@@ -1,6 +1,7 @@
 #if UNITY_6000_5_OR_NEWER
 using Unity.Scripting.LifecycleManagement;
 #endif
+using PJDev.DevelopKit.Framework.Shared.Runtime;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
@@ -9,21 +10,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 #endif
     public static partial class LootTableCatalog
     {
-        private static ILootTableDatabase current;
+        public static bool IsReady => GlobalRegistry<ILootTableDatabase>.IsReady;
 
-        public static bool IsReady => current != null;
+        public static ILootTableDatabase Current =>
+            GlobalRegistry<ILootTableDatabase>.ResolveOrDefault(null, NullLootTableDatabase.Instance);
 
-        public static ILootTableDatabase Current => current ?? NullLootTableDatabase.Instance;
+        public static void Set(ILootTableDatabase database) => GlobalRegistry<ILootTableDatabase>.Set(database);
 
-        public static void Set(ILootTableDatabase database)
-        {
-            if (database == null)
-                throw new System.ArgumentNullException(nameof(database));
-
-            current = database;
-        }
-
-        public static void Clear() => current = null;
+        public static void Clear() => GlobalRegistry<ILootTableDatabase>.Clear();
 
         public static ILootTableDatabase Resolve(ILootTableDatabase database = null) =>
             database ?? Current;

@@ -2,10 +2,10 @@ using System;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 using UnityEngine;
-using ObjectInventorySystem = PJDev.DevelopKit.Framework.InventorySystem.Runtime.InventorySystem;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
+    [AddComponentMenu("PJDev/Framework/Object Equipment System")]
     public class ObjectEquipmentSystem : MonoBehaviour
     {
         [SerializeField] private EquipmentSetupSO setup;
@@ -31,7 +31,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 
             if (inventorySystem == null)
             {
-                CDebug.LogWarning("ObjectEquipmentSystem : InventorySystem is null.");
+                CDebug.LogWarning("ObjectEquipmentSystem : ObjectInventorySystem is null.");
                 return;
             }
 

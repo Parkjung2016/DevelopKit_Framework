@@ -20,14 +20,14 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 
         [SerializeField] private List<AbilityInputBridgeInfo> abilityInputBridgeInfoList;
 
-        private AbilitySystem abilitySystemCompo;
+        private ObjectAbilitySystem abilitySystemCompo;
         private IInputActionCollection2 inputActionCollection;
 
         private readonly Dictionary<InputAction, Action<InputAction.CallbackContext>> callbackMap = new();
 
         private bool isBound;
 
-        public void Init(AbilitySystem abilitySystem)
+        public void Init(ObjectAbilitySystem abilitySystem)
         {
             abilitySystemCompo = abilitySystem;
 
