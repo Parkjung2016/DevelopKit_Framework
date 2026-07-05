@@ -24,12 +24,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
                 return;
             }
 
-            GameObject instance = Object.Instantiate(prefab);
-            ISocketItem socketItem = instance.TryGetComponent(out ISocketItem existing)
-                ? existing
-                : new GameObjectSocketItem(instance);
-
-            OnSpawnCompleted?.Invoke(socketItem);
+            OnSpawnCompleted?.Invoke(SocketItemUtility.FromGameObject(prefab));
         }
 
         public void Release(ISocketItem socketItem) => SocketItemUtility.ReleaseDestroy(socketItem);

@@ -6,7 +6,21 @@ namespace PJDev.DevelopKit.Framework.SocketSystem.Runtime
     public static class SocketItemUtility
     {
         /// <summary>
-        /// <see cref="ISocketItem"/> 구현 컴포넌트, 같은 GameObject, 루트 순으로 찾고 없으면 <see cref="GameObjectSocketItem"/>으로 래핑합니다.
+        /// GameObject에 붙은 <see cref="ISocketItem"/>을 반환하고, 없으면 <see cref="GameObjectSocketItem"/>으로 래핑합니다.
+        /// </summary>
+        public static ISocketItem FromGameObject(GameObject gameObject)
+        {
+            if (gameObject == null)
+                return null;
+
+            if (gameObject.TryGetComponent(out ISocketItem existing))
+                return existing;
+
+            return new GameObjectSocketItem(gameObject);
+        }
+
+        /// <summary>
+        /// <see cref="ISocketItem"/> 구현 컴포넌트, 같은 GameObject, 루트 순으로 찾고 없으면 <see cref="FromGameObject"/>로 래핑합니다.
         /// </summary>
         public static ISocketItem FromComponent(Component component)
         {
@@ -23,7 +37,7 @@ namespace PJDev.DevelopKit.Framework.SocketSystem.Runtime
             if (root != component.transform && root.TryGetComponent(out ISocketItem onRoot))
                 return onRoot;
 
-            return new GameObjectSocketItem(component.gameObject);
+            return FromGameObject(component.gameObject);
         }
 
         public static void ReleaseDestroy(ISocketItem socketItem)

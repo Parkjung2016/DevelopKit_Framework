@@ -98,13 +98,7 @@ host.Initialize(
     {
         AddressableManager.Instance
             .InstantiateAsync(request.Definition.AssetKey)
-            .OnCompleted(go =>
-            {
-                ISocketItem item = go.TryGetComponent(out ISocketItem existing)
-                    ? existing
-                    : new GameObjectSocketItem(go);
-                onCompleted(item);
-            })
+            .OnCompleted(go => onCompleted(SocketItemUtility.FromGameObject(go)))
             .Run();
     }));
 
