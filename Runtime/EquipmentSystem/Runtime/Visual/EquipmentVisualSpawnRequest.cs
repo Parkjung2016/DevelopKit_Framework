@@ -1,25 +1,19 @@
-using PJDev.DevelopKit.Framework.SocketSystem.Runtime;
-
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
     /// <summary><see cref="IEquipmentVisualSpawner"/>에 전달하는 스폰 요청입니다.</summary>
     public readonly struct EquipmentVisualSpawnRequest
     {
-        public EquipmentVisualSpawnRequest(
-            int equipSlotIndex,
-            string slotCategory,
-            ObjectSocket socket,
-            in EquipmentVisualDefinition definition)
+        public EquipmentVisualSpawnRequest(int itemId, string assetKey, int equipSlotIndex, long instanceId = 0)
         {
+            ItemId = itemId;
+            AssetKey = assetKey;
             EquipSlotIndex = equipSlotIndex;
-            SlotCategory = slotCategory;
-            Socket = socket;
-            Definition = definition;
+            InstanceId = instanceId;
         }
 
+        public int ItemId { get; }
+        public string AssetKey { get; }
         public int EquipSlotIndex { get; }
-        public string SlotCategory { get; }
-        public ObjectSocket Socket { get; }
-        public EquipmentVisualDefinition Definition { get; }
+        public long InstanceId { get; }
     }
 }

@@ -67,7 +67,11 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             int spawnGeneration = ++state.SpawnGeneration;
             state.Socket = socket;
 
-            var request = new EquipmentVisualSpawnRequest(equipSlotIndex, slotCategory, socket, visual);
+            var request = new EquipmentVisualSpawnRequest(
+                stack.ItemId,
+                visual.AssetKey,
+                equipSlotIndex,
+                stack.InstanceId);
             spawner.Spawn(request, socketItem => OnSlotVisualSpawnCompleted(state, spawnGeneration, visual, socketItem));
         }
 

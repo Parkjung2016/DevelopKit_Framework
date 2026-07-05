@@ -97,8 +97,12 @@ host.Initialize(
     new DelegateEquipmentVisualSpawner((request, onCompleted) =>
     {
         AddressableManager.Instance
-            .InstantiateAsync(request.Definition.AssetKey)
-            .OnCompleted(go => onCompleted(SocketItemUtility.FromGameObject(go)))
+            .InstantiateAsync<BaseWeaponVisual>(request.AssetKey)
+            .OnCompleted(visual =>
+            {
+                visual.Setup(request.ItemId, request.EquipSlotIndex, request.InstanceId);
+                onCompleted(visual);
+            })
             .Run();
     }));
 

@@ -17,7 +17,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 
         public void Spawn(in EquipmentVisualSpawnRequest request, EquipmentVisualSpawnCompletedHandler OnSpawnCompleted)
         {
-            if (!prefabsByKey.TryGetValue(request.Definition.AssetKey, out GameObject prefab) || prefab == null)
+            if (!prefabsByKey.TryGetValue(request.AssetKey, out GameObject prefab) || prefab == null)
             {
                 OnSpawnCompleted?.Invoke(null);
                 return;
