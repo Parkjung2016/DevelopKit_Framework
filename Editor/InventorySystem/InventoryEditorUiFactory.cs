@@ -788,9 +788,7 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
             if (item == null)
                 return string.Empty;
 
-            int stackSize = item.IsStackable
-                ? (item.MaxStackSize > 0 ? item.MaxStackSize : 1)
-                : 1;
+            int stackSize = ItemDefinition.ResolveMaxStackSize(item.MaxStackSize, item.IsStackable);
 
             return $"{InventoryEnumCatalog.GetItemTypeDisplayName(item.ItemType)} · stack {stackSize}";
         }

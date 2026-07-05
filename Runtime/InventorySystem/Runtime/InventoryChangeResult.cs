@@ -255,8 +255,8 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 return "null";
 
             return pretty
-                ? $"{{ \"ItemId\": {definition.ItemId}, \"ItemType\": \"{definition.ItemType}\", \"MaxStackSize\": {definition.MaxStackSize}, \"IsStackable\": {Bool(definition.IsStackable)}, \"EffectiveMaxStackSize\": {definition.EffectiveMaxStackSize}, \"CanDrop\": {Bool(definition.CanDrop)}, \"CanTrade\": {Bool(definition.CanTrade)} }}"
-                : $"{{\"ItemId\":{definition.ItemId},\"ItemType\":\"{definition.ItemType}\",\"MaxStackSize\":{definition.MaxStackSize},\"IsStackable\":{Bool(definition.IsStackable)},\"EffectiveMaxStackSize\":{definition.EffectiveMaxStackSize},\"CanDrop\":{Bool(definition.CanDrop)},\"CanTrade\":{Bool(definition.CanTrade)}}}";
+                ? $"{{ \"ItemId\": {definition.ItemId}, \"ItemType\": \"{definition.ItemType}\", \"MaxStackSize\": {definition.MaxStackSize}, \"IsStackable\": {Bool(definition.IsStackable)}, \"CanDrop\": {Bool(definition.CanDrop)}, \"CanTrade\": {Bool(definition.CanTrade)} }}"
+                : $"{{\"ItemId\":{definition.ItemId},\"ItemType\":\"{definition.ItemType}\",\"MaxStackSize\":{definition.MaxStackSize},\"IsStackable\":{Bool(definition.IsStackable)},\"CanDrop\":{Bool(definition.CanDrop)},\"CanTrade\":{Bool(definition.CanTrade)}}}";
         }
 
         private static string FormatIndices(int[] indices)

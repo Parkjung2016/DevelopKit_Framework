@@ -1023,10 +1023,10 @@ namespace PJDev.DevelopKit.Framework.Editors.InventorySystem
 
         private static int GetLootStackCap(ItemDefinitionSO item)
         {
-            if (item == null || item.MaxStackSize <= 0)
+            if (item == null)
                 return LootCountFallbackMax;
 
-            return item.IsStackable ? item.MaxStackSize : 1;
+            return ItemDefinition.ResolveMaxStackSize(item.MaxStackSize, item.IsStackable);
         }
 
         private static float GetLootEntryWeightPercent(LootEntry[] entries, LootEntry entry)

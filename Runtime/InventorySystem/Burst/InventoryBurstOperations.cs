@@ -66,7 +66,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             remainder = count;
             totalItemCountBefore = 0;
 
-            int effectiveMaxStackSize = GetEffectiveMaxStackSize(maxStackSize, isStackable);
+            int effectiveMaxStackSize = maxStackSize;
             if (itemId <= 0 || count <= 0 || effectiveMaxStackSize <= 0)
                 return;
 
@@ -135,7 +135,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             addedTotal = 0;
             remainder = count;
 
-            int effectiveMaxStackSize = GetEffectiveMaxStackSize(maxStackSize, isStackable);
+            int effectiveMaxStackSize = maxStackSize;
             if (slotIndex < 0 || slotIndex >= slots.Length || itemId <= 0 || count <= 0 || effectiveMaxStackSize <= 0)
                 return false;
 
@@ -265,7 +265,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             processedCount = 0;
             remainder = 0;
 
-            int effectiveMaxStackSize = GetEffectiveMaxStackSize(maxStackSize, isStackable);
+            int effectiveMaxStackSize = maxStackSize;
 
             if (fromSlotIndex < 0 || fromSlotIndex >= slots.Length ||
                 toSlotIndex < 0 || toSlotIndex >= slots.Length ||
@@ -402,7 +402,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             if (itemId <= 0 || count <= 0)
                 return 0;
 
-            int effectiveMaxStackSize = GetEffectiveMaxStackSize(maxStackSize, isStackable);
+            int effectiveMaxStackSize = maxStackSize;
             if (effectiveMaxStackSize <= 0)
                 return 0;
 
@@ -580,10 +580,6 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Burst
             slot.Count += addable;
             return amount - addable;
         }
-
-        [BurstCompile]
-        private static int GetEffectiveMaxStackSize(int maxStackSize, bool isStackable) =>
-            isStackable ? maxStackSize : 1;
 
         [BurstCompile]
         private static int TryAddToSlot(ref SlotData slot, int itemId, int amount, int maxStackSize)

@@ -197,7 +197,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (!TryGetDefinition(itemId, out ItemDefinition definition) || !definition.IsStackable)
                 return false;
 
-            int maxStack = definition.EffectiveMaxStackSize;
+            int maxStack = definition.MaxStackSize;
             for (int i = 0; i < slots.Length; i++)
             {
                 SlotData slot = slots[i];
@@ -467,7 +467,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                         continue;
 
                     SlotData simulated = slot;
-                    remainder = SimulateSlotAdd(ref simulated, itemId, remainder, definition.EffectiveMaxStackSize);
+                    remainder = SimulateSlotAdd(ref simulated, itemId, remainder, definition.MaxStackSize);
                 }
             }
 
@@ -479,7 +479,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 if (definition.IsStackable)
                 {
                     SlotData simulated = default;
-                    remainder = SimulateSlotAdd(ref simulated, itemId, remainder, definition.EffectiveMaxStackSize);
+                    remainder = SimulateSlotAdd(ref simulated, itemId, remainder, definition.MaxStackSize);
                 }
                 else
                 {
