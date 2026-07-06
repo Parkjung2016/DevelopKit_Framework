@@ -40,6 +40,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private static MontageViewportCamera activeCamera;
         private static Func<bool> tryTogglePlayback;
         private static int lastPlaybackToggleFrame = -1;
+        private static int focusedControlId;
 
         public static bool IsActive => flyLookActive || IsFlyMoving() || HasFlyMomentum();
 
@@ -61,7 +62,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return false;
             }
 
-            int controlId = GUIUtility.GetControlID(ViewportControlHash, FocusType.Passive);
+            int controlId = GUIUtility.GetControlID(ViewportControlHash, FocusType.Keyboard);
             Event evt = Event.current;
             bool inRect = viewportRect.Contains(evt.mousePosition);
             bool changed = false;
@@ -69,15 +70,27 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             switch (evt.GetTypeForControl(controlId))
             {
                 case EventType.MouseDown:
-                    if (inRect && !EditorGUIUtility.editingTextField && ShouldCaptureMouseDown(evt, camera))
+                    if (inRect && !EditorGUIUtility.editingTextField)
                     {
-                        if (TryBeginFlyLook(evt, camera))
-                            changed = true;
-
-                        GUIUtility.hotControl = controlId;
                         GUIUtility.keyboardControl = controlId;
-                        evt.Use();
+                        focusedControlId = controlId;
+
+                        if (ShouldCaptureMouseDown(evt, camera))
+                        {
+                            if (TryBeginFlyLook(evt, camera))
+                                changed = true;
+
+                            GUIUtility.hotControl = controlId;
+                            evt.Use();
+                        }
+
                         changed = true;
+                    }
+                    else if (!inRect && focusedControlId == controlId)
+                    {
+                        focusedControlId = 0;
+                        if (GUIUtility.keyboardControl == controlId)
+                            GUIUtility.keyboardControl = 0;
                     }
 
                     break;
@@ -89,8 +102,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     if (GUIUtility.hotControl == controlId)
                     {
                         GUIUtility.hotControl = 0;
-                        if (GUIUtility.keyboardControl == controlId)
-                            GUIUtility.keyboardControl = 0;
                         evt.Use();
                         changed = true;
                     }
@@ -128,6 +139,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     break;
 
                 case EventType.KeyDown:
+                    if (TryHandleModeShortcut(camera, viewportRect, controlId, inRect, requestRepaint))
+                    {
+                        evt.Use();
+                        changed = true;
+                        break;
+                    }
+
                     if (TryHandlePlaybackShortcut(viewportRect, controlId, inRect))
                     {
                         evt.Use();
@@ -194,6 +212,28 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             activeCamera = null;
             tryTogglePlayback = null;
             lastPlaybackToggleFrame = -1;
+            focusedControlId = 0;
+        }
+
+        private static bool TryHandleModeShortcut(
+            MontageViewportCamera camera,
+            Rect viewportRect,
+            int controlId,
+            bool inRect,
+            Action requestRepaint)
+        {
+            Event evt = Event.current;
+            if (evt.type != EventType.KeyDown
+                || (evt.keyCode != KeyCode.Alpha2 && evt.keyCode != KeyCode.Keypad2)
+                || EditorGUIUtility.editingTextField)
+            {
+                return false;
+            }
+
+            if (!HasViewportFocus(controlId))
+                return false;
+
+            return MontageSceneViewNavigation.Toggle2DMode(camera, requestRepaint);
         }
 
         private static bool TryHandlePlaybackShortcut(Rect viewportRect, int controlId, bool inRect)
@@ -205,15 +245,24 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (tryTogglePlayback == null)
                 return false;
 
-            bool viewportContext = flyLookActive
-                || GUIUtility.hotControl == controlId
-                || GUIUtility.keyboardControl == controlId
-                || inRect;
-            if (!viewportContext)
+            if (!HasViewportKeyboardContext(viewportRect, controlId, inRect))
                 return false;
 
             return InvokePlaybackToggle();
         }
+
+        private static bool HasViewportKeyboardContext(Rect viewportRect, int controlId, bool inRect) =>
+            flyLookActive
+            || GUIUtility.hotControl == controlId
+            || GUIUtility.keyboardControl == controlId
+            || focusedControlId == controlId
+            || (inRect && viewportRect.Contains(Event.current.mousePosition));
+
+        private static bool HasViewportFocus(int controlId) =>
+            flyLookActive
+            || GUIUtility.hotControl == controlId
+            || GUIUtility.keyboardControl == controlId
+            || focusedControlId == controlId;
 
         private static bool InvokePlaybackToggle()
         {
@@ -309,9 +358,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return false;
 
             Quaternion rotation = camera.Rotation;
+            Vector3 cameraPosition = camera.Pivot + rotation * new Vector3(0f, 0f, -camera.Size);
             rotation = Quaternion.AngleAxis(evt.delta.y * 0.003f * Mathf.Rad2Deg, rotation * Vector3.right) * rotation;
             rotation = Quaternion.AngleAxis(evt.delta.x * 0.003f * Mathf.Rad2Deg, Vector3.up) * rotation;
             camera.Rotation = rotation;
+            camera.Pivot = cameraPosition + rotation * new Vector3(0f, 0f, camera.Size);
             return true;
         }
 

@@ -41,6 +41,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return true;
         }
 
+        public static bool Toggle2DMode(MontageViewportCamera camera, Action requestRepaint)
+        {
+            if (camera == null || ModeTransition.IsActive)
+                return false;
+
+            ModeTransition.Begin(camera, !camera.Is2DMode, requestRepaint);
+            requestRepaint?.Invoke();
+            return true;
+        }
+
         public static bool IsToolbarRect(Rect viewportRect, Vector2 mousePosition) =>
             GetToolbarRect(viewportRect).Contains(mousePosition);
 

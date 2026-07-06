@@ -10,18 +10,24 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
     internal sealed class MontageTimelineView : VisualElement
     {
         private const float RulerHeight = 22f;
-        private const float TrackHeight = 32f;
-        private const float TrackGap = 6f;
+        private const float TrackHeight = 40f;
+        private const float TrackGap = 8f;
         private const float TrackLabelWidth = 56f;
         private const float ContentPadding = 8f;
-        private const float SnapStep = 0.05f;
+        private const float SnapStep = 0.01f;
         private const float EdgeHandleWidth = 6f;
+        private const float BlendHandleHitWidth = 22f;
+        private const float TransitionHandleWidth = 22f;
+        private const float MagneticSnapPixels = 10f;
         private const float MinSegmentDuration = 0.05f;
+        private const float DefaultQuickBlendDuration = 0.2f;
 
         private static readonly Color SegmentCoreColor = new(0.28f, 0.52f, 0.92f, 0.92f);
         private static readonly Color SegmentSelectedColor = new(0.38f, 0.64f, 1f, 0.98f);
         private static readonly Color BlendOverlayColor = new(0.08f, 0.12f, 0.22f, 0.55f);
+        private static readonly Color BlendHandleColor = new(1f, 1f, 1f, 0.62f);
         private static readonly Color TransitionColor = new(0.62f, 0.38f, 0.95f, 0.42f);
+        private static readonly Color TransitionHandleColor = new(0.8f, 0.56f, 1f, 0.72f);
         private static readonly Color TrackRowColor = new(0.1f, 0.1f, 0.11f, 1f);
 
         private enum DragMode
@@ -32,10 +38,19 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             SegmentBlendIn,
             SegmentBlendOut,
             TransitionCrossfade,
+            TimelinePan,
             NotifyMove,
             NotifyStateMove,
             NotifyStateResizeStart,
             NotifyStateResizeEnd
+        }
+
+        private enum PendingCreateKind
+        {
+            None,
+            Segment,
+            Notify,
+            NotifyState
         }
 
         private readonly struct TransitionLayout
@@ -86,6 +101,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private readonly List<NotifyStateLayout> notifyStateLayouts = new();
 
         private float pixelsPerSecond = 120f;
+        private float viewStartTime;
         private float segmentTrackTop;
         private float notifyTrackTop;
         private float notifyStateTrackTop;
@@ -97,6 +113,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private float dragAnchorTime;
         private float dragAnchorValue;
         private float dragNotifyStateDuration;
+        private bool hasSnapGuide;
+        private float snapGuideTime;
+        private PendingCreateKind pendingCreateKind = PendingCreateKind.None;
+        private float pendingCreateTime;
+        private int pendingObjectPickerControlId;
+        private int objectPickerSerial;
 
         public MontageTimelineView(MontageEditorContext context)
         {
@@ -114,6 +136,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             RegisterCallback<PointerMoveEvent>(OnPointerMove);
             RegisterCallback<PointerUpEvent>(OnPointerUp);
             RegisterCallback<WheelEvent>(OnWheel);
+            RegisterCallback<KeyDownEvent>(OnKeyDown);
+            RegisterCallback<ExecuteCommandEvent>(OnExecuteCommand, TrickleDown.TrickleDown);
+            RegisterCallback<AttachToPanelEvent>(_ => Undo.undoRedoPerformed += OnUndoRedoPerformed);
+            RegisterCallback<DetachFromPanelEvent>(_ => Undo.undoRedoPerformed -= OnUndoRedoPerformed);
 
             context.Changed += RequestRepaint;
             context.PlayheadChanged += RequestRepaint;
@@ -121,11 +147,70 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void RequestRepaint() => MarkDirtyRepaint();
 
+        private void OnUndoRedoPerformed()
+        {
+            context.NotifyExternalChange();
+            MarkDirtyRepaint();
+        }
+
         private void OnWheel(WheelEvent evt)
         {
+            float cursorTime = XToTime(evt.localMousePosition.x);
+            float oldPixelsPerSecond = pixelsPerSecond;
             pixelsPerSecond = Mathf.Clamp(pixelsPerSecond - evt.delta.y * 4f, 40f, 400f);
+
+            if (!Mathf.Approximately(oldPixelsPerSecond, pixelsPerSecond))
+            {
+                float contentX = evt.localMousePosition.x - TrackLabelWidth - ContentPadding;
+                viewStartTime = cursorTime - Mathf.Max(0f, contentX) / pixelsPerSecond;
+            }
+
+            ClampViewStartTime();
             evt.StopPropagation();
             MarkDirtyRepaint();
+        }
+
+        private void OnKeyDown(KeyDownEvent evt)
+        {
+            if (evt.target is TextField)
+                return;
+
+            if (evt.keyCode != KeyCode.Delete && evt.keyCode != KeyCode.Backspace)
+                return;
+
+            if (!DeleteSelected())
+                return;
+
+            evt.StopPropagation();
+        }
+
+        private void OnExecuteCommand(ExecuteCommandEvent evt)
+        {
+            if (evt.commandName != "ObjectSelectorClosed")
+                return;
+
+            if (pendingCreateKind == PendingCreateKind.None
+                || EditorGUIUtility.GetObjectPickerControlID() != pendingObjectPickerControlId)
+                return;
+
+            UnityEngine.Object picked = EditorGUIUtility.GetObjectPickerObject();
+            switch (pendingCreateKind)
+            {
+                case PendingCreateKind.Segment when picked is AnimationClip clip:
+                    AddSegmentAtTime(pendingCreateTime, clip);
+                    break;
+
+                case PendingCreateKind.Notify when picked is AnimNotifySO notify:
+                    AddNotifyAtTime(pendingCreateTime, notify);
+                    break;
+
+                case PendingCreateKind.NotifyState when picked is AnimNotifyStateSO notifyState:
+                    AddNotifyStateAtTime(pendingCreateTime, notifyState);
+                    break;
+            }
+
+            pendingCreateKind = PendingCreateKind.None;
+            evt.StopPropagation();
         }
 
         private void OnPointerDown(PointerDownEvent evt)
@@ -134,22 +219,29 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return;
 
             focusController?.IgnoreEvent(evt);
+            Focus();
             Vector2 local = evt.localPosition;
+
+            if (evt.button == 2)
+            {
+                BeginDrag(DragMode.TimelinePan, evt.pointerId);
+                dragAnchorTime = local.x;
+                dragAnchorValue = viewStartTime;
+                evt.StopPropagation();
+                return;
+            }
+
+            if (evt.button == 1)
+            {
+                ShowContextMenu(local);
+                evt.StopPropagation();
+                return;
+            }
 
             if (TryHitPlayhead(local, out _))
             {
                 BeginDrag(DragMode.Playhead, evt.pointerId);
                 SetPlayheadFromX(local.x);
-                evt.StopPropagation();
-                return;
-            }
-
-            if (TryHitTransition(local, out dragSegmentIndex, out float transitionDuration))
-            {
-                BeginDrag(DragMode.TransitionCrossfade, evt.pointerId);
-                dragAnchorTime = XToTime(local.x);
-                dragAnchorValue = transitionDuration;
-                context.SetSelectedSegment(dragSegmentIndex);
                 evt.StopPropagation();
                 return;
             }
@@ -164,6 +256,25 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return;
             }
 
+            if (TryHitTransition(local, out dragSegmentIndex, out float transitionDuration))
+            {
+                context.SetSelectedSegment(dragSegmentIndex);
+                if (evt.clickCount == 2)
+                {
+                    ApplyTransitionCrossfade(
+                        dragSegmentIndex,
+                        transitionDuration > 0.0001f ? 0f : DefaultQuickBlendDuration);
+                    evt.StopPropagation();
+                    return;
+                }
+
+                BeginDrag(DragMode.TransitionCrossfade, evt.pointerId);
+                dragAnchorTime = XToTime(local.x);
+                dragAnchorValue = transitionDuration;
+                evt.StopPropagation();
+                return;
+            }
+
             if (TryHitNotifyState(local, out dragNotifyStateIndex, out DragMode stateDrag))
             {
                 BeginDrag(stateDrag, evt.pointerId);
@@ -173,6 +284,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 dragAnchorValue = stateDrag == DragMode.NotifyStateResizeEnd
                     ? placement.EndTime
                     : placement.StartTime;
+                context.SetSelectedNotifyState(dragNotifyStateIndex);
                 evt.StopPropagation();
                 return;
             }
@@ -206,11 +318,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (!this.HasPointerCapture(evt.pointerId))
                 return;
 
-            float time = Snap(XToTime(evt.localPosition.x));
+            float time = XToTime(evt.localPosition.x);
+            hasSnapGuide = false;
             switch (dragMode)
             {
                 case DragMode.Playhead:
-                    context.SetPlayhead(time);
+                    context.SetPlayhead(Snap(time));
                     break;
 
                 case DragMode.NotifyMove when dragNotifyIndex >= 0:
@@ -230,7 +343,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     break;
 
                 case DragMode.TransitionCrossfade when dragSegmentIndex >= 0:
-                    ApplyTransitionCrossfade(dragSegmentIndex, dragAnchorValue + (time - dragAnchorTime));
+                    ApplyTransitionCrossfade(
+                        dragSegmentIndex,
+                        dragAnchorValue <= 0.0001f
+                            ? Mathf.Abs(time - dragAnchorTime)
+                            : dragAnchorValue + (time - dragAnchorTime));
+                    break;
+
+                case DragMode.TimelinePan:
+                    viewStartTime = dragAnchorValue - (evt.localPosition.x - dragAnchorTime) / Mathf.Max(1f, pixelsPerSecond);
+                    ClampViewStartTime();
+                    MarkDirtyRepaint();
                     break;
 
                 case DragMode.NotifyStateMove when dragNotifyStateIndex >= 0:
@@ -268,6 +391,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             dragSegmentIndex = -1;
             dragNotifyIndex = -1;
             dragNotifyStateIndex = -1;
+            hasSnapGuide = false;
+            MarkDirtyRepaint();
             evt.StopPropagation();
         }
 
@@ -275,6 +400,110 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         {
             dragMode = mode;
             this.CapturePointer(pointerId);
+        }
+
+        private void ShowContextMenu(Vector2 local)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return;
+
+            float time = Snap(XToTime(local.x));
+            GenericMenu menu = new();
+
+            if (TryHitSegment(local, out int segmentIndex, out _))
+            {
+                menu.AddItem(new GUIContent("Segment/Delete"), false, () => DeleteArrayElement("segments", segmentIndex, "Delete Montage Segment"));
+                menu.AddItem(new GUIContent("Segment/Select"), false, () => context.SetSelectedSegment(segmentIndex));
+                menu.AddSeparator("");
+            }
+
+            if (TryHitNotify(local, out int notifyIndex))
+            {
+                menu.AddItem(new GUIContent("Notify/Delete"), false, () => DeleteArrayElement("notifies", notifyIndex, "Delete Anim Notify"));
+                menu.AddSeparator("");
+            }
+
+            if (TryHitNotifyState(local, out int notifyStateIndex, out _))
+            {
+                menu.AddItem(new GUIContent("Notify State/Delete"), false, () => DeleteArrayElement("notifyStates", notifyStateIndex, "Delete Anim Notify State"));
+                menu.AddSeparator("");
+            }
+
+            if (IsSegmentTrack(local))
+            {
+                menu.AddItem(new GUIContent("Create/Animation Segment..."), false, () => OpenCreatePicker(PendingCreateKind.Segment, time));
+                if (Selection.activeObject is AnimationClip selectedClip)
+                    menu.AddItem(new GUIContent("Create/Segment From Project Selection"), false, () => AddSegmentAtTime(time, selectedClip));
+                else
+                    menu.AddDisabledItem(new GUIContent("Create/Segment From Project Selection"));
+            }
+            else if (IsNotifyTrack(local))
+            {
+                menu.AddItem(new GUIContent("Create/Notify..."), false, () => OpenCreatePicker(PendingCreateKind.Notify, time));
+                if (Selection.activeObject is AnimNotifySO selectedNotify)
+                    menu.AddItem(new GUIContent("Create/Notify From Project Selection"), false, () => AddNotifyAtTime(time, selectedNotify));
+                else
+                    menu.AddDisabledItem(new GUIContent("Create/Notify From Project Selection"));
+            }
+            else if (IsNotifyStateTrack(local))
+            {
+                menu.AddItem(new GUIContent("Create/Notify State..."), false, () => OpenCreatePicker(PendingCreateKind.NotifyState, time));
+                if (Selection.activeObject is AnimNotifyStateSO selectedState)
+                    menu.AddItem(new GUIContent("Create/Notify State From Project Selection"), false, () => AddNotifyStateAtTime(time, selectedState));
+                else
+                    menu.AddDisabledItem(new GUIContent("Create/Notify State From Project Selection"));
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Create"));
+            }
+
+            menu.ShowAsContext();
+        }
+
+        private bool IsSegmentTrack(Vector2 local) =>
+            local.y >= segmentTrackTop && local.y <= segmentTrackTop + TrackHeight;
+
+        private bool IsNotifyTrack(Vector2 local) =>
+            local.y >= notifyTrackTop && local.y <= notifyTrackTop + TrackHeight;
+
+        private bool IsNotifyStateTrack(Vector2 local) =>
+            local.y >= notifyStateTrackTop && local.y <= notifyStateTrackTop + TrackHeight;
+
+        private void OpenCreatePicker(PendingCreateKind kind, float time)
+        {
+            pendingCreateKind = kind;
+            pendingCreateTime = time;
+            pendingObjectPickerControlId = GetNextObjectPickerControlId(kind);
+
+            switch (kind)
+            {
+                case PendingCreateKind.Segment:
+                    EditorGUIUtility.ShowObjectPicker<AnimationClip>(null, false, string.Empty, pendingObjectPickerControlId);
+                    break;
+
+                case PendingCreateKind.Notify:
+                    EditorGUIUtility.ShowObjectPicker<AnimNotifySO>(null, false, string.Empty, pendingObjectPickerControlId);
+                    break;
+
+                case PendingCreateKind.NotifyState:
+                    EditorGUIUtility.ShowObjectPicker<AnimNotifyStateSO>(null, false, string.Empty, pendingObjectPickerControlId);
+                    break;
+            }
+        }
+
+        private int GetNextObjectPickerControlId(PendingCreateKind kind)
+        {
+            unchecked
+            {
+                objectPickerSerial++;
+                int hash = 17;
+                hash = hash * 31 + GetHashCode();
+                hash = hash * 31 + (int)kind;
+                hash = hash * 31 + objectPickerSerial;
+                return hash;
+            }
         }
 
         private float GetSegmentDragValue(DragMode mode, int segmentIndex)
@@ -291,10 +520,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void ApplySegmentStartTime(int segmentIndex, float startTime)
         {
+            startTime = SnapSegmentStartTime(segmentIndex, Mathf.Max(0f, startTime));
+
             Undo.RecordObject(context.Montage, "Move Montage Segment");
             SerializedObject so = new(context.Montage);
             SerializedProperty segmentProperty = so.FindProperty("segments").GetArrayElementAtIndex(segmentIndex);
-            segmentProperty.FindPropertyRelative("startTime").floatValue = Snap(Mathf.Max(0f, startTime));
+            segmentProperty.FindPropertyRelative("startTime").floatValue = startTime;
             so.ApplyModifiedProperties();
             context.MarkDirty();
         }
@@ -302,6 +533,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void ApplySegmentBlendIn(int segmentIndex, float time)
         {
             MontageSegment segment = context.Montage.Segments[segmentIndex];
+            time = SnapToNeighborEdge(time, segmentIndex, preferPrevious: true);
             float blendIn = Snap(Mathf.Clamp(time - segment.StartTime, 0f, MaxBlendDuration(segment)));
             WriteSegmentBlend(segmentIndex, blendIn, segment.BlendOut);
         }
@@ -309,6 +541,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void ApplySegmentBlendOut(int segmentIndex, float time)
         {
             MontageSegment segment = context.Montage.Segments[segmentIndex];
+            time = SnapToNeighborEdge(time, segmentIndex, preferPrevious: false);
             float blendOut = Snap(Mathf.Clamp(segment.EndTime - time, 0f, MaxBlendDuration(segment)));
             WriteSegmentBlend(segmentIndex, segment.BlendIn, blendOut);
         }
@@ -355,6 +588,91 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private static float MaxBlendDuration(MontageSegment segment) =>
             Mathf.Max(MinSegmentDuration, segment.Duration * 0.5f);
 
+        private float SnapSegmentStartTime(int segmentIndex, float startTime)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || segmentIndex < 0 || segmentIndex >= montage.Segments.Count)
+                return Snap(startTime);
+
+            MontageSegment moving = montage.Segments[segmentIndex];
+            if (moving == null)
+                return Snap(startTime);
+
+            float duration = moving.Duration;
+            float endTime = startTime + duration;
+            float tolerance = MagneticSnapPixels / Mathf.Max(1f, pixelsPerSecond);
+            float bestDistance = tolerance;
+            float snappedStart = startTime;
+            bool snapped = false;
+
+            if (startTime <= tolerance)
+            {
+                bestDistance = startTime;
+                snappedStart = 0f;
+                snapped = true;
+            }
+
+            for (int i = 0; i < montage.Segments.Count; i++)
+            {
+                if (i == segmentIndex)
+                    continue;
+
+                MontageSegment other = montage.Segments[i];
+                if (other == null)
+                    continue;
+
+                TrySnapEdge(other.EndTime, startTime, other.EndTime);
+                TrySnapEdge(other.StartTime, endTime, other.StartTime - duration);
+            }
+
+            if (snapped)
+            {
+                snapGuideTime = Mathf.Max(0f, Mathf.Abs(snappedStart - startTime) <= Mathf.Abs(snappedStart + duration - endTime)
+                    ? snappedStart
+                    : snappedStart + duration);
+                hasSnapGuide = true;
+                return Mathf.Max(0f, snappedStart);
+            }
+
+            return Snap(startTime);
+
+            void TrySnapEdge(float guideTime, float movingEdgeTime, float candidateStart)
+            {
+                float distance = Mathf.Abs(movingEdgeTime - guideTime);
+                if (distance > bestDistance)
+                    return;
+
+                bestDistance = distance;
+                snappedStart = Mathf.Max(0f, candidateStart);
+                snapGuideTime = guideTime;
+                snapped = true;
+            }
+        }
+
+        private float SnapToNeighborEdge(float time, int segmentIndex, bool preferPrevious)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return time;
+
+            float tolerance = MagneticSnapPixels / Mathf.Max(1f, pixelsPerSecond);
+            int neighborIndex = preferPrevious ? segmentIndex - 1 : segmentIndex + 1;
+            if (neighborIndex < 0 || neighborIndex >= montage.Segments.Count)
+                return time;
+
+            MontageSegment neighbor = montage.Segments[neighborIndex];
+            if (neighbor == null)
+                return time;
+
+            float edge = preferPrevious ? neighbor.EndTime : neighbor.StartTime;
+            if (Mathf.Abs(time - edge) > tolerance)
+                return time;
+
+            snapGuideTime = edge;
+            hasSnapGuide = true;
+            return edge;
+        }
+
         private void ApplyNotifyTime(int notifyIndex, float time)
         {
             Undo.RecordObject(context.Montage, "Move Anim Notify");
@@ -376,7 +694,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             context.MarkDirty();
         }
 
-        private void AddNotifyAtTime(float time)
+        private void AddNotifyAtTime(float time) => AddNotifyAtTime(time, null);
+
+        private void AddNotifyAtTime(float time, AnimNotifySO notify)
         {
             AnimMontageSO montage = context.Montage;
             if (montage == null)
@@ -389,10 +709,96 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             prop.InsertArrayElementAtIndex(index);
             SerializedProperty element = prop.GetArrayElementAtIndex(index);
             element.FindPropertyRelative("time").floatValue = Snap(time);
+            element.FindPropertyRelative("notify").objectReferenceValue = notify;
             element.FindPropertyRelative("trackId").stringValue = "Default";
             so.ApplyModifiedPropertiesWithoutUndo();
             context.MarkDirty();
             context.SetPlayhead(time);
+            context.SetSelectedNotify(index);
+        }
+
+        private void AddNotifyStateAtTime(float time) => AddNotifyStateAtTime(time, null);
+
+        private void AddNotifyStateAtTime(float time, AnimNotifyStateSO notifyState)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return;
+
+            Undo.RecordObject(montage, "Add Anim Notify State");
+            SerializedObject so = new(montage);
+            SerializedProperty prop = so.FindProperty("notifyStates");
+            int index = prop.arraySize;
+            prop.InsertArrayElementAtIndex(index);
+            SerializedProperty element = prop.GetArrayElementAtIndex(index);
+            element.FindPropertyRelative("startTime").floatValue = Snap(time);
+            element.FindPropertyRelative("endTime").floatValue = Snap(time + DefaultQuickBlendDuration);
+            element.FindPropertyRelative("notifyState").objectReferenceValue = notifyState;
+            element.FindPropertyRelative("trackId").stringValue = "Default";
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetPlayhead(time);
+            context.SetSelectedNotifyState(index);
+        }
+
+        private void AddSegmentAtTime(float time, AnimationClip clip)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return;
+
+            Undo.RecordObject(montage, "Add Montage Segment");
+            SerializedObject so = new(montage);
+            SerializedProperty prop = so.FindProperty("segments");
+            int index = prop.arraySize;
+            prop.InsertArrayElementAtIndex(index);
+            SerializedProperty element = prop.GetArrayElementAtIndex(index);
+            element.FindPropertyRelative("sectionName").stringValue = clip != null ? clip.name : "Default";
+            element.FindPropertyRelative("clip").objectReferenceValue = clip;
+            element.FindPropertyRelative("startTime").floatValue = Snap(time);
+            element.FindPropertyRelative("playRate").floatValue = 1f;
+            element.FindPropertyRelative("blendIn").floatValue = 0f;
+            element.FindPropertyRelative("blendOut").floatValue = 0f;
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetPlayhead(time);
+            context.SetSelectedSegment(index);
+        }
+
+        private bool DeleteSelected()
+        {
+            if (context.Montage == null)
+                return false;
+
+            if (context.SelectedSegmentIndex >= 0)
+                return DeleteArrayElement("segments", context.SelectedSegmentIndex, "Delete Montage Segment");
+
+            if (context.SelectedNotifyIndex >= 0)
+                return DeleteArrayElement("notifies", context.SelectedNotifyIndex, "Delete Anim Notify");
+
+            if (context.SelectedNotifyStateIndex >= 0)
+                return DeleteArrayElement("notifyStates", context.SelectedNotifyStateIndex, "Delete Anim Notify State");
+
+            return false;
+        }
+
+        private bool DeleteArrayElement(string propertyName, int index, string undoName)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || index < 0)
+                return false;
+
+            Undo.RecordObject(montage, undoName);
+            SerializedObject so = new(montage);
+            SerializedProperty prop = so.FindProperty(propertyName);
+            if (prop == null || index >= prop.arraySize)
+                return false;
+
+            prop.DeleteArrayElementAtIndex(index);
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetSelected(montage);
+            return true;
         }
 
         private void OnGenerateVisualContent(MeshGenerationContext ctx)
@@ -413,6 +819,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return;
 
             DrawRuler(painter, rect, montage.Length);
+            DrawTimeGrid(painter, rect, montage.Length);
             float y = RulerHeight + TrackGap;
             segmentTrackTop = y;
             y = DrawSegmentTrack(painter, rect, y, montage);
@@ -420,6 +827,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             y = DrawNotifyTrack(painter, rect, y, montage, "Default");
             notifyStateTrackTop = y;
             DrawNotifyStateTrack(painter, rect, y, montage);
+            DrawSnapGuide(painter, rect);
             DrawPlayhead(painter, rect);
         }
 
@@ -461,6 +869,27 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             FillRect(painter, labelGutter);
         }
 
+        private void DrawTimeGrid(Painter2D painter, Rect rect, float length)
+        {
+            float maxTime = Mathf.Max(length, 1f);
+            float minorStep = pixelsPerSecond >= 180f ? 0.25f : pixelsPerSecond >= 90f ? 0.5f : 1f;
+            float majorStep = pixelsPerSecond >= 90f ? 1f : 5f;
+
+            for (float t = 0f; t <= maxTime; t += minorStep)
+            {
+                bool major = Mathf.Abs(t / majorStep - Mathf.Round(t / majorStep)) < 0.001f;
+                painter.strokeColor = major
+                    ? new Color(1f, 1f, 1f, 0.09f)
+                    : new Color(1f, 1f, 1f, 0.035f);
+                painter.lineWidth = major ? 1.2f : 1f;
+                float x = TimeToX(t);
+                painter.BeginPath();
+                painter.MoveTo(new Vector2(x, RulerHeight));
+                painter.LineTo(new Vector2(x, rect.yMax));
+                painter.Stroke();
+            }
+        }
+
         private float DrawSegmentTrack(Painter2D painter, Rect rect, float y, AnimMontageSO montage)
         {
             DrawTrackRow(painter, rect, y, new Color(0.18f, 0.34f, 0.62f, 0.35f));
@@ -473,15 +902,29 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     continue;
 
                 float crossfade = MontageSegmentBlending.GetCrossfadeDuration(current, next);
-                if (crossfade <= 0f)
-                    continue;
+                float boundaryX = TimeToX(current.EndTime);
+                Rect transitionRect;
+                if (crossfade > 0f)
+                {
+                    float x0 = TimeToX(current.EndTime - crossfade);
+                    float x1 = TimeToX(current.EndTime + crossfade);
+                    transitionRect = new Rect(x0, y + 4f, Mathf.Max(TransitionHandleWidth, x1 - x0), TrackHeight - 8f);
+                    painter.fillColor = TransitionColor;
+                    FillRoundedRect(painter, transitionRect, 4f);
+                    DrawDiagonalHatch(painter, transitionRect, new Color(1f, 1f, 1f, 0.08f));
+                }
+                else
+                {
+                    transitionRect = new Rect(
+                        boundaryX - TransitionHandleWidth * 0.5f,
+                        y + 5f,
+                        TransitionHandleWidth,
+                        TrackHeight - 10f);
+                    painter.fillColor = new Color(TransitionHandleColor.r, TransitionHandleColor.g, TransitionHandleColor.b, 0.22f);
+                    FillRoundedRect(painter, transitionRect, 4f);
+                }
 
-                float x0 = TimeToX(current.EndTime - crossfade);
-                float x1 = TimeToX(current.EndTime + crossfade);
-                var transitionRect = new Rect(x0, y + 4f, Mathf.Max(6f, x1 - x0), TrackHeight - 8f);
-                painter.fillColor = TransitionColor;
-                FillRoundedRect(painter, transitionRect, 4f);
-                DrawDiagonalHatch(painter, transitionRect, new Color(1f, 1f, 1f, 0.08f));
+                DrawTransitionHandle(painter, boundaryX, y + 4f, TrackHeight - 8f, crossfade > 0f);
                 transitionLayouts.Add(new TransitionLayout(i, transitionRect, crossfade));
             }
 
@@ -498,6 +941,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
                 painter.fillColor = selected ? SegmentSelectedColor : SegmentCoreColor;
                 FillRoundedRect(painter, body, 3f);
+                painter.strokeColor = selected ? new Color(1f, 1f, 1f, 0.7f) : new Color(1f, 1f, 1f, 0.22f);
+                painter.lineWidth = selected ? 1.6f : 1f;
+                StrokeRoundedRect(painter, body, 3f);
 
                 float blendInWidth = segment.BlendIn > 0f
                     ? Mathf.Clamp(segment.BlendIn * pixelsPerSecond, 3f, body.width * 0.5f)
@@ -506,26 +952,37 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     ? Mathf.Clamp(segment.BlendOut * pixelsPerSecond, 3f, body.width * 0.5f)
                     : 0f;
 
-                var blendInRect = new Rect(body.xMin, body.yMin, blendInWidth, body.height);
-                var blendOutRect = new Rect(body.xMax - blendOutWidth, body.yMin, blendOutWidth, body.height);
+                var visualBlendInRect = new Rect(body.xMin, body.yMin, blendInWidth, body.height);
+                var visualBlendOutRect = new Rect(body.xMax - blendOutWidth, body.yMin, blendOutWidth, body.height);
+                float blendHitWidth = Mathf.Min(BlendHandleHitWidth, body.width * 0.45f);
+                var blendInHitRect = new Rect(body.xMin, body.yMin, blendHitWidth, body.height);
+                var blendOutHitRect = new Rect(body.xMax - blendHitWidth, body.yMin, blendHitWidth, body.height);
 
                 if (blendInWidth > 0f)
                 {
                     painter.fillColor = BlendOverlayColor;
-                    FillRect(painter, blendInRect);
-                    DrawBlendHandle(painter, blendInRect.xMax, body.yMin, body.height);
+                    FillRect(painter, visualBlendInRect);
+                    DrawBlendHandle(painter, visualBlendInRect.xMax, body.yMin, body.height, true);
+                }
+                else
+                {
+                    DrawBlendHandle(painter, body.xMin + 4f, body.yMin, body.height, false);
                 }
 
                 if (blendOutWidth > 0f)
                 {
                     painter.fillColor = BlendOverlayColor;
-                    FillRect(painter, blendOutRect);
-                    DrawBlendHandle(painter, blendOutRect.xMin, body.yMin, body.height);
+                    FillRect(painter, visualBlendOutRect);
+                    DrawBlendHandle(painter, visualBlendOutRect.xMin, body.yMin, body.height, true);
+                }
+                else
+                {
+                    DrawBlendHandle(painter, body.xMax - 4f, body.yMin, body.height, false);
                 }
 
                 if (body.width > 28f)
                 {
-                    painter.strokeColor = new Color(1f, 1f, 1f, 0.18f);
+                    painter.strokeColor = new Color(1f, 1f, 1f, 0.12f);
                     painter.lineWidth = 1f;
                     float midY = body.yMin + body.height * 0.5f;
                     painter.BeginPath();
@@ -534,7 +991,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     painter.Stroke();
                 }
 
-                segmentLayouts.Add(new SegmentLayout(i, body, blendInRect, blendOutRect));
+                DrawSegmentEdgeTicks(painter, body);
+
+                segmentLayouts.Add(new SegmentLayout(i, body, blendInHitRect, blendOutHitRect));
             }
 
             return y + TrackHeight + TrackGap;
@@ -588,14 +1047,63 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             FillRoundedRect(painter, labelRect, 3f);
         }
 
-        private static void DrawBlendHandle(Painter2D painter, float x, float y, float height)
+        private static void DrawBlendHandle(Painter2D painter, float x, float y, float height, bool active)
         {
-            painter.strokeColor = new Color(1f, 1f, 1f, 0.55f);
+            painter.strokeColor = active ? BlendHandleColor : new Color(1f, 1f, 1f, 0.32f);
             painter.lineWidth = 2f;
             painter.BeginPath();
             painter.MoveTo(new Vector2(x, y + 4f));
             painter.LineTo(new Vector2(x, y + height - 4f));
             painter.Stroke();
+
+            painter.lineWidth = 1f;
+            for (int i = -1; i <= 1; i++)
+            {
+                float gripX = x + i * 3f;
+                painter.BeginPath();
+                painter.MoveTo(new Vector2(gripX, y + height * 0.36f));
+                painter.LineTo(new Vector2(gripX, y + height * 0.64f));
+                painter.Stroke();
+            }
+        }
+
+        private static void DrawTransitionHandle(Painter2D painter, float x, float y, float height, bool active)
+        {
+            painter.strokeColor = active ? TransitionHandleColor : new Color(TransitionHandleColor.r, TransitionHandleColor.g, TransitionHandleColor.b, 0.45f);
+            painter.lineWidth = active ? 2.5f : 2f;
+            painter.BeginPath();
+            painter.MoveTo(new Vector2(x, y + 2f));
+            painter.LineTo(new Vector2(x, y + height - 2f));
+            painter.Stroke();
+
+            float midY = y + height * 0.5f;
+            float halfWidth = active ? 8f : 6f;
+            painter.BeginPath();
+            painter.MoveTo(new Vector2(x - halfWidth, midY - 5f));
+            painter.LineTo(new Vector2(x, midY));
+            painter.LineTo(new Vector2(x - halfWidth, midY + 5f));
+            painter.Stroke();
+
+            painter.BeginPath();
+            painter.MoveTo(new Vector2(x + halfWidth, midY - 5f));
+            painter.LineTo(new Vector2(x, midY));
+            painter.LineTo(new Vector2(x + halfWidth, midY + 5f));
+            painter.Stroke();
+        }
+
+        private static void DrawSegmentEdgeTicks(Painter2D painter, Rect rect)
+        {
+            painter.strokeColor = new Color(1f, 1f, 1f, 0.32f);
+            painter.lineWidth = 1f;
+
+            for (int i = 0; i < 2; i++)
+            {
+                float x = i == 0 ? rect.xMin + 3f : rect.xMax - 3f;
+                painter.BeginPath();
+                painter.MoveTo(new Vector2(x, rect.yMin + 5f));
+                painter.LineTo(new Vector2(x, rect.yMax - 5f));
+                painter.Stroke();
+            }
         }
 
         private static void DrawDiagonalHatch(Painter2D painter, Rect rect, Color color)
@@ -633,6 +1141,49 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             painter.Arc(new Vector2(rect.xMin + radius, rect.yMin + radius), radius, 180f, 270f);
             painter.ClosePath();
             painter.Fill();
+        }
+
+        private static void StrokeRoundedRect(Painter2D painter, Rect rect, float radius)
+        {
+            radius = Mathf.Min(radius, rect.width * 0.5f, rect.height * 0.5f);
+            if (radius <= 0f)
+            {
+                painter.BeginPath();
+                painter.MoveTo(new Vector2(rect.xMin, rect.yMin));
+                painter.LineTo(new Vector2(rect.xMax, rect.yMin));
+                painter.LineTo(new Vector2(rect.xMax, rect.yMax));
+                painter.LineTo(new Vector2(rect.xMin, rect.yMax));
+                painter.ClosePath();
+                painter.Stroke();
+                return;
+            }
+
+            painter.BeginPath();
+            painter.MoveTo(new Vector2(rect.xMin + radius, rect.yMin));
+            painter.LineTo(new Vector2(rect.xMax - radius, rect.yMin));
+            painter.Arc(new Vector2(rect.xMax - radius, rect.yMin + radius), radius, 270f, 360f);
+            painter.LineTo(new Vector2(rect.xMax, rect.yMax - radius));
+            painter.Arc(new Vector2(rect.xMax - radius, rect.yMax - radius), radius, 0f, 90f);
+            painter.LineTo(new Vector2(rect.xMin + radius, rect.yMax));
+            painter.Arc(new Vector2(rect.xMin + radius, rect.yMax - radius), radius, 90f, 180f);
+            painter.LineTo(new Vector2(rect.xMin, rect.yMin + radius));
+            painter.Arc(new Vector2(rect.xMin + radius, rect.yMin + radius), radius, 180f, 270f);
+            painter.ClosePath();
+            painter.Stroke();
+        }
+
+        private void DrawSnapGuide(Painter2D painter, Rect rect)
+        {
+            if (!hasSnapGuide)
+                return;
+
+            float x = TimeToX(snapGuideTime);
+            painter.strokeColor = new Color(1f, 0.86f, 0.24f, 0.95f);
+            painter.lineWidth = 2f;
+            painter.BeginPath();
+            painter.MoveTo(new Vector2(x, RulerHeight));
+            painter.LineTo(new Vector2(x, rect.yMax));
+            painter.Stroke();
         }
 
         private void DrawPlayhead(Painter2D painter, Rect rect)
@@ -794,9 +1345,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void SetPlayheadFromX(float x) => context.SetPlayhead(XToTime(x));
 
-        private float TimeToX(float time) => TrackLabelWidth + ContentPadding + time * pixelsPerSecond;
+        private void ClampViewStartTime()
+        {
+            float visibleDuration = Mathf.Max(0f, (contentRect.width - TrackLabelWidth - ContentPadding) / Mathf.Max(1f, pixelsPerSecond));
+            float maxStart = Mathf.Max(0f, (context.Montage?.Length ?? 0f) - visibleDuration * 0.35f);
+            viewStartTime = Mathf.Clamp(viewStartTime, 0f, maxStart);
+        }
 
-        private float XToTime(float x) => Mathf.Max(0f, (x - TrackLabelWidth - ContentPadding) / pixelsPerSecond);
+        private float TimeToX(float time) => TrackLabelWidth + ContentPadding + (time - viewStartTime) * pixelsPerSecond;
+
+        private float XToTime(float x) => Mathf.Max(0f, viewStartTime + (x - TrackLabelWidth - ContentPadding) / pixelsPerSecond);
 
         private static float Snap(float time) => Mathf.Round(time / SnapStep) * SnapStep;
     }

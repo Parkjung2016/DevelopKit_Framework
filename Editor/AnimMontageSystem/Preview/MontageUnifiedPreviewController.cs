@@ -7,12 +7,19 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
     {
         private PreviewRenderUtility preview;
         private GameObject previewInstance;
+        private GameObject gridInstance;
+        private GameObject gizmoInstance;
         private Texture previewTexture;
         private MontageEditorContext boundContext;
         private readonly MontageViewportCamera viewportCamera = new();
         private readonly MontageSceneViewBridge sceneViewBridge = new();
         private Bounds renderBounds;
         private bool hasBounds;
+        private Transform previewMotionRoot;
+        private float lockedPreviewRootY;
+        private float lockedMotionRootLocalY;
+        private float previewGroundPlaneY;
+        private bool hasPreviewHeightLock;
 
         public void Bind(MontageEditorContext editorContext) => boundContext = editorContext;
 
@@ -29,10 +36,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             previewInstance.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             preview.AddSingleGO(previewInstance);
             MontagePreviewSampling.BindInstance(previewInstance);
+            previewMotionRoot = previewInstance.GetComponentInChildren<Animator>()?.transform ?? previewInstance.transform;
 
             CacheBounds();
             AlignModelFeetToGround();
             CacheBounds();
+            StorePreviewHeightLock();
             viewportCamera.FrameBounds(renderBounds);
             viewportCamera.Is2DMode = false;
         }
@@ -124,8 +133,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 && localRect.Contains(evt.mousePosition))
             {
                 Sample(boundContext);
-                CacheBounds();
-                SnapModelFeetToGrid();
+                StabilizePreviewHeight();
                 CacheBounds();
                 viewportCamera.FrameBounds(renderBounds);
                 requestRepaint?.Invoke();
@@ -134,8 +142,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (evt.type == EventType.Repaint)
             {
                 Sample(boundContext);
-                CacheBounds();
-                SnapModelFeetToGrid();
+                StabilizePreviewHeight();
                 CacheBounds();
 
                 if (previewInstance != null)
@@ -149,11 +156,20 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 preview.camera.backgroundColor = new Color(0.16f, 0.16f, 0.16f, 1f);
                 preview.camera.clearFlags = CameraClearFlags.SolidColor;
                 preview.ambientColor = new Color(0.2f, 0.2f, 0.2f, 1f);
-                MontageSceneViewGrid.DrawPreview(
-                    localRect,
-                    preview.camera,
-                    viewportCamera,
+                float groundPlaneY = hasPreviewHeightLock ? previewGroundPlaneY : 0f;
+                MontagePreviewSceneGizmos.Update(
+                    gizmoInstance,
+                    previewInstance,
+                    renderBounds,
+                    hasBounds,
+                    groundPlaneY,
                     MontageSceneViewNavigation.ShouldUseFrontGrid(viewportCamera));
+                MontageSceneViewGrid.DrawPreview(
+                    preview.camera,
+                    gridInstance,
+                    viewportCamera,
+                    MontageSceneViewNavigation.ShouldUseFrontGrid(viewportCamera),
+                    groundPlaneY);
                 previewTexture = preview.EndPreview();
             }
 
@@ -196,8 +212,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return false;
 
             Sample(boundContext);
-            CacheBounds();
-            SnapModelFeetToGrid();
+            StabilizePreviewHeight();
             CacheBounds();
             viewportCamera.FrameBounds(renderBounds);
             evt.Use();
@@ -212,6 +227,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             sceneViewBridge.Dispose();
             MontagePreviewSampling.Dispose();
             ClearInstance();
+            ClearGrid();
+            ClearGizmos();
 
             if (previewTexture != null)
             {
@@ -229,13 +246,40 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void EnsurePreview()
         {
             if (preview != null)
+            {
+                EnsureGrid();
+                EnsureGizmos();
                 return;
+            }
 
             preview = new PreviewRenderUtility(true);
             preview.cameraFieldOfView = 30f;
             preview.lights[0].intensity = 1.1f;
             preview.lights[0].transform.rotation = Quaternion.Euler(40f, 40f, 0f);
             preview.lights[1].intensity = 0.55f;
+
+            EnsureGrid();
+            EnsureGizmos();
+        }
+
+        private void EnsureGrid()
+        {
+            if (preview == null || gridInstance != null)
+                return;
+
+            gridInstance = MontageSceneViewGrid.CreatePreviewGrid();
+            if (gridInstance != null)
+                preview.AddSingleGO(gridInstance);
+        }
+
+        private void EnsureGizmos()
+        {
+            if (preview == null || gizmoInstance != null)
+                return;
+
+            gizmoInstance = MontagePreviewSceneGizmos.Create();
+            if (gizmoInstance != null)
+                preview.AddSingleGO(gizmoInstance);
         }
 
         private void CacheBounds()
@@ -265,6 +309,37 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void AlignModelFeetToGround() => SnapModelFeetToGrid();
 
+        private void StorePreviewHeightLock()
+        {
+            if (previewInstance == null)
+            {
+                hasPreviewHeightLock = false;
+                return;
+            }
+
+            previewGroundPlaneY = 0f;
+            lockedPreviewRootY = previewInstance.transform.position.y;
+            lockedMotionRootLocalY = previewMotionRoot != null ? previewMotionRoot.localPosition.y : 0f;
+            hasPreviewHeightLock = true;
+        }
+
+        private void StabilizePreviewHeight()
+        {
+            if (!hasPreviewHeightLock || previewInstance == null)
+                return;
+
+            Vector3 rootPosition = previewInstance.transform.position;
+            rootPosition.y = lockedPreviewRootY;
+            previewInstance.transform.position = rootPosition;
+
+            if (previewMotionRoot == null || previewMotionRoot == previewInstance.transform)
+                return;
+
+            Vector3 localPosition = previewMotionRoot.localPosition;
+            localPosition.y = lockedMotionRootLocalY;
+            previewMotionRoot.localPosition = localPosition;
+        }
+
         private static void DrawEmptyState(Rect rect, string message)
         {
             EditorGUI.DrawRect(rect, new Color(0.16f, 0.16f, 0.16f, 1f));
@@ -279,7 +354,30 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             MontageEditorSelectionUtility.RemoveHierarchyFromSelection(previewInstance);
             Object.DestroyImmediate(previewInstance);
             previewInstance = null;
+            previewMotionRoot = null;
             hasBounds = false;
+            hasPreviewHeightLock = false;
+        }
+
+        private void ClearGrid()
+        {
+            if (gridInstance == null)
+                return;
+
+            if (gridInstance.TryGetComponent(out MeshFilter filter) && filter.sharedMesh != null)
+                Object.DestroyImmediate(filter.sharedMesh);
+
+            Object.DestroyImmediate(gridInstance);
+            gridInstance = null;
+        }
+
+        private void ClearGizmos()
+        {
+            if (gizmoInstance == null)
+                return;
+
+            MontagePreviewSceneGizmos.Destroy(gizmoInstance);
+            gizmoInstance = null;
         }
     }
 }

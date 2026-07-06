@@ -82,6 +82,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         {
             SelectedNotifyStateIndex = notifyStateIndex;
             SelectedNotifyIndex = -1;
+            SelectedSegmentIndex = -1;
             SelectedObject = Montage;
             RaiseSelectionChanged();
         }
@@ -102,6 +103,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             RaiseChanged();
         }
+
+        public void NotifyExternalChange() => RaiseChanged();
 
         private void RaiseChanged() => Changed?.Invoke();
         private void RaiseSelectionChanged() => SelectionChanged?.Invoke();

@@ -67,7 +67,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 results.Add(new MontageSegmentSample(
                     segment,
                     i,
-                    segment.ToClipTime(montageTime),
+                    ComputeClipTime(montageTime, segment, i, segments),
                     weight));
                 totalWeight += weight;
             }
@@ -115,15 +115,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 : 0f;
 
             float activeStart = start - crossfadeIn;
-            float activeEnd = end + crossfadeOut;
+            float activeEnd = end;
             if (montageTime < activeStart || montageTime >= activeEnd)
                 return 0f;
 
             if (montageTime < start)
                 return crossfadeIn > 0f ? (montageTime - activeStart) / crossfadeIn : 0f;
-
-            if (montageTime >= end)
-                return crossfadeOut > 0f ? (activeEnd - montageTime) / crossfadeOut : 0f;
 
             float weight = 1f;
 
@@ -138,6 +135,23 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 weight *= (end - montageTime) / segment.BlendOut;
 
             return Mathf.Clamp01(weight);
+        }
+
+        private static float ComputeClipTime(
+            float montageTime,
+            MontageSegment segment,
+            int segmentIndex,
+            IReadOnlyList<MontageSegment> segments)
+        {
+            float start = segment.StartTime;
+            MontageSegment previous = segmentIndex > 0 ? segments[segmentIndex - 1] : null;
+            float crossfadeIn = previous != null && previous.Clip != null
+                ? GetCrossfadeDuration(previous, segment)
+                : 0f;
+
+            float clipClockStart = crossfadeIn > 0f ? start - crossfadeIn : start;
+            float local = (montageTime - clipClockStart) * segment.PlayRate;
+            return Mathf.Clamp(local, 0f, segment.Clip.length);
         }
     }
 }

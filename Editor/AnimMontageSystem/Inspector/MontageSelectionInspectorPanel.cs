@@ -32,7 +32,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Add(scrollView);
 
             context.SelectionChanged += Rebuild;
-            context.Changed += Rebuild;
             Rebuild();
         }
 
@@ -52,6 +51,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             var editor = UnityEditor.Editor.CreateEditor(selected);
             var inspector = new InspectorElement(editor);
             inspector.style.flexGrow = 1;
+            inspector.TrackSerializedObjectValue(editor.serializedObject, _ => context.NotifyExternalChange());
             host.Add(inspector);
         }
     }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Playables;
@@ -14,10 +15,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         private readonly MontagePlaybackState playback = new();
         private readonly MontageNotifyDispatcher dispatcher = new();
+        private readonly List<MontageSegmentSample> samples = new();
+        private readonly List<AnimationClipPlayable> clipPlayables = new();
         private PlayableGraph graph;
         private AnimationPlayableOutput output;
-        private AnimationClipPlayable clipPlayable;
-        private int activeSegmentIndex = -1;
+        private AnimationMixerPlayable mixer;
+        private int mixerInputCount;
 
         public AnimMontageSO CurrentMontage => playback.Montage;
         public float CurrentTime => playback.CurrentTime;
@@ -64,7 +67,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public void Stop()
         {
             playback.Stop();
-            activeSegmentIndex = -1;
             DestroyGraph();
         }
 
@@ -96,7 +98,10 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 return;
 
             graph.Destroy();
-            activeSegmentIndex = -1;
+            samples.Clear();
+            clipPlayables.Clear();
+            mixer = default;
+            mixerInputCount = 0;
         }
 
         private void UpdateAnimationSample(bool force = false)
@@ -104,22 +109,59 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (!graph.IsValid() || playback.Montage == null)
                 return;
 
-            if (!playback.Montage.TryGetSegmentAtTime(playback.CurrentTime, out MontageSegment segment, out int segmentIndex))
+            MontageSegmentBlending.Evaluate(playback.CurrentTime, playback.Montage.Segments, samples);
+            if (samples.Count == 0)
                 return;
 
-            AnimationClip clip = segment.Clip;
-            if (clip == null)
-                return;
+            EnsureMixer(samples.Count, force);
 
-            if (force || segmentIndex != activeSegmentIndex)
+            for (int i = 0; i < samples.Count; i++)
             {
-                activeSegmentIndex = segmentIndex;
-                clipPlayable = AnimationClipPlayable.Create(graph, clip);
-                output.SetSourcePlayable(clipPlayable);
-                clipPlayable.SetSpeed(segment.PlayRate * playback.Montage.RateScale);
+                MontageSegmentSample sample = samples[i];
+                AnimationClipPlayable playable = clipPlayables[i];
+                if (!playable.IsValid() || playable.GetAnimationClip() != sample.Segment.Clip)
+                {
+                    if (playable.IsValid())
+                        playable.Destroy();
+
+                    playable = AnimationClipPlayable.Create(graph, sample.Segment.Clip);
+                    playable.SetApplyFootIK(true);
+                    playable.SetApplyPlayableIK(true);
+                    playable.SetSpeed(0f);
+                    clipPlayables[i] = playable;
+                    graph.Connect(playable, 0, mixer, i);
+                }
+
+                playable.SetTime(sample.ClipTime);
+                mixer.SetInputWeight(i, sample.Weight);
             }
 
-            clipPlayable.SetTime(segment.ToClipTime(playback.CurrentTime));
+            for (int i = samples.Count; i < mixerInputCount; i++)
+                mixer.SetInputWeight(i, 0f);
+        }
+
+        private void EnsureMixer(int inputCount, bool force)
+        {
+            int required = Mathf.Max(1, inputCount);
+            if (!force && mixer.IsValid() && mixerInputCount == required)
+                return;
+
+            for (int i = 0; i < clipPlayables.Count; i++)
+            {
+                AnimationClipPlayable playable = clipPlayables[i];
+                if (playable.IsValid())
+                    playable.Destroy();
+            }
+
+            if (mixer.IsValid())
+                mixer.Destroy();
+
+            mixer = AnimationMixerPlayable.Create(graph, required, true);
+            mixerInputCount = required;
+            output.SetSourcePlayable(mixer);
+            clipPlayables.Clear();
+            for (int i = 0; i < required; i++)
+                clipPlayables.Add(default);
         }
     }
 }
