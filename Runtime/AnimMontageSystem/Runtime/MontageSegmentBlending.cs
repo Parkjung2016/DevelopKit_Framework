@@ -34,6 +34,10 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
                 if (segment.BlendIn > 0f || segment.BlendOut > 0f)
                     return true;
+
+                if (FindNextOnTrack(i, segments) is MontageSegment next
+                    && GetOverlapDuration(segment, next) > 0f)
+                    return true;
             }
 
             return false;
@@ -44,7 +48,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (from?.Clip == null || to?.Clip == null)
                 return 0f;
 
-            return Mathf.Min(from.BlendOut, to.BlendIn);
+            float manual = Mathf.Min(from.BlendOut, to.BlendIn);
+            float overlap = GetOverlapDuration(from, to);
+            return Mathf.Max(manual, overlap);
         }
 
         public static void Evaluate(float montageTime, IReadOnlyList<MontageSegment> segments, List<MontageSegmentSample> results)
@@ -104,8 +110,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
             float start = segment.StartTime;
             float end = segment.EndTime;
-            MontageSegment previous = segmentIndex > 0 ? segments[segmentIndex - 1] : null;
-            MontageSegment next = segmentIndex + 1 < segments.Count ? segments[segmentIndex + 1] : null;
+            MontageSegment previous = FindPreviousOnTrack(segmentIndex, segments);
+            MontageSegment next = FindNextOnTrack(segmentIndex, segments);
 
             float crossfadeIn = previous != null && previous.Clip != null
                 ? GetCrossfadeDuration(previous, segment)
@@ -114,23 +120,33 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 ? GetCrossfadeDuration(segment, next)
                 : 0f;
 
-            float activeStart = start - crossfadeIn;
+            bool overlapsPrevious = previous != null && previous.EndTime > start;
+            bool overlapsNext = next != null && next.StartTime < end;
+            float fadeInStart = crossfadeIn > 0f && !overlapsPrevious ? start - crossfadeIn : start;
+            float fadeInEnd = crossfadeIn > 0f && overlapsPrevious ? Mathf.Min(previous.EndTime, end) : start;
+            float fadeOutStart = crossfadeOut > 0f && overlapsNext ? Mathf.Max(start, next.StartTime) : end - crossfadeOut;
+            float fadeOutEnd = end;
+
+            float activeStart = fadeInStart;
             float activeEnd = end;
             if (montageTime < activeStart || montageTime >= activeEnd)
                 return 0f;
 
-            if (montageTime < start)
-                return crossfadeIn > 0f ? (montageTime - activeStart) / crossfadeIn : 0f;
+            if (crossfadeIn > 0f && montageTime < fadeInEnd)
+                return (montageTime - fadeInStart) / Mathf.Max(0.0001f, fadeInEnd - fadeInStart);
 
             float weight = 1f;
 
-            if (crossfadeIn > 0f && montageTime - start < crossfadeIn)
-                weight = (montageTime - (start - crossfadeIn)) / crossfadeIn;
+            if (crossfadeIn > 0f && !overlapsPrevious && montageTime < start)
+                weight = (montageTime - fadeInStart) / crossfadeIn;
             else if (segment.BlendIn > 0f && previous == null && montageTime - start < segment.BlendIn)
                 weight = (montageTime - start) / segment.BlendIn;
 
-            if (crossfadeOut > 0f && end - montageTime < crossfadeOut)
-                weight *= (end - montageTime) / crossfadeOut;
+            if (crossfadeOut > 0f && next != null)
+            {
+                if (montageTime >= fadeOutStart)
+                    weight *= (fadeOutEnd - montageTime) / Mathf.Max(0.0001f, fadeOutEnd - fadeOutStart);
+            }
             else if (segment.BlendOut > 0f && next == null && end - montageTime < segment.BlendOut)
                 weight *= (end - montageTime) / segment.BlendOut;
 
@@ -144,14 +160,84 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             IReadOnlyList<MontageSegment> segments)
         {
             float start = segment.StartTime;
-            MontageSegment previous = segmentIndex > 0 ? segments[segmentIndex - 1] : null;
+            MontageSegment previous = FindPreviousOnTrack(segmentIndex, segments);
             float crossfadeIn = previous != null && previous.Clip != null
                 ? GetCrossfadeDuration(previous, segment)
                 : 0f;
 
-            float clipClockStart = crossfadeIn > 0f ? start - crossfadeIn : start;
-            float local = (montageTime - clipClockStart) * segment.PlayRate;
-            return Mathf.Clamp(local, 0f, segment.Clip.length);
+            bool overlapsPrevious = previous != null && previous.EndTime > start;
+            float clipClockStart = crossfadeIn > 0f && !overlapsPrevious ? start - crossfadeIn : start;
+            float local = segment.ClipStartTime + (montageTime - clipClockStart) * segment.PlayRate;
+            return Mathf.Clamp(local, segment.ClipStartTime, segment.ClipEndTime);
+        }
+
+        private static MontageSegment FindPreviousOnTrack(int segmentIndex, IReadOnlyList<MontageSegment> segments)
+        {
+            MontageSegment current = GetSegment(segmentIndex, segments);
+            if (current == null)
+                return null;
+
+            MontageSegment previous = null;
+            float bestStartTime = float.MinValue;
+            for (int i = 0; i < segments.Count; i++)
+            {
+                if (i == segmentIndex)
+                    continue;
+
+                MontageSegment candidate = segments[i];
+                if (candidate?.Clip == null)
+                    continue;
+
+                if (candidate.StartTime > current.StartTime || candidate.StartTime <= bestStartTime)
+                    continue;
+
+                bestStartTime = candidate.StartTime;
+                previous = candidate;
+            }
+
+            return previous;
+        }
+
+        private static MontageSegment FindNextOnTrack(int segmentIndex, IReadOnlyList<MontageSegment> segments)
+        {
+            MontageSegment current = GetSegment(segmentIndex, segments);
+            if (current == null)
+                return null;
+
+            MontageSegment next = null;
+            float bestStartTime = float.MaxValue;
+            for (int i = 0; i < segments.Count; i++)
+            {
+                if (i == segmentIndex)
+                    continue;
+
+                MontageSegment candidate = segments[i];
+                if (candidate?.Clip == null)
+                    continue;
+
+                if (candidate.StartTime <= current.StartTime || candidate.StartTime >= bestStartTime)
+                    continue;
+
+                bestStartTime = candidate.StartTime;
+                next = candidate;
+            }
+
+            return next;
+        }
+
+        private static MontageSegment GetSegment(int segmentIndex, IReadOnlyList<MontageSegment> segments)
+        {
+            if (segments == null || segmentIndex < 0 || segmentIndex >= segments.Count)
+                return null;
+
+            return segments[segmentIndex];
+        }
+
+        private static float GetOverlapDuration(MontageSegment from, MontageSegment to)
+        {
+            float start = Mathf.Max(from.StartTime, to.StartTime);
+            float end = Mathf.Min(from.EndTime, to.EndTime);
+            return Mathf.Max(0f, end - start);
         }
     }
 }

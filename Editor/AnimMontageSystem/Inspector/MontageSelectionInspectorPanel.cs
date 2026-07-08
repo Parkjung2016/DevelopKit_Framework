@@ -12,6 +12,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private readonly MontageEditorContext context;
         private readonly ScrollView scrollView = new(ScrollViewMode.Vertical);
         private readonly VisualElement host = new();
+        private SerializedObject boundObject;
 
         public MontageSelectionInspectorPanel(MontageEditorContext context)
         {
@@ -32,12 +33,18 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Add(scrollView);
 
             context.SelectionChanged += Rebuild;
+            host.RegisterCallback<SerializedPropertyChangeEvent>(_ => context.NotifyExternalChange());
             Rebuild();
         }
 
         private void Rebuild()
         {
+            host.Unbind();
             host.Clear();
+            boundObject = null;
+            if (TryBuildTimelineElementInspector())
+                return;
+
             UnityEngine.Object selected = context.SelectedObject ?? context.Montage;
             if (selected == null)
             {
@@ -51,8 +58,73 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             var editor = UnityEditor.Editor.CreateEditor(selected);
             var inspector = new InspectorElement(editor);
             inspector.style.flexGrow = 1;
-            inspector.TrackSerializedObjectValue(editor.serializedObject, _ => context.NotifyExternalChange());
             host.Add(inspector);
+        }
+
+        private bool TryBuildTimelineElementInspector()
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return false;
+
+            boundObject = new SerializedObject(montage);
+            if (context.SelectedSegmentIndex >= 0)
+                return BuildArrayElementInspector(
+                    "Animation Segment",
+                    "segments",
+                    context.SelectedSegmentIndex,
+                    "sectionName",
+                    "clip",
+                    "startTime",
+                    "clipStartTime",
+                    "clipEndTime",
+                    "playRate");
+
+            if (context.SelectedNotifyIndex >= 0)
+                return BuildArrayElementInspector(
+                    "Anim Notify",
+                    "notifies",
+                    context.SelectedNotifyIndex,
+                    "notify",
+                    "time");
+
+            if (context.SelectedNotifyStateIndex >= 0)
+                return BuildArrayElementInspector(
+                    "Anim Notify State",
+                    "notifyStates",
+                    context.SelectedNotifyStateIndex,
+                    "notifyState",
+                    "startTime",
+                    "endTime");
+
+            return false;
+        }
+
+        private bool BuildArrayElementInspector(string title, string arrayPropertyName, int index, params string[] propertyNames)
+        {
+            SerializedProperty array = boundObject.FindProperty(arrayPropertyName);
+            if (array == null || index < 0 || index >= array.arraySize)
+                return false;
+
+            host.Add(new Label(title)
+            {
+                style =
+                {
+                    unityFontStyleAndWeight = FontStyle.Bold,
+                    marginBottom = 6f
+                }
+            });
+
+            SerializedProperty element = array.GetArrayElementAtIndex(index);
+            for (int i = 0; i < propertyNames.Length; i++)
+            {
+                SerializedProperty property = element.FindPropertyRelative(propertyNames[i]);
+                if (property != null)
+                    host.Add(new PropertyField(property));
+            }
+
+            host.Bind(boundObject);
+            return true;
         }
     }
 }

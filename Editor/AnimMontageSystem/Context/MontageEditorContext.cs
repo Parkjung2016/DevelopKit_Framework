@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -18,6 +19,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         public int SelectedNotifyIndex { get; private set; } = -1;
         public int SelectedNotifyStateIndex { get; private set; } = -1;
         public int SelectedSegmentIndex { get; private set; } = -1;
+        public IReadOnlyCollection<int> SelectedSegmentIndices => selectedSegmentIndices;
+        public IReadOnlyCollection<int> SelectedNotifyIndices => selectedNotifyIndices;
+        public IReadOnlyCollection<int> SelectedNotifyStateIndices => selectedNotifyStateIndices;
+        public IReadOnlyCollection<string> SelectedTimelineTrackKeys => selectedTimelineTrackKeys;
+
+        private readonly HashSet<int> selectedSegmentIndices = new();
+        private readonly HashSet<int> selectedNotifyIndices = new();
+        private readonly HashSet<int> selectedNotifyStateIndices = new();
+        private readonly HashSet<string> selectedTimelineTrackKeys = new();
 
         public event Action Changed;
         public event Action SelectionChanged;
@@ -29,9 +39,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Montage = montage;
             PlayheadTime = 0f;
             SetPlaying(false);
-            SelectedNotifyIndex = -1;
-            SelectedNotifyStateIndex = -1;
-            SelectedSegmentIndex = -1;
+            ClearTimelineSelection();
             SelectedObject = montage;
             RaiseChanged();
             RaiseSelectionChanged();
@@ -54,38 +62,153 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         public void SetSelected(UnityEngine.Object selected)
         {
             SelectedObject = selected;
-            SelectedNotifyIndex = -1;
-            SelectedNotifyStateIndex = -1;
-            SelectedSegmentIndex = -1;
+            ClearTimelineSelection();
             RaiseSelectionChanged();
         }
 
-        public void SetSelectedSegment(int segmentIndex)
+        public void SetSelectedSegment(int segmentIndex, bool additive = false, bool toggle = false)
         {
-            SelectedSegmentIndex = segmentIndex;
-            SelectedNotifyIndex = -1;
-            SelectedNotifyStateIndex = -1;
+            SetTimelineIndexSelection(selectedSegmentIndices, segmentIndex, additive, toggle);
+            selectedNotifyIndices.Clear();
+            selectedNotifyStateIndices.Clear();
+            selectedTimelineTrackKeys.Clear();
             SelectedObject = Montage;
+            SyncLegacySelection();
             RaiseSelectionChanged();
         }
 
-        public void SetSelectedNotify(int notifyIndex)
+        public void SetSelectedSegments(IEnumerable<int> segmentIndices, bool additive = false)
         {
-            SelectedNotifyIndex = notifyIndex;
-            SelectedNotifyStateIndex = -1;
-            SelectedSegmentIndex = -1;
+            if (!additive)
+                ClearTimelineSelection();
+
+            foreach (int index in segmentIndices)
+                selectedSegmentIndices.Add(index);
+
+            selectedNotifyIndices.Clear();
+            selectedNotifyStateIndices.Clear();
             SelectedObject = Montage;
+            SyncLegacySelection();
             RaiseSelectionChanged();
         }
 
-        public void SetSelectedNotifyState(int notifyStateIndex)
+        public void SetSelectedNotify(int notifyIndex, bool additive = false, bool toggle = false)
         {
-            SelectedNotifyStateIndex = notifyStateIndex;
-            SelectedNotifyIndex = -1;
-            SelectedSegmentIndex = -1;
+            SetTimelineIndexSelection(selectedNotifyIndices, notifyIndex, additive, toggle);
+            selectedSegmentIndices.Clear();
+            selectedNotifyStateIndices.Clear();
+            selectedTimelineTrackKeys.Clear();
             SelectedObject = Montage;
+            SyncLegacySelection();
             RaiseSelectionChanged();
         }
+
+        public void SetSelectedNotifies(IEnumerable<int> notifyIndices, bool additive = false)
+        {
+            if (!additive)
+                ClearTimelineSelection();
+
+            foreach (int index in notifyIndices)
+                selectedNotifyIndices.Add(index);
+
+            selectedSegmentIndices.Clear();
+            selectedNotifyStateIndices.Clear();
+            SelectedObject = Montage;
+            SyncLegacySelection();
+            RaiseSelectionChanged();
+        }
+
+        public void SetSelectedNotifyState(int notifyStateIndex, bool additive = false, bool toggle = false)
+        {
+            SetTimelineIndexSelection(selectedNotifyStateIndices, notifyStateIndex, additive, toggle);
+            selectedSegmentIndices.Clear();
+            selectedNotifyIndices.Clear();
+            selectedTimelineTrackKeys.Clear();
+            SelectedObject = Montage;
+            SyncLegacySelection();
+            RaiseSelectionChanged();
+        }
+
+        public void SetSelectedNotifyStates(IEnumerable<int> notifyStateIndices, bool additive = false)
+        {
+            if (!additive)
+                ClearTimelineSelection();
+
+            foreach (int index in notifyStateIndices)
+                selectedNotifyStateIndices.Add(index);
+
+            selectedSegmentIndices.Clear();
+            selectedNotifyIndices.Clear();
+            SelectedObject = Montage;
+            SyncLegacySelection();
+            RaiseSelectionChanged();
+        }
+
+        public void SetSelectedTimelineTrack(string trackKey, bool additive = false, bool toggle = false)
+        {
+            if (!additive && !toggle)
+                ClearTimelineSelection();
+
+            if (toggle && selectedTimelineTrackKeys.Contains(trackKey))
+                selectedTimelineTrackKeys.Remove(trackKey);
+            else
+                selectedTimelineTrackKeys.Add(trackKey);
+
+            selectedSegmentIndices.Clear();
+            selectedNotifyIndices.Clear();
+            selectedNotifyStateIndices.Clear();
+            SelectedObject = Montage;
+            SyncLegacySelection();
+            RaiseSelectionChanged();
+        }
+
+        public void SetSelectedTimelineTracks(IEnumerable<string> trackKeys, bool additive = false)
+        {
+            if (!additive)
+                ClearTimelineSelection();
+
+            foreach (string key in trackKeys)
+                selectedTimelineTrackKeys.Add(key);
+
+            selectedSegmentIndices.Clear();
+            selectedNotifyIndices.Clear();
+            selectedNotifyStateIndices.Clear();
+            SelectedObject = Montage;
+            SyncLegacySelection();
+            RaiseSelectionChanged();
+        }
+
+        public void SetSelectedTimelineElements(
+            IEnumerable<int> segmentIndices,
+            IEnumerable<int> notifyIndices,
+            IEnumerable<int> notifyStateIndices,
+            IEnumerable<string> trackKeys,
+            bool additive = false)
+        {
+            if (!additive)
+                ClearTimelineSelection();
+
+            foreach (int index in segmentIndices)
+                selectedSegmentIndices.Add(index);
+
+            foreach (int index in notifyIndices)
+                selectedNotifyIndices.Add(index);
+
+            foreach (int index in notifyStateIndices)
+                selectedNotifyStateIndices.Add(index);
+
+            foreach (string key in trackKeys)
+                selectedTimelineTrackKeys.Add(key);
+
+            SelectedObject = Montage;
+            SyncLegacySelection();
+            RaiseSelectionChanged();
+        }
+
+        public bool IsSegmentSelected(int index) => selectedSegmentIndices.Contains(index);
+        public bool IsNotifySelected(int index) => selectedNotifyIndices.Contains(index);
+        public bool IsNotifyStateSelected(int index) => selectedNotifyStateIndices.Contains(index);
+        public bool IsTimelineTrackSelected(string trackKey) => selectedTimelineTrackKeys.Contains(trackKey);
 
         public void SetPlaying(bool playing)
         {
@@ -105,6 +228,41 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
 
         public void NotifyExternalChange() => RaiseChanged();
+
+        private static void SetTimelineIndexSelection(HashSet<int> selection, int index, bool additive, bool toggle)
+        {
+            if (!additive && !toggle)
+                selection.Clear();
+
+            if (toggle && selection.Contains(index))
+                selection.Remove(index);
+            else
+                selection.Add(index);
+        }
+
+        private void ClearTimelineSelection()
+        {
+            selectedSegmentIndices.Clear();
+            selectedNotifyIndices.Clear();
+            selectedNotifyStateIndices.Clear();
+            selectedTimelineTrackKeys.Clear();
+            SyncLegacySelection();
+        }
+
+        private void SyncLegacySelection()
+        {
+            SelectedSegmentIndex = FirstOrMinusOne(selectedSegmentIndices);
+            SelectedNotifyIndex = FirstOrMinusOne(selectedNotifyIndices);
+            SelectedNotifyStateIndex = FirstOrMinusOne(selectedNotifyStateIndices);
+        }
+
+        private static int FirstOrMinusOne(HashSet<int> values)
+        {
+            foreach (int value in values)
+                return value;
+
+            return -1;
+        }
 
         private void RaiseChanged() => Changed?.Invoke();
         private void RaiseSelectionChanged() => SelectionChanged?.Invoke();

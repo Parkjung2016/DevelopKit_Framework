@@ -124,7 +124,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             graph = PlayableGraph.Create("MontagePreviewBlend");
             graph.SetTimeUpdateMode(DirectorUpdateMode.Manual);
-            mixer = AnimationMixerPlayable.Create(graph, required, true);
+            mixer = AnimationMixerPlayable.Create(graph, required);
             mixerInputCount = required;
             output = AnimationPlayableOutput.Create(graph, "MontagePreviewOutput", boundAnimator);
             output.SetSourcePlayable(mixer);

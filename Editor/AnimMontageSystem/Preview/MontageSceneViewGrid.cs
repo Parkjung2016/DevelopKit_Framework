@@ -8,6 +8,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private const float MinimumGridStep = 0.05f;
         private const int LinesPerDirection = 80;
         private const int MajorLineFrequency = 5;
+        private const float Fixed3DGridHalfSize = 5f;
+        private const float Fixed3DGridStep = 0.5f;
 
         private static readonly Color MinorLineColor = new(0.46f, 0.46f, 0.46f, 0.34f);
         private static readonly Color MajorLineColor = new(0.58f, 0.58f, 0.58f, 0.46f);
@@ -88,10 +90,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
             else
             {
-                BuildPlaneGrid(
-                    Snap(pivot.x, step),
-                    Snap(pivot.z, step),
-                    step,
+                BuildFixedPlaneGrid(
                     Axis.X,
                     Axis.Z,
                     groundPlaneY);
@@ -129,6 +128,27 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     BuildPoint(minA, b, axisA, axisB, planeOffset),
                     BuildPoint(maxA, b, axisA, axisB, planeOffset),
                     GetLineColor(lineIndexB, axisB));
+            }
+        }
+
+        private static void BuildFixedPlaneGrid(Axis axisA, Axis axisB, float planeOffset)
+        {
+            int lineCount = Mathf.RoundToInt(Fixed3DGridHalfSize / Fixed3DGridStep);
+            float min = -Fixed3DGridHalfSize;
+            float max = Fixed3DGridHalfSize;
+
+            for (int i = -lineCount; i <= lineCount; i++)
+            {
+                float position = i * Fixed3DGridStep;
+                AddLine(
+                    BuildPoint(position, min, axisA, axisB, planeOffset),
+                    BuildPoint(position, max, axisA, axisB, planeOffset),
+                    GetLineColor(i, axisA));
+
+                AddLine(
+                    BuildPoint(min, position, axisA, axisB, planeOffset),
+                    BuildPoint(max, position, axisA, axisB, planeOffset),
+                    GetLineColor(i, axisB));
             }
         }
 

@@ -16,18 +16,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private const float ContentPadding = 8f;
         private const float SnapStep = 0.01f;
         private const float EdgeHandleWidth = 6f;
-        private const float BlendHandleHitWidth = 22f;
-        private const float TransitionHandleWidth = 22f;
         private const float MagneticSnapPixels = 10f;
         private const float MinSegmentDuration = 0.05f;
         private const float DefaultQuickBlendDuration = 0.2f;
 
         private static readonly Color SegmentCoreColor = new(0.28f, 0.52f, 0.92f, 0.92f);
         private static readonly Color SegmentSelectedColor = new(0.38f, 0.64f, 1f, 0.98f);
-        private static readonly Color BlendOverlayColor = new(0.08f, 0.12f, 0.22f, 0.55f);
-        private static readonly Color BlendHandleColor = new(1f, 1f, 1f, 0.62f);
-        private static readonly Color TransitionColor = new(0.62f, 0.38f, 0.95f, 0.42f);
-        private static readonly Color TransitionHandleColor = new(0.8f, 0.56f, 1f, 0.72f);
+        private static readonly Color AutoBlendOverlayColor = new(0.95f, 0.52f, 0.18f, 0.48f);
         private static readonly Color TrackRowColor = new(0.1f, 0.1f, 0.11f, 1f);
 
         private enum DragMode
@@ -35,52 +30,70 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             None,
             Playhead,
             SegmentMove,
-            SegmentBlendIn,
-            SegmentBlendOut,
-            TransitionCrossfade,
+            SegmentTrimStart,
+            SegmentTrimEnd,
             TimelinePan,
+            TrackReorder,
             NotifyMove,
             NotifyStateMove,
             NotifyStateResizeStart,
-            NotifyStateResizeEnd
+            NotifyStateResizeEnd,
+            BoxSelect
         }
 
         private enum PendingCreateKind
         {
-            None,
+            Segment,
+            Notify,
+            NotifyState,
+            ReplaceSegmentClip,
+            ReplaceNotify,
+            ReplaceNotifyState
+        }
+
+        private enum TrackKind
+        {
             Segment,
             Notify,
             NotifyState
         }
 
-        private readonly struct TransitionLayout
+        private readonly struct TrackRowLayout
         {
-            public TransitionLayout(int lowerSegmentIndex, Rect rect, float duration)
+            public TrackRowLayout(TrackKind kind, string trackId, Rect rect)
             {
-                LowerSegmentIndex = lowerSegmentIndex;
+                Kind = kind;
+                TrackId = trackId;
                 Rect = rect;
-                Duration = duration;
             }
 
-            public int LowerSegmentIndex { get; }
+            public TrackKind Kind { get; }
+            public string TrackId { get; }
             public Rect Rect { get; }
-            public float Duration { get; }
+        }
+
+        private readonly struct TrackIdentity
+        {
+            public TrackIdentity(TrackKind kind, string trackId)
+            {
+                Kind = kind;
+                TrackId = trackId;
+            }
+
+            public TrackKind Kind { get; }
+            public string TrackId { get; }
         }
 
         private readonly struct SegmentLayout
         {
-            public SegmentLayout(int index, Rect body, Rect blendIn, Rect blendOut)
+            public SegmentLayout(int index, Rect body)
             {
                 Index = index;
                 Body = body;
-                BlendIn = blendIn;
-                BlendOut = blendOut;
             }
 
             public int Index { get; }
             public Rect Body { get; }
-            public Rect BlendIn { get; }
-            public Rect BlendOut { get; }
         }
 
         private readonly struct NotifyStateLayout
@@ -95,30 +108,239 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             public Rect Body { get; }
         }
 
+        private readonly struct NotifyLayout
+        {
+            public NotifyLayout(int index, Rect body)
+            {
+                Index = index;
+                Body = body;
+            }
+
+            public int Index { get; }
+            public Rect Body { get; }
+        }
+
+        private readonly struct HoverTooltipInfo
+        {
+            public HoverTooltipInfo(string text, float minWidth = 96f)
+            {
+                Text = text;
+                MinWidth = minWidth;
+            }
+
+            public string Text { get; }
+            public float MinWidth { get; }
+        }
+
+        private sealed class ObjectPickerPopup : EditorWindow
+        {
+            private readonly List<UnityEngine.Object> assets = new();
+            private Type objectType;
+            private Action<UnityEngine.Object> onPick;
+            private string searchText = string.Empty;
+            private Vector2 scroll;
+            private bool consumed;
+            private string actionLabel = "Select";
+            private UnityEngine.Object selectedAsset;
+            private UnityEngine.Object previewAsset;
+            private Editor previewEditor;
+
+            public static void Show<T>(string title, Action<T> onPick) where T : UnityEngine.Object
+            {
+                ObjectPickerPopup window = CreateInstance<ObjectPickerPopup>();
+                window.titleContent = new GUIContent(title);
+                window.minSize = new Vector2(340f, 420f);
+                window.position = new Rect(160f, 160f, 380f, 460f);
+                window.actionLabel = title.StartsWith("Replace", StringComparison.OrdinalIgnoreCase) ? "Replace" : "Create";
+                window.Initialize(typeof(T), picked =>
+                {
+                    if (picked is T typed)
+                        onPick?.Invoke(typed);
+                });
+                window.ShowAuxWindow();
+                window.Focus();
+            }
+
+            private void Initialize(Type type, Action<UnityEngine.Object> pickCallback)
+            {
+                objectType = type;
+                onPick = pickCallback;
+                assets.Clear();
+
+                string[] guids = AssetDatabase.FindAssets($"t:{objectType.Name}");
+                for (int i = 0; i < guids.Length; i++)
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                    UnityEngine.Object[] loadedAssets = AssetDatabase.LoadAllAssetsAtPath(path);
+                    for (int j = 0; j < loadedAssets.Length; j++)
+                    {
+                        UnityEngine.Object asset = loadedAssets[j];
+                        if (asset == null || !objectType.IsInstanceOfType(asset) || IsInternalPreviewAsset(asset))
+                            continue;
+
+                        if (!assets.Contains(asset))
+                            assets.Add(asset);
+                    }
+                }
+
+                assets.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase));
+            }
+
+            private void OnGUI()
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    using (new EditorGUILayout.VerticalScope(GUILayout.Width(position.width * 0.5f)))
+                    {
+                        searchText = EditorGUILayout.TextField(searchText, EditorStyles.toolbarSearchField);
+                        scroll = EditorGUILayout.BeginScrollView(scroll);
+                        for (int i = 0; i < assets.Count; i++)
+                        {
+                            UnityEngine.Object asset = assets[i];
+                            if (asset == null || !MatchesSearch(asset))
+                                continue;
+
+                            GUIContent content = new(asset.name, AssetDatabase.GetAssetPath(asset));
+                            Rect rowRect = GUILayoutUtility.GetRect(content, EditorStyles.objectField, GUILayout.Height(20f));
+                            bool selected = selectedAsset == asset;
+                            if (selected && Event.current.type == EventType.Repaint)
+                                EditorGUI.DrawRect(rowRect, new Color(0.28f, 0.48f, 0.78f, 0.38f));
+
+                            if (GUI.Button(rowRect, content, EditorStyles.objectField))
+                                SelectAsset(asset);
+
+                            if (selected && Event.current.type == EventType.Repaint)
+                                GUI.Box(rowRect, GUIContent.none, EditorStyles.helpBox);
+                        }
+
+                        EditorGUILayout.EndScrollView();
+                    }
+
+                    using (new EditorGUILayout.VerticalScope())
+                    {
+                        DrawAssetPreview();
+                    }
+                }
+            }
+
+            private bool MatchesSearch(UnityEngine.Object asset) =>
+                string.IsNullOrWhiteSpace(searchText)
+                || asset.name.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+
+            private static bool IsInternalPreviewAsset(UnityEngine.Object asset) =>
+                asset.name.IndexOf("__preview__", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            private void SelectAsset(UnityEngine.Object asset)
+            {
+                selectedAsset = asset;
+                SetPreviewAsset(asset);
+            }
+
+            private void SetPreviewAsset(UnityEngine.Object asset)
+            {
+                if (previewAsset == asset)
+                    return;
+
+                DestroyPreviewEditor();
+                previewAsset = asset;
+                if (previewAsset != null)
+                    previewEditor = Editor.CreateEditor(previewAsset);
+            }
+
+            private void DrawAssetPreview()
+            {
+                GUILayout.Label(previewAsset != null ? previewAsset.name : "Preview", EditorStyles.boldLabel);
+                Rect previewRect = GUILayoutUtility.GetRect(160f, Mathf.Max(120f, position.height - 112f), GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+                if (previewEditor != null && previewEditor.HasPreviewGUI())
+                {
+                    previewEditor.OnInteractivePreviewGUI(previewRect, GUIStyle.none);
+                    Repaint();
+                }
+                else
+                {
+                    Texture2D preview = previewAsset != null ? AssetPreview.GetAssetPreview(previewAsset) : null;
+                    if (preview == null && previewAsset != null)
+                        preview = AssetPreview.GetMiniThumbnail(previewAsset);
+
+                    if (preview != null)
+                        GUI.DrawTexture(previewRect, preview, ScaleMode.ScaleToFit, true);
+                    else
+                        EditorGUI.HelpBox(previewRect, "Select an asset to preview it.", MessageType.Info);
+                }
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.FlexibleSpace();
+                    using (new EditorGUI.DisabledScope(selectedAsset == null || consumed))
+                    {
+                        if (GUILayout.Button(actionLabel, GUILayout.Width(96f), GUILayout.Height(24f)))
+                            Pick(selectedAsset);
+                    }
+                }
+            }
+
+            private void Pick(UnityEngine.Object asset)
+            {
+                if (consumed)
+                    return;
+
+                consumed = true;
+                onPick?.Invoke(asset);
+                Close();
+            }
+
+            private void OnDisable()
+            {
+                DestroyPreviewEditor();
+            }
+
+            private void DestroyPreviewEditor()
+            {
+                if (previewEditor == null)
+                    return;
+
+                DestroyImmediate(previewEditor);
+                previewEditor = null;
+            }
+        }
+
         private readonly MontageEditorContext context;
         private readonly List<SegmentLayout> segmentLayouts = new();
-        private readonly List<TransitionLayout> transitionLayouts = new();
+        private readonly List<NotifyLayout> notifyLayouts = new();
         private readonly List<NotifyStateLayout> notifyStateLayouts = new();
+        private readonly List<TrackRowLayout> trackRows = new();
+        private readonly Dictionary<int, float> dragSegmentStartTimes = new();
+        private readonly Dictionary<int, float> dragNotifyTimes = new();
+        private readonly Dictionary<int, Vector2> dragNotifyStateRanges = new();
+        private readonly Label hoverTooltip;
 
         private float pixelsPerSecond = 120f;
         private float viewStartTime;
-        private float segmentTrackTop;
-        private float notifyTrackTop;
-        private float notifyStateTrackTop;
+        private float viewStartY;
+        private float totalTrackContentHeight;
 
         private DragMode dragMode = DragMode.None;
         private int dragSegmentIndex = -1;
         private int dragNotifyIndex = -1;
         private int dragNotifyStateIndex = -1;
+        private TrackKind dragTrackKind;
+        private string dragTrackId = "Default";
         private float dragAnchorTime;
         private float dragAnchorValue;
+        private float dragAnchorClipStart;
+        private float dragAnchorClipEnd;
+        private float dragAnchorSegmentEnd;
+        private float dragAnchorY;
+        private float dragAnchorScrollY;
         private float dragNotifyStateDuration;
+        private Vector2 boxSelectStart;
+        private Vector2 boxSelectEnd;
+        private bool boxSelectAdditive;
         private bool hasSnapGuide;
         private float snapGuideTime;
-        private PendingCreateKind pendingCreateKind = PendingCreateKind.None;
-        private float pendingCreateTime;
-        private int pendingObjectPickerControlId;
-        private int objectPickerSerial;
+        private bool hasHoverTrack;
+        private TrackKind hoverTrackKind;
+        private string hoverTrackId = "Default";
 
         public MontageTimelineView(MontageEditorContext context)
         {
@@ -131,15 +353,37 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             style.overflow = Overflow.Hidden;
             focusable = true;
 
+            hoverTooltip = new Label { pickingMode = PickingMode.Ignore };
+            hoverTooltip.style.position = Position.Absolute;
+            hoverTooltip.style.display = DisplayStyle.None;
+            hoverTooltip.style.paddingLeft = 8f;
+            hoverTooltip.style.paddingRight = 8f;
+            hoverTooltip.style.paddingTop = 4f;
+            hoverTooltip.style.paddingBottom = 4f;
+            hoverTooltip.style.backgroundColor = new Color(0.05f, 0.05f, 0.06f, 0.94f);
+            hoverTooltip.style.borderTopLeftRadius = 3f;
+            hoverTooltip.style.borderTopRightRadius = 3f;
+            hoverTooltip.style.borderBottomLeftRadius = 3f;
+            hoverTooltip.style.borderBottomRightRadius = 3f;
+            hoverTooltip.style.color = new Color(1f, 1f, 1f, 0.95f);
+            hoverTooltip.style.fontSize = 11f;
+            Add(hoverTooltip);
+
             generateVisualContent += OnGenerateVisualContent;
             RegisterCallback<PointerDownEvent>(OnPointerDown);
             RegisterCallback<PointerMoveEvent>(OnPointerMove);
+            RegisterCallback<PointerLeaveEvent>(OnPointerLeave);
             RegisterCallback<PointerUpEvent>(OnPointerUp);
             RegisterCallback<WheelEvent>(OnWheel);
             RegisterCallback<KeyDownEvent>(OnKeyDown);
-            RegisterCallback<ExecuteCommandEvent>(OnExecuteCommand, TrickleDown.TrickleDown);
-            RegisterCallback<AttachToPanelEvent>(_ => Undo.undoRedoPerformed += OnUndoRedoPerformed);
-            RegisterCallback<DetachFromPanelEvent>(_ => Undo.undoRedoPerformed -= OnUndoRedoPerformed);
+            RegisterCallback<AttachToPanelEvent>(_ =>
+            {
+                Undo.undoRedoPerformed += OnUndoRedoPerformed;
+            });
+            RegisterCallback<DetachFromPanelEvent>(_ =>
+            {
+                Undo.undoRedoPerformed -= OnUndoRedoPerformed;
+            });
 
             context.Changed += RequestRepaint;
             context.PlayheadChanged += RequestRepaint;
@@ -178,38 +422,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (evt.keyCode != KeyCode.Delete && evt.keyCode != KeyCode.Backspace)
                 return;
 
-            if (!DeleteSelected())
+            if (!DeleteHoveredTrack() && !DeleteSelected())
                 return;
 
-            evt.StopPropagation();
-        }
-
-        private void OnExecuteCommand(ExecuteCommandEvent evt)
-        {
-            if (evt.commandName != "ObjectSelectorClosed")
-                return;
-
-            if (pendingCreateKind == PendingCreateKind.None
-                || EditorGUIUtility.GetObjectPickerControlID() != pendingObjectPickerControlId)
-                return;
-
-            UnityEngine.Object picked = EditorGUIUtility.GetObjectPickerObject();
-            switch (pendingCreateKind)
-            {
-                case PendingCreateKind.Segment when picked is AnimationClip clip:
-                    AddSegmentAtTime(pendingCreateTime, clip);
-                    break;
-
-                case PendingCreateKind.Notify when picked is AnimNotifySO notify:
-                    AddNotifyAtTime(pendingCreateTime, notify);
-                    break;
-
-                case PendingCreateKind.NotifyState when picked is AnimNotifyStateSO notifyState:
-                    AddNotifyStateAtTime(pendingCreateTime, notifyState);
-                    break;
-            }
-
-            pendingCreateKind = PendingCreateKind.None;
             evt.StopPropagation();
         }
 
@@ -227,6 +442,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 BeginDrag(DragMode.TimelinePan, evt.pointerId);
                 dragAnchorTime = local.x;
                 dragAnchorValue = viewStartTime;
+                dragAnchorY = local.y;
+                dragAnchorScrollY = viewStartY;
                 evt.StopPropagation();
                 return;
             }
@@ -234,6 +451,25 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (evt.button == 1)
             {
                 ShowContextMenu(local);
+                evt.StopPropagation();
+                return;
+            }
+
+            if (TryGetTrackRow(local, out TrackRowLayout row) && IsTrackLabel(local, row))
+            {
+                bool additive = evt.shiftKey;
+                bool toggle = evt.ctrlKey || evt.commandKey;
+                string trackKey = GetTrackKey(row.Kind, row.TrackId);
+                context.SetSelectedTimelineTrack(trackKey, additive || toggle, toggle);
+                if (additive || toggle)
+                {
+                    evt.StopPropagation();
+                    return;
+                }
+
+                BeginDrag(DragMode.TrackReorder, evt.pointerId);
+                dragTrackKind = row.Kind;
+                dragTrackId = row.TrackId;
                 evt.StopPropagation();
                 return;
             }
@@ -248,35 +484,40 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (TryHitSegment(local, out dragSegmentIndex, out DragMode segmentDrag))
             {
-                BeginDrag(segmentDrag, evt.pointerId);
-                dragAnchorTime = XToTime(local.x);
-                dragAnchorValue = GetSegmentDragValue(segmentDrag, dragSegmentIndex);
-                context.SetSelectedSegment(dragSegmentIndex);
-                evt.StopPropagation();
-                return;
-            }
-
-            if (TryHitTransition(local, out dragSegmentIndex, out float transitionDuration))
-            {
-                context.SetSelectedSegment(dragSegmentIndex);
-                if (evt.clickCount == 2)
+                bool additive = evt.shiftKey;
+                bool toggle = evt.ctrlKey || evt.commandKey;
+                if (additive || toggle || !context.IsSegmentSelected(dragSegmentIndex))
+                    context.SetSelectedSegment(dragSegmentIndex, additive, toggle);
+                if (toggle && !context.IsSegmentSelected(dragSegmentIndex))
                 {
-                    ApplyTransitionCrossfade(
-                        dragSegmentIndex,
-                        transitionDuration > 0.0001f ? 0f : DefaultQuickBlendDuration);
                     evt.StopPropagation();
                     return;
                 }
 
-                BeginDrag(DragMode.TransitionCrossfade, evt.pointerId);
+                BeginDrag(segmentDrag, evt.pointerId);
                 dragAnchorTime = XToTime(local.x);
-                dragAnchorValue = transitionDuration;
+                dragAnchorValue = GetSegmentDragValue(segmentDrag, dragSegmentIndex);
+                MontageSegment segment = context.Montage.Segments[dragSegmentIndex];
+                dragAnchorClipStart = segment.ClipStartTime;
+                dragAnchorClipEnd = segment.ClipEndTime;
+                dragAnchorSegmentEnd = segment.EndTime;
+                CaptureDragSelectionAnchors();
                 evt.StopPropagation();
                 return;
             }
 
             if (TryHitNotifyState(local, out dragNotifyStateIndex, out DragMode stateDrag))
             {
+                bool additive = evt.shiftKey;
+                bool toggle = evt.ctrlKey || evt.commandKey;
+                if (additive || toggle || !context.IsNotifyStateSelected(dragNotifyStateIndex))
+                    context.SetSelectedNotifyState(dragNotifyStateIndex, additive, toggle);
+                if (toggle && !context.IsNotifyStateSelected(dragNotifyStateIndex))
+                {
+                    evt.StopPropagation();
+                    return;
+                }
+
                 BeginDrag(stateDrag, evt.pointerId);
                 dragAnchorTime = XToTime(local.x);
                 AnimNotifyStatePlacement placement = context.Montage.NotifyStates[dragNotifyStateIndex];
@@ -284,23 +525,34 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 dragAnchorValue = stateDrag == DragMode.NotifyStateResizeEnd
                     ? placement.EndTime
                     : placement.StartTime;
-                context.SetSelectedNotifyState(dragNotifyStateIndex);
+                CaptureDragSelectionAnchors();
                 evt.StopPropagation();
                 return;
             }
 
             if (TryHitNotify(local, out dragNotifyIndex))
             {
+                bool additive = evt.shiftKey;
+                bool toggle = evt.ctrlKey || evt.commandKey;
+                if (additive || toggle || !context.IsNotifySelected(dragNotifyIndex))
+                    context.SetSelectedNotify(dragNotifyIndex, additive, toggle);
+                if (toggle && !context.IsNotifySelected(dragNotifyIndex))
+                {
+                    evt.StopPropagation();
+                    return;
+                }
+
                 BeginDrag(DragMode.NotifyMove, evt.pointerId);
                 dragAnchorTime = XToTime(local.x);
-                context.SetSelectedNotify(dragNotifyIndex);
+                dragAnchorValue = context.Montage.Notifies[dragNotifyIndex].Time;
+                CaptureDragSelectionAnchors();
                 evt.StopPropagation();
                 return;
             }
 
-            if (evt.clickCount == 2 && local.y > RulerHeight)
+            if (evt.clickCount == 2 && TryGetTrackRow(local, TrackKind.Notify, out TrackRowLayout notifyRow))
             {
-                AddNotifyAtTime(XToTime(local.x));
+                AddNotifyAtTime(XToTime(local.x), null, notifyRow.TrackId);
                 evt.StopPropagation();
                 return;
             }
@@ -310,13 +562,27 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 BeginDrag(DragMode.Playhead, evt.pointerId);
                 SetPlayheadFromX(local.x);
                 evt.StopPropagation();
+                return;
+            }
+
+            if (TryGetTrackRow(local, out _))
+            {
+                BeginDrag(DragMode.BoxSelect, evt.pointerId);
+                boxSelectStart = local;
+                boxSelectEnd = local;
+                boxSelectAdditive = evt.shiftKey || evt.ctrlKey || evt.commandKey;
+                HideHoverTooltip();
+                evt.StopPropagation();
             }
         }
 
         private void OnPointerMove(PointerMoveEvent evt)
         {
             if (!this.HasPointerCapture(evt.pointerId))
+            {
+                UpdateHoverTrack(evt.localPosition);
                 return;
+            }
 
             float time = XToTime(evt.localPosition.x);
             hasSnapGuide = false;
@@ -327,40 +593,41 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     break;
 
                 case DragMode.NotifyMove when dragNotifyIndex >= 0:
-                    ApplyNotifyTime(dragNotifyIndex, time);
+                    ApplySelectedTimelineMove(Snap(time) - dragAnchorValue, evt.localPosition, TrackKind.Notify);
                     break;
 
                 case DragMode.SegmentMove when dragSegmentIndex >= 0:
-                    ApplySegmentStartTime(dragSegmentIndex, time - dragAnchorTime + dragAnchorValue);
+                    float segmentStartTime = SnapSegmentStartTime(dragSegmentIndex, Mathf.Max(0f, time - dragAnchorTime + dragAnchorValue));
+                    ApplySelectedTimelineMove(segmentStartTime - dragAnchorValue, evt.localPosition, TrackKind.Segment);
                     break;
 
-                case DragMode.SegmentBlendIn when dragSegmentIndex >= 0:
-                    ApplySegmentBlendIn(dragSegmentIndex, time);
+                case DragMode.SegmentTrimStart when dragSegmentIndex >= 0:
+                    ApplySegmentTrimStart(dragSegmentIndex, time);
                     break;
 
-                case DragMode.SegmentBlendOut when dragSegmentIndex >= 0:
-                    ApplySegmentBlendOut(dragSegmentIndex, time);
-                    break;
-
-                case DragMode.TransitionCrossfade when dragSegmentIndex >= 0:
-                    ApplyTransitionCrossfade(
-                        dragSegmentIndex,
-                        dragAnchorValue <= 0.0001f
-                            ? Mathf.Abs(time - dragAnchorTime)
-                            : dragAnchorValue + (time - dragAnchorTime));
+                case DragMode.SegmentTrimEnd when dragSegmentIndex >= 0:
+                    ApplySegmentTrimEnd(dragSegmentIndex, time);
                     break;
 
                 case DragMode.TimelinePan:
                     viewStartTime = dragAnchorValue - (evt.localPosition.x - dragAnchorTime) / Mathf.Max(1f, pixelsPerSecond);
+                    viewStartY = dragAnchorScrollY - (evt.localPosition.y - dragAnchorY);
                     ClampViewStartTime();
+                    ClampViewStartY();
+                    MarkDirtyRepaint();
+                    break;
+
+                case DragMode.TrackReorder:
+                    ApplyTrackReorder(evt.localPosition);
+                    break;
+
+                case DragMode.BoxSelect:
+                    boxSelectEnd = evt.localPosition;
                     MarkDirtyRepaint();
                     break;
 
                 case DragMode.NotifyStateMove when dragNotifyStateIndex >= 0:
-                    ApplyNotifyStateRange(
-                        dragNotifyStateIndex,
-                        time - dragAnchorTime + dragAnchorValue,
-                        time - dragAnchorTime + dragAnchorValue + dragNotifyStateDuration);
+                    ApplySelectedTimelineMove(time - dragAnchorTime, evt.localPosition, TrackKind.NotifyState);
                     break;
 
                 case DragMode.NotifyStateResizeStart when dragNotifyStateIndex >= 0:
@@ -381,17 +648,32 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             evt.StopPropagation();
         }
 
+        private void OnPointerLeave(PointerLeaveEvent evt)
+        {
+            if (dragMode != DragMode.None)
+                return;
+
+            hasHoverTrack = false;
+            HideHoverTooltip();
+            MarkDirtyRepaint();
+        }
+
         private void OnPointerUp(PointerUpEvent evt)
         {
             if (!this.HasPointerCapture(evt.pointerId))
                 return;
 
             this.ReleasePointer(evt.pointerId);
+            DragMode endedDragMode = dragMode;
             dragMode = DragMode.None;
             dragSegmentIndex = -1;
             dragNotifyIndex = -1;
             dragNotifyStateIndex = -1;
+            dragTrackId = "Default";
             hasSnapGuide = false;
+            if (endedDragMode == DragMode.BoxSelect)
+                ApplyBoxSelection();
+
             MarkDirtyRepaint();
             evt.StopPropagation();
         }
@@ -402,6 +684,38 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             this.CapturePointer(pointerId);
         }
 
+        private void CaptureDragSelectionAnchors()
+        {
+            dragSegmentStartTimes.Clear();
+            dragNotifyTimes.Clear();
+            dragNotifyStateRanges.Clear();
+
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return;
+
+            foreach (int index in context.SelectedSegmentIndices)
+            {
+                if (index >= 0 && index < montage.Segments.Count && montage.Segments[index] != null)
+                    dragSegmentStartTimes[index] = montage.Segments[index].StartTime;
+            }
+
+            foreach (int index in context.SelectedNotifyIndices)
+            {
+                if (index >= 0 && index < montage.Notifies.Count && montage.Notifies[index] != null)
+                    dragNotifyTimes[index] = montage.Notifies[index].Time;
+            }
+
+            foreach (int index in context.SelectedNotifyStateIndices)
+            {
+                if (index < 0 || index >= montage.NotifyStates.Count || montage.NotifyStates[index] == null)
+                    continue;
+
+                AnimNotifyStatePlacement state = montage.NotifyStates[index];
+                dragNotifyStateRanges[index] = new Vector2(state.StartTime, state.EndTime);
+            }
+        }
+
         private void ShowContextMenu(Vector2 local)
         {
             AnimMontageSO montage = context.Montage;
@@ -410,9 +724,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             float time = Snap(XToTime(local.x));
             GenericMenu menu = new();
+            bool hasRow = TryGetTrackRow(local, out TrackRowLayout row);
 
             if (TryHitSegment(local, out int segmentIndex, out _))
             {
+                menu.AddItem(new GUIContent("Segment/Replace Clip..."), false, () => OpenCreatePicker(PendingCreateKind.ReplaceSegmentClip, time, "Default", segmentIndex));
+                if (Selection.activeObject is AnimationClip replacementClip)
+                    menu.AddItem(new GUIContent("Segment/Replace Clip From Project Selection"), false, () => ReplaceSegmentClip(segmentIndex, replacementClip));
+                else
+                    menu.AddDisabledItem(new GUIContent("Segment/Replace Clip From Project Selection"));
+                menu.AddItem(new GUIContent("Segment/Reset Trim"), false, () => ResetSegmentTrim(segmentIndex));
                 menu.AddItem(new GUIContent("Segment/Delete"), false, () => DeleteArrayElement("segments", segmentIndex, "Delete Montage Segment"));
                 menu.AddItem(new GUIContent("Segment/Select"), false, () => context.SetSelectedSegment(segmentIndex));
                 menu.AddSeparator("");
@@ -420,37 +741,50 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (TryHitNotify(local, out int notifyIndex))
             {
+                menu.AddItem(new GUIContent("Notify/Replace Notify..."), false, () => OpenCreatePicker(PendingCreateKind.ReplaceNotify, time, "Default", notifyIndex));
+                if (Selection.activeObject is AnimNotifySO replacementNotify)
+                    menu.AddItem(new GUIContent("Notify/Replace Notify From Project Selection"), false, () => ReplaceNotify(notifyIndex, replacementNotify));
+                else
+                    menu.AddDisabledItem(new GUIContent("Notify/Replace Notify From Project Selection"));
                 menu.AddItem(new GUIContent("Notify/Delete"), false, () => DeleteArrayElement("notifies", notifyIndex, "Delete Anim Notify"));
                 menu.AddSeparator("");
             }
 
             if (TryHitNotifyState(local, out int notifyStateIndex, out _))
             {
+                menu.AddItem(new GUIContent("Notify State/Replace Notify State..."), false, () => OpenCreatePicker(PendingCreateKind.ReplaceNotifyState, time, "Default", notifyStateIndex));
+                if (Selection.activeObject is AnimNotifyStateSO replacementState)
+                    menu.AddItem(new GUIContent("Notify State/Replace Notify State From Project Selection"), false, () => ReplaceNotifyState(notifyStateIndex, replacementState));
+                else
+                    menu.AddDisabledItem(new GUIContent("Notify State/Replace Notify State From Project Selection"));
                 menu.AddItem(new GUIContent("Notify State/Delete"), false, () => DeleteArrayElement("notifyStates", notifyStateIndex, "Delete Anim Notify State"));
                 menu.AddSeparator("");
             }
 
-            if (IsSegmentTrack(local))
+            if (hasRow && row.Kind == TrackKind.Segment)
             {
-                menu.AddItem(new GUIContent("Create/Animation Segment..."), false, () => OpenCreatePicker(PendingCreateKind.Segment, time));
+                string trackId = row.TrackId;
+                menu.AddItem(new GUIContent("Create/Animation Segment..."), false, () => OpenCreatePicker(PendingCreateKind.Segment, time, trackId));
                 if (Selection.activeObject is AnimationClip selectedClip)
-                    menu.AddItem(new GUIContent("Create/Segment From Project Selection"), false, () => AddSegmentAtTime(time, selectedClip));
+                    menu.AddItem(new GUIContent("Create/Segment From Project Selection"), false, () => AddSegmentAtTime(time, selectedClip, trackId));
                 else
                     menu.AddDisabledItem(new GUIContent("Create/Segment From Project Selection"));
             }
-            else if (IsNotifyTrack(local))
+            else if (hasRow && row.Kind == TrackKind.Notify)
             {
-                menu.AddItem(new GUIContent("Create/Notify..."), false, () => OpenCreatePicker(PendingCreateKind.Notify, time));
+                string trackId = row.TrackId;
+                menu.AddItem(new GUIContent("Create/Notify..."), false, () => OpenCreatePicker(PendingCreateKind.Notify, time, trackId));
                 if (Selection.activeObject is AnimNotifySO selectedNotify)
-                    menu.AddItem(new GUIContent("Create/Notify From Project Selection"), false, () => AddNotifyAtTime(time, selectedNotify));
+                    menu.AddItem(new GUIContent("Create/Notify From Project Selection"), false, () => AddNotifyAtTime(time, selectedNotify, trackId));
                 else
                     menu.AddDisabledItem(new GUIContent("Create/Notify From Project Selection"));
             }
-            else if (IsNotifyStateTrack(local))
+            else if (hasRow && row.Kind == TrackKind.NotifyState)
             {
-                menu.AddItem(new GUIContent("Create/Notify State..."), false, () => OpenCreatePicker(PendingCreateKind.NotifyState, time));
+                string trackId = row.TrackId;
+                menu.AddItem(new GUIContent("Create/Notify State..."), false, () => OpenCreatePicker(PendingCreateKind.NotifyState, time, trackId));
                 if (Selection.activeObject is AnimNotifyStateSO selectedState)
-                    menu.AddItem(new GUIContent("Create/Notify State From Project Selection"), false, () => AddNotifyStateAtTime(time, selectedState));
+                    menu.AddItem(new GUIContent("Create/Notify State From Project Selection"), false, () => AddNotifyStateAtTime(time, selectedState, trackId));
                 else
                     menu.AddDisabledItem(new GUIContent("Create/Notify State From Project Selection"));
             }
@@ -459,50 +793,62 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 menu.AddDisabledItem(new GUIContent("Create"));
             }
 
+            menu.AddSeparator("");
+            menu.AddItem(new GUIContent("Track/Add Animation Track"), false, () => AddTrack("animationTracks", "Animation"));
+            menu.AddItem(new GUIContent("Track/Add Notify Track"), false, () => AddTrack("notifyTracks", "Notify"));
+            menu.AddItem(new GUIContent("Track/Add Notify State Track"), false, () => AddTrack("notifyStateTracks", "Notify State"));
+            if (hasRow && !string.IsNullOrEmpty(row.TrackId) && row.TrackId != "Default")
+            {
+                string propertyName = GetTrackPropertyName(row.Kind);
+                string trackId = row.TrackId;
+                menu.AddItem(new GUIContent("Track/Delete Current Track"), false, () => DeleteTrack(row.Kind, propertyName, trackId));
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Track/Delete Current Track"));
+            }
+
             menu.ShowAsContext();
         }
 
         private bool IsSegmentTrack(Vector2 local) =>
-            local.y >= segmentTrackTop && local.y <= segmentTrackTop + TrackHeight;
+            TryGetTrackRow(local, TrackKind.Segment, out _);
 
         private bool IsNotifyTrack(Vector2 local) =>
-            local.y >= notifyTrackTop && local.y <= notifyTrackTop + TrackHeight;
+            TryGetTrackRow(local, TrackKind.Notify, out _);
 
         private bool IsNotifyStateTrack(Vector2 local) =>
-            local.y >= notifyStateTrackTop && local.y <= notifyStateTrackTop + TrackHeight;
+            TryGetTrackRow(local, TrackKind.NotifyState, out _);
 
-        private void OpenCreatePicker(PendingCreateKind kind, float time)
+        private void OpenCreatePicker(PendingCreateKind kind, float time, string trackId, int editIndex = -1)
         {
-            pendingCreateKind = kind;
-            pendingCreateTime = time;
-            pendingObjectPickerControlId = GetNextObjectPickerControlId(kind);
+            trackId = SanitizeTrackId(trackId);
 
             switch (kind)
             {
                 case PendingCreateKind.Segment:
-                    EditorGUIUtility.ShowObjectPicker<AnimationClip>(null, false, string.Empty, pendingObjectPickerControlId);
+                    ObjectPickerPopup.Show<AnimationClip>("Create Animation Segment", clip => AddSegmentAtTime(time, clip, trackId));
+                    break;
+
+                case PendingCreateKind.ReplaceSegmentClip:
+                    ObjectPickerPopup.Show<AnimationClip>("Replace Animation Clip", clip => ReplaceSegmentClip(editIndex, clip));
                     break;
 
                 case PendingCreateKind.Notify:
-                    EditorGUIUtility.ShowObjectPicker<AnimNotifySO>(null, false, string.Empty, pendingObjectPickerControlId);
+                    ObjectPickerPopup.Show<AnimNotifySO>("Create Notify", notify => AddNotifyAtTime(time, notify, trackId));
+                    break;
+
+                case PendingCreateKind.ReplaceNotify:
+                    ObjectPickerPopup.Show<AnimNotifySO>("Replace Notify", notify => ReplaceNotify(editIndex, notify));
                     break;
 
                 case PendingCreateKind.NotifyState:
-                    EditorGUIUtility.ShowObjectPicker<AnimNotifyStateSO>(null, false, string.Empty, pendingObjectPickerControlId);
+                    ObjectPickerPopup.Show<AnimNotifyStateSO>("Create Notify State", state => AddNotifyStateAtTime(time, state, trackId));
                     break;
-            }
-        }
 
-        private int GetNextObjectPickerControlId(PendingCreateKind kind)
-        {
-            unchecked
-            {
-                objectPickerSerial++;
-                int hash = 17;
-                hash = hash * 31 + GetHashCode();
-                hash = hash * 31 + (int)kind;
-                hash = hash * 31 + objectPickerSerial;
-                return hash;
+                case PendingCreateKind.ReplaceNotifyState:
+                    ObjectPickerPopup.Show<AnimNotifyStateSO>("Replace Notify State", state => ReplaceNotifyState(editIndex, state));
+                    break;
             }
         }
 
@@ -512,8 +858,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return mode switch
             {
                 DragMode.SegmentMove => segment.StartTime,
-                DragMode.SegmentBlendIn => segment.BlendIn,
-                DragMode.SegmentBlendOut => segment.EndTime - segment.BlendOut,
+                DragMode.SegmentTrimStart => segment.StartTime,
+                DragMode.SegmentTrimEnd => segment.EndTime,
                 _ => 0f
             };
         }
@@ -530,63 +876,133 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             context.MarkDirty();
         }
 
-        private void ApplySegmentBlendIn(int segmentIndex, float time)
-        {
-            MontageSegment segment = context.Montage.Segments[segmentIndex];
-            time = SnapToNeighborEdge(time, segmentIndex, preferPrevious: true);
-            float blendIn = Snap(Mathf.Clamp(time - segment.StartTime, 0f, MaxBlendDuration(segment)));
-            WriteSegmentBlend(segmentIndex, blendIn, segment.BlendOut);
-        }
-
-        private void ApplySegmentBlendOut(int segmentIndex, float time)
-        {
-            MontageSegment segment = context.Montage.Segments[segmentIndex];
-            time = SnapToNeighborEdge(time, segmentIndex, preferPrevious: false);
-            float blendOut = Snap(Mathf.Clamp(segment.EndTime - time, 0f, MaxBlendDuration(segment)));
-            WriteSegmentBlend(segmentIndex, segment.BlendIn, blendOut);
-        }
-
-        private void WriteSegmentBlend(int segmentIndex, float blendIn, float blendOut)
-        {
-            MontageSegment segment = context.Montage.Segments[segmentIndex];
-            float maxBlend = MaxBlendDuration(segment);
-            blendIn = Mathf.Clamp(blendIn, 0f, maxBlend);
-            blendOut = Mathf.Clamp(blendOut, 0f, maxBlend - blendIn);
-
-            Undo.RecordObject(context.Montage, "Adjust Segment Blend");
-            SerializedObject so = new(context.Montage);
-            SerializedProperty segmentProperty = so.FindProperty("segments").GetArrayElementAtIndex(segmentIndex);
-            segmentProperty.FindPropertyRelative("blendIn").floatValue = blendIn;
-            segmentProperty.FindPropertyRelative("blendOut").floatValue = blendOut;
-            so.ApplyModifiedProperties();
-            context.MarkDirty();
-        }
-
-        private void ApplyTransitionCrossfade(int lowerSegmentIndex, float duration)
+        private void ApplySelectedTimelineMove(float deltaTime, Vector2 local, TrackKind activeKind)
         {
             AnimMontageSO montage = context.Montage;
-            if (montage == null || lowerSegmentIndex < 0 || lowerSegmentIndex + 1 >= montage.Segments.Count)
+            if (montage == null)
                 return;
 
-            MontageSegment from = montage.Segments[lowerSegmentIndex];
-            MontageSegment to = montage.Segments[lowerSegmentIndex + 1];
-            if (from == null || to == null)
-                return;
+            string targetTrackId = null;
+            if (TryGetTrackRow(local, activeKind, out TrackRowLayout targetRow))
+                targetTrackId = targetRow.TrackId;
 
-            float maxDuration = Mathf.Min(MaxBlendDuration(from), MaxBlendDuration(to));
-            duration = Snap(Mathf.Clamp(duration, 0f, maxDuration));
-
-            Undo.RecordObject(montage, "Adjust Transition Crossfade");
+            Undo.RecordObject(montage, "Move Montage Timeline Elements");
             SerializedObject so = new(montage);
+
             SerializedProperty segments = so.FindProperty("segments");
-            segments.GetArrayElementAtIndex(lowerSegmentIndex).FindPropertyRelative("blendOut").floatValue = duration;
-            segments.GetArrayElementAtIndex(lowerSegmentIndex + 1).FindPropertyRelative("blendIn").floatValue = duration;
+            foreach (KeyValuePair<int, float> entry in dragSegmentStartTimes)
+            {
+                if (segments == null || entry.Key < 0 || entry.Key >= segments.arraySize)
+                    continue;
+
+                SerializedProperty segment = segments.GetArrayElementAtIndex(entry.Key);
+                segment.FindPropertyRelative("startTime").floatValue = Snap(Mathf.Max(0f, entry.Value + deltaTime));
+                if (activeKind == TrackKind.Segment && targetTrackId != null)
+                    segment.FindPropertyRelative("trackId").stringValue = targetTrackId;
+            }
+
+            SerializedProperty notifies = so.FindProperty("notifies");
+            foreach (KeyValuePair<int, float> entry in dragNotifyTimes)
+            {
+                if (notifies == null || entry.Key < 0 || entry.Key >= notifies.arraySize)
+                    continue;
+
+                SerializedProperty notify = notifies.GetArrayElementAtIndex(entry.Key);
+                notify.FindPropertyRelative("time").floatValue = Snap(Mathf.Max(0f, entry.Value + deltaTime));
+                if (activeKind == TrackKind.Notify && targetTrackId != null)
+                    notify.FindPropertyRelative("trackId").stringValue = targetTrackId;
+            }
+
+            SerializedProperty notifyStates = so.FindProperty("notifyStates");
+            foreach (KeyValuePair<int, Vector2> entry in dragNotifyStateRanges)
+            {
+                if (notifyStates == null || entry.Key < 0 || entry.Key >= notifyStates.arraySize)
+                    continue;
+
+                float duration = Mathf.Max(MinSegmentDuration, entry.Value.y - entry.Value.x);
+                float startTime = Snap(Mathf.Max(0f, entry.Value.x + deltaTime));
+                float endTime = Snap(startTime + duration);
+                SerializedProperty state = notifyStates.GetArrayElementAtIndex(entry.Key);
+                state.FindPropertyRelative("startTime").floatValue = startTime;
+                state.FindPropertyRelative("endTime").floatValue = endTime;
+                if (activeKind == TrackKind.NotifyState && targetTrackId != null)
+                    state.FindPropertyRelative("trackId").stringValue = targetTrackId;
+            }
+
             so.ApplyModifiedProperties();
             context.MarkDirty();
         }
 
-        private static float MaxBlendDuration(MontageSegment segment) =>
-            Mathf.Max(MinSegmentDuration, segment.Duration * 0.5f);
+        private void ApplySegmentTrimStart(int segmentIndex, float startTime)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || segmentIndex < 0 || segmentIndex >= montage.Segments.Count)
+                return;
+
+            MontageSegment segment = montage.Segments[segmentIndex];
+            if (segment?.Clip == null)
+                return;
+
+            float playRate = segment.PlayRate;
+            float maxStartTime = dragAnchorSegmentEnd - MinSegmentDuration;
+            startTime = Snap(Mathf.Clamp(startTime, 0f, maxStartTime));
+            float deltaClip = (startTime - dragAnchorValue) * playRate;
+            float clipStart = Mathf.Clamp(dragAnchorClipStart + deltaClip, 0f, dragAnchorClipEnd - MinSegmentDuration * playRate);
+            float duration = Mathf.Max(MinSegmentDuration, (dragAnchorClipEnd - clipStart) / playRate);
+
+            Undo.RecordObject(montage, "Trim Montage Segment Start");
+            SerializedObject so = new(montage);
+            SerializedProperty segmentProperty = so.FindProperty("segments").GetArrayElementAtIndex(segmentIndex);
+            segmentProperty.FindPropertyRelative("startTime").floatValue = dragAnchorSegmentEnd - duration;
+            segmentProperty.FindPropertyRelative("clipStartTime").floatValue = clipStart;
+            segmentProperty.FindPropertyRelative("clipEndTime").floatValue = dragAnchorClipEnd;
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+        }
+
+        private void ApplySegmentTrimEnd(int segmentIndex, float endTime)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || segmentIndex < 0 || segmentIndex >= montage.Segments.Count)
+                return;
+
+            MontageSegment segment = montage.Segments[segmentIndex];
+            if (segment?.Clip == null)
+                return;
+
+            float playRate = segment.PlayRate;
+            float minEndTime = segment.StartTime + MinSegmentDuration;
+            endTime = Snap(Mathf.Clamp(endTime, minEndTime, segment.StartTime + (segment.Clip.length - dragAnchorClipStart) / playRate));
+            float clipEnd = Mathf.Clamp(dragAnchorClipStart + (endTime - segment.StartTime) * playRate, dragAnchorClipStart + MinSegmentDuration * playRate, segment.Clip.length);
+
+            Undo.RecordObject(montage, "Trim Montage Segment End");
+            SerializedObject so = new(montage);
+            SerializedProperty segmentProperty = so.FindProperty("segments").GetArrayElementAtIndex(segmentIndex);
+            segmentProperty.FindPropertyRelative("clipStartTime").floatValue = dragAnchorClipStart;
+            segmentProperty.FindPropertyRelative("clipEndTime").floatValue = clipEnd;
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+        }
+
+        private void ApplySegmentTrack(int segmentIndex, Vector2 local)
+        {
+            if (context.Montage == null
+                || segmentIndex < 0
+                || segmentIndex >= context.Montage.Segments.Count
+                || !TryGetTrackRow(local, TrackKind.Segment, out TrackRowLayout row))
+                return;
+
+            MontageSegment segment = context.Montage.Segments[segmentIndex];
+            if (segment == null || segment.TrackId == row.TrackId)
+                return;
+
+            Undo.RecordObject(context.Montage, "Move Segment To Track");
+            SerializedObject so = new(context.Montage);
+            SerializedProperty segmentProperty = so.FindProperty("segments").GetArrayElementAtIndex(segmentIndex);
+            segmentProperty.FindPropertyRelative("trackId").stringValue = row.TrackId;
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+        }
 
         private float SnapSegmentStartTime(int segmentIndex, float startTime)
         {
@@ -618,7 +1034,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     continue;
 
                 MontageSegment other = montage.Segments[i];
-                if (other == null)
+                if (other == null || other.TrackId != moving.TrackId)
                     continue;
 
                 TrySnapEdge(other.EndTime, startTime, other.EndTime);
@@ -649,34 +1065,30 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
         }
 
-        private float SnapToNeighborEdge(float time, int segmentIndex, bool preferPrevious)
-        {
-            AnimMontageSO montage = context.Montage;
-            if (montage == null)
-                return time;
-
-            float tolerance = MagneticSnapPixels / Mathf.Max(1f, pixelsPerSecond);
-            int neighborIndex = preferPrevious ? segmentIndex - 1 : segmentIndex + 1;
-            if (neighborIndex < 0 || neighborIndex >= montage.Segments.Count)
-                return time;
-
-            MontageSegment neighbor = montage.Segments[neighborIndex];
-            if (neighbor == null)
-                return time;
-
-            float edge = preferPrevious ? neighbor.EndTime : neighbor.StartTime;
-            if (Mathf.Abs(time - edge) > tolerance)
-                return time;
-
-            snapGuideTime = edge;
-            hasSnapGuide = true;
-            return edge;
-        }
-
         private void ApplyNotifyTime(int notifyIndex, float time)
         {
             Undo.RecordObject(context.Montage, "Move Anim Notify");
             context.Montage.Notifies[notifyIndex].Time = Snap(time);
+            context.MarkDirty();
+        }
+
+        private void ApplyNotifyTrack(int notifyIndex, Vector2 local)
+        {
+            if (context.Montage == null
+                || notifyIndex < 0
+                || notifyIndex >= context.Montage.Notifies.Count
+                || !TryGetTrackRow(local, TrackKind.Notify, out TrackRowLayout row))
+                return;
+
+            AnimNotifyPlacement placement = context.Montage.Notifies[notifyIndex];
+            if (placement == null || placement.TrackId == row.TrackId)
+                return;
+
+            Undo.RecordObject(context.Montage, "Move Notify To Track");
+            SerializedObject so = new(context.Montage);
+            SerializedProperty notifyProperty = so.FindProperty("notifies").GetArrayElementAtIndex(notifyIndex);
+            notifyProperty.FindPropertyRelative("trackId").stringValue = row.TrackId;
+            so.ApplyModifiedProperties();
             context.MarkDirty();
         }
 
@@ -694,9 +1106,31 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             context.MarkDirty();
         }
 
-        private void AddNotifyAtTime(float time) => AddNotifyAtTime(time, null);
+        private void ApplyNotifyStateTrack(int notifyStateIndex, Vector2 local)
+        {
+            if (context.Montage == null
+                || notifyStateIndex < 0
+                || notifyStateIndex >= context.Montage.NotifyStates.Count
+                || !TryGetTrackRow(local, TrackKind.NotifyState, out TrackRowLayout row))
+                return;
 
-        private void AddNotifyAtTime(float time, AnimNotifySO notify)
+            AnimNotifyStatePlacement placement = context.Montage.NotifyStates[notifyStateIndex];
+            if (placement == null || placement.TrackId == row.TrackId)
+                return;
+
+            Undo.RecordObject(context.Montage, "Move Notify State To Track");
+            SerializedObject so = new(context.Montage);
+            SerializedProperty stateProperty = so.FindProperty("notifyStates").GetArrayElementAtIndex(notifyStateIndex);
+            stateProperty.FindPropertyRelative("trackId").stringValue = row.TrackId;
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+        }
+
+        private void AddNotifyAtTime(float time) => AddNotifyAtTime(time, null, "Default");
+
+        private void AddNotifyAtTime(float time, AnimNotifySO notify) => AddNotifyAtTime(time, notify, "Default");
+
+        private void AddNotifyAtTime(float time, AnimNotifySO notify, string trackId)
         {
             AnimMontageSO montage = context.Montage;
             if (montage == null)
@@ -710,16 +1144,18 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             SerializedProperty element = prop.GetArrayElementAtIndex(index);
             element.FindPropertyRelative("time").floatValue = Snap(time);
             element.FindPropertyRelative("notify").objectReferenceValue = notify;
-            element.FindPropertyRelative("trackId").stringValue = "Default";
+            element.FindPropertyRelative("trackId").stringValue = SanitizeTrackId(trackId);
             so.ApplyModifiedPropertiesWithoutUndo();
             context.MarkDirty();
             context.SetPlayhead(time);
             context.SetSelectedNotify(index);
         }
 
-        private void AddNotifyStateAtTime(float time) => AddNotifyStateAtTime(time, null);
+        private void AddNotifyStateAtTime(float time) => AddNotifyStateAtTime(time, null, "Default");
 
-        private void AddNotifyStateAtTime(float time, AnimNotifyStateSO notifyState)
+        private void AddNotifyStateAtTime(float time, AnimNotifyStateSO notifyState) => AddNotifyStateAtTime(time, notifyState, "Default");
+
+        private void AddNotifyStateAtTime(float time, AnimNotifyStateSO notifyState, string trackId)
         {
             AnimMontageSO montage = context.Montage;
             if (montage == null)
@@ -734,14 +1170,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             element.FindPropertyRelative("startTime").floatValue = Snap(time);
             element.FindPropertyRelative("endTime").floatValue = Snap(time + DefaultQuickBlendDuration);
             element.FindPropertyRelative("notifyState").objectReferenceValue = notifyState;
-            element.FindPropertyRelative("trackId").stringValue = "Default";
+            element.FindPropertyRelative("trackId").stringValue = SanitizeTrackId(trackId);
             so.ApplyModifiedProperties();
             context.MarkDirty();
             context.SetPlayhead(time);
             context.SetSelectedNotifyState(index);
         }
 
-        private void AddSegmentAtTime(float time, AnimationClip clip)
+        private void AddSegmentAtTime(float time, AnimationClip clip) => AddSegmentAtTime(time, clip, "Default");
+
+        private void AddSegmentAtTime(float time, AnimationClip clip, string trackId)
         {
             AnimMontageSO montage = context.Montage;
             if (montage == null)
@@ -754,8 +1192,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             prop.InsertArrayElementAtIndex(index);
             SerializedProperty element = prop.GetArrayElementAtIndex(index);
             element.FindPropertyRelative("sectionName").stringValue = clip != null ? clip.name : "Default";
+            element.FindPropertyRelative("trackId").stringValue = SanitizeTrackId(trackId);
             element.FindPropertyRelative("clip").objectReferenceValue = clip;
             element.FindPropertyRelative("startTime").floatValue = Snap(time);
+            element.FindPropertyRelative("clipStartTime").floatValue = 0f;
+            element.FindPropertyRelative("clipEndTime").floatValue = clip != null ? clip.length : 0f;
             element.FindPropertyRelative("playRate").floatValue = 1f;
             element.FindPropertyRelative("blendIn").floatValue = 0f;
             element.FindPropertyRelative("blendOut").floatValue = 0f;
@@ -765,21 +1206,155 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             context.SetSelectedSegment(index);
         }
 
+        private void ReplaceSegmentClip(int segmentIndex, AnimationClip clip)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || segmentIndex < 0 || segmentIndex >= montage.Segments.Count)
+                return;
+
+            Undo.RecordObject(montage, "Replace Montage Segment Clip");
+            SerializedObject so = new(montage);
+            SerializedProperty segment = so.FindProperty("segments").GetArrayElementAtIndex(segmentIndex);
+            segment.FindPropertyRelative("sectionName").stringValue = clip != null ? clip.name : "Default";
+            segment.FindPropertyRelative("clip").objectReferenceValue = clip;
+            segment.FindPropertyRelative("clipStartTime").floatValue = 0f;
+            segment.FindPropertyRelative("clipEndTime").floatValue = clip != null ? clip.length : 0f;
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetSelectedSegment(segmentIndex);
+        }
+
+        private void ResetSegmentTrim(int segmentIndex)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || segmentIndex < 0 || segmentIndex >= montage.Segments.Count)
+                return;
+
+            MontageSegment montageSegment = montage.Segments[segmentIndex];
+            AnimationClip clip = montageSegment?.Clip;
+            if (clip == null)
+                return;
+
+            Undo.RecordObject(montage, "Reset Montage Segment Trim");
+            SerializedObject so = new(montage);
+            SerializedProperty segment = so.FindProperty("segments").GetArrayElementAtIndex(segmentIndex);
+            segment.FindPropertyRelative("clipStartTime").floatValue = 0f;
+            segment.FindPropertyRelative("clipEndTime").floatValue = clip.length;
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetSelectedSegment(segmentIndex);
+        }
+
+        private void ReplaceNotify(int notifyIndex, AnimNotifySO notify)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || notifyIndex < 0 || notifyIndex >= montage.Notifies.Count)
+                return;
+
+            Undo.RecordObject(montage, "Replace Anim Notify");
+            SerializedObject so = new(montage);
+            SerializedProperty placement = so.FindProperty("notifies").GetArrayElementAtIndex(notifyIndex);
+            placement.FindPropertyRelative("notify").objectReferenceValue = notify;
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetSelectedNotify(notifyIndex);
+        }
+
+        private void ReplaceNotifyState(int notifyStateIndex, AnimNotifyStateSO notifyState)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || notifyStateIndex < 0 || notifyStateIndex >= montage.NotifyStates.Count)
+                return;
+
+            Undo.RecordObject(montage, "Replace Anim Notify State");
+            SerializedObject so = new(montage);
+            SerializedProperty placement = so.FindProperty("notifyStates").GetArrayElementAtIndex(notifyStateIndex);
+            placement.FindPropertyRelative("notifyState").objectReferenceValue = notifyState;
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetSelectedNotifyState(notifyStateIndex);
+        }
+
         private bool DeleteSelected()
         {
             if (context.Montage == null)
                 return false;
 
-            if (context.SelectedSegmentIndex >= 0)
-                return DeleteArrayElement("segments", context.SelectedSegmentIndex, "Delete Montage Segment");
-
-            if (context.SelectedNotifyIndex >= 0)
-                return DeleteArrayElement("notifies", context.SelectedNotifyIndex, "Delete Anim Notify");
-
-            if (context.SelectedNotifyStateIndex >= 0)
-                return DeleteArrayElement("notifyStates", context.SelectedNotifyStateIndex, "Delete Anim Notify State");
+            if (context.SelectedSegmentIndices.Count > 0
+                || context.SelectedNotifyIndices.Count > 0
+                || context.SelectedNotifyStateIndices.Count > 0)
+                return DeleteSelectedTimelineElements();
 
             return false;
+        }
+
+        private bool DeleteHoveredTrack()
+        {
+            if (context.Montage == null || !hasHoverTrack || hoverTrackId == "Default")
+                return false;
+
+            string propertyName = GetTrackPropertyName(hoverTrackKind);
+            DeleteTrack(hoverTrackKind, propertyName, hoverTrackId);
+            return true;
+        }
+
+        private bool DeleteArrayElements(string propertyName, IReadOnlyCollection<int> indices, string undoName)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || indices.Count == 0)
+                return false;
+
+            Undo.RecordObject(montage, undoName);
+            SerializedObject so = new(montage);
+            SerializedProperty prop = so.FindProperty(propertyName);
+            if (prop == null)
+                return false;
+
+            var sorted = new List<int>(indices);
+            sorted.Sort((a, b) => b.CompareTo(a));
+            for (int i = 0; i < sorted.Count; i++)
+            {
+                int index = sorted[i];
+                if (index >= 0 && index < prop.arraySize)
+                    prop.DeleteArrayElementAtIndex(index);
+            }
+
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetSelected(montage);
+            return true;
+        }
+
+        private bool DeleteSelectedTimelineElements()
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return false;
+
+            Undo.RecordObject(montage, "Delete Montage Timeline Elements");
+            SerializedObject so = new(montage);
+            DeleteArrayElementsWithoutApply(so.FindProperty("segments"), context.SelectedSegmentIndices);
+            DeleteArrayElementsWithoutApply(so.FindProperty("notifies"), context.SelectedNotifyIndices);
+            DeleteArrayElementsWithoutApply(so.FindProperty("notifyStates"), context.SelectedNotifyStateIndices);
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetSelected(montage);
+            return true;
+        }
+
+        private static void DeleteArrayElementsWithoutApply(SerializedProperty prop, IReadOnlyCollection<int> indices)
+        {
+            if (prop == null || indices.Count == 0)
+                return;
+
+            var sorted = new List<int>(indices);
+            sorted.Sort((a, b) => b.CompareTo(a));
+            for (int i = 0; i < sorted.Count; i++)
+            {
+                int index = sorted[i];
+                if (index >= 0 && index < prop.arraySize)
+                    prop.DeleteArrayElementAtIndex(index);
+            }
         }
 
         private bool DeleteArrayElement(string propertyName, int index, string undoName)
@@ -801,6 +1376,313 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return true;
         }
 
+        private void AddTrack(string propertyName, string displayName)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return;
+
+            Undo.RecordObject(montage, "Add Montage Track");
+            SerializedObject so = new(montage);
+            SerializedProperty tracks = so.FindProperty(propertyName);
+            if (tracks == null)
+                return;
+
+            int index = tracks.arraySize;
+            tracks.InsertArrayElementAtIndex(index);
+            string trackId = CreateUniqueTrackId(tracks, displayName);
+            tracks.GetArrayElementAtIndex(index).stringValue = trackId;
+            SerializedProperty order = so.FindProperty("timelineTrackOrder");
+            if (order != null && TryGetTrackKindByPropertyName(propertyName, out TrackKind kind))
+                EnsureTrackKeyInOrder(order, GetTrackKey(kind, trackId));
+
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            MarkDirtyRepaint();
+        }
+
+        private void DeleteTrack(TrackKind kind, string propertyName, string trackId)
+        {
+            AnimMontageSO montage = context.Montage;
+            trackId = SanitizeTrackId(trackId);
+            if (montage == null || trackId == "Default")
+                return;
+
+            if (!EditorUtility.DisplayDialog(
+                    "Delete Montage Track",
+                    $"Delete '{trackId}' track and all items on it?",
+                    "Delete",
+                    "Cancel"))
+                return;
+
+            Undo.RecordObject(montage, "Delete Montage Track");
+            SerializedObject so = new(montage);
+            DeleteTrackItems(so, kind, trackId);
+
+            SerializedProperty tracks = so.FindProperty(propertyName);
+            if (tracks != null)
+            {
+                for (int i = tracks.arraySize - 1; i >= 0; i--)
+                {
+                    if (SanitizeTrackId(tracks.GetArrayElementAtIndex(i).stringValue) == trackId)
+                        tracks.DeleteArrayElementAtIndex(i);
+                }
+            }
+
+            SerializedProperty order = so.FindProperty("timelineTrackOrder");
+            if (order != null)
+                RemoveTrackKeyFromOrder(order, GetTrackKey(kind, trackId));
+
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetSelected(montage);
+            MarkDirtyRepaint();
+        }
+
+        private void ApplyTrackReorder(Vector2 local)
+        {
+            UpdateHoverTrack(local);
+            if (context.Montage == null
+                || string.IsNullOrEmpty(dragTrackId)
+                || !TryGetTrackRow(local, out TrackRowLayout targetRow)
+                || (targetRow.Kind == dragTrackKind && targetRow.TrackId == dragTrackId))
+                return;
+
+            MoveTrack(dragTrackKind, dragTrackId, targetRow.Kind, targetRow.TrackId);
+        }
+
+        private void MoveTrack(TrackKind sourceKind, string sourceTrackId, TrackKind targetKind, string targetTrackId)
+        {
+            sourceTrackId = SanitizeTrackId(sourceTrackId);
+            targetTrackId = SanitizeTrackId(targetTrackId);
+            if (sourceKind == targetKind && sourceTrackId == targetTrackId)
+                return;
+
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return;
+
+            Undo.RecordObject(montage, "Reorder Montage Track");
+            SerializedObject so = new(montage);
+            EnsureTrackInProperty(so.FindProperty(GetTrackPropertyName(sourceKind)), sourceTrackId);
+            EnsureTrackInProperty(so.FindProperty(GetTrackPropertyName(targetKind)), targetTrackId);
+
+            SerializedProperty order = so.FindProperty("timelineTrackOrder");
+            if (order == null)
+                return;
+
+            EnsureTimelineOrder(order, GetOrderedTimelineTracks(montage));
+            string sourceKey = GetTrackKey(sourceKind, sourceTrackId);
+            string targetKey = GetTrackKey(targetKind, targetTrackId);
+            EnsureTrackKeyInOrder(order, sourceKey);
+            EnsureTrackKeyInOrder(order, targetKey);
+
+            int sourceIndex = FindTrackKeyIndex(order, sourceKey);
+            int targetIndex = FindTrackKeyIndex(order, targetKey);
+            if (sourceIndex < 0 || targetIndex < 0 || sourceIndex == targetIndex)
+                return;
+
+            order.MoveArrayElement(sourceIndex, targetIndex);
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            MarkDirtyRepaint();
+        }
+
+        private void ApplyBoxSelection()
+        {
+            Rect selectionRect = GetBoxSelectionRect();
+            if (selectionRect.width < 3f && selectionRect.height < 3f)
+                return;
+
+            var segmentSelection = new List<int>();
+            for (int i = 0; i < segmentLayouts.Count; i++)
+            {
+                SegmentLayout layout = segmentLayouts[i];
+                if (layout.Body.Overlaps(selectionRect))
+                    segmentSelection.Add(layout.Index);
+            }
+
+            var notifySelection = new List<int>();
+            for (int i = 0; i < notifyLayouts.Count; i++)
+            {
+                NotifyLayout layout = notifyLayouts[i];
+                if (layout.Body.Overlaps(selectionRect))
+                    notifySelection.Add(layout.Index);
+            }
+
+            var stateSelection = new List<int>();
+            for (int i = 0; i < notifyStateLayouts.Count; i++)
+            {
+                NotifyStateLayout layout = notifyStateLayouts[i];
+                if (layout.Body.Overlaps(selectionRect))
+                    stateSelection.Add(layout.Index);
+            }
+
+            var trackSelection = new List<string>();
+            for (int i = 0; i < trackRows.Count; i++)
+            {
+                TrackRowLayout row = trackRows[i];
+                var labelRect = new Rect(row.Rect.xMin, row.Rect.yMin, TrackLabelWidth, row.Rect.height);
+                if (labelRect.Overlaps(selectionRect))
+                    trackSelection.Add(GetTrackKey(row.Kind, row.TrackId));
+            }
+
+            if (segmentSelection.Count > 0 || notifySelection.Count > 0 || stateSelection.Count > 0 || trackSelection.Count > 0)
+                context.SetSelectedTimelineElements(segmentSelection, notifySelection, stateSelection, trackSelection, boxSelectAdditive);
+            else if (!boxSelectAdditive)
+                context.SetSelected(context.Montage);
+        }
+
+        private Rect GetBoxSelectionRect()
+        {
+            float xMin = Mathf.Min(boxSelectStart.x, boxSelectEnd.x);
+            float yMin = Mathf.Min(boxSelectStart.y, boxSelectEnd.y);
+            float xMax = Mathf.Max(boxSelectStart.x, boxSelectEnd.x);
+            float yMax = Mathf.Max(boxSelectStart.y, boxSelectEnd.y);
+            return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+        }
+
+        private static void DeleteTrackItems(SerializedObject so, TrackKind kind, string trackId)
+        {
+            string itemPropertyName = kind switch
+            {
+                TrackKind.Segment => "segments",
+                TrackKind.Notify => "notifies",
+                TrackKind.NotifyState => "notifyStates",
+                _ => null
+            };
+
+            if (string.IsNullOrEmpty(itemPropertyName))
+                return;
+
+            SerializedProperty items = so.FindProperty(itemPropertyName);
+            if (items == null)
+                return;
+
+            for (int i = items.arraySize - 1; i >= 0; i--)
+            {
+                SerializedProperty item = items.GetArrayElementAtIndex(i);
+                SerializedProperty itemTrack = item.FindPropertyRelative("trackId");
+                if (itemTrack != null && SanitizeTrackId(itemTrack.stringValue) == trackId)
+                    items.DeleteArrayElementAtIndex(i);
+            }
+        }
+
+        private static void EnsureTrackInProperty(SerializedProperty tracks, string trackId)
+        {
+            if (tracks == null)
+                return;
+
+            if (FindTrackIndex(tracks, trackId) >= 0)
+                return;
+
+            int index = tracks.arraySize;
+            tracks.InsertArrayElementAtIndex(index);
+            tracks.GetArrayElementAtIndex(index).stringValue = SanitizeTrackId(trackId);
+        }
+
+        private static int FindTrackIndex(SerializedProperty tracks, string trackId)
+        {
+            trackId = SanitizeTrackId(trackId);
+            for (int i = 0; i < tracks.arraySize; i++)
+            {
+                if (SanitizeTrackId(tracks.GetArrayElementAtIndex(i).stringValue) == trackId)
+                    return i;
+            }
+
+            return -1;
+        }
+
+        private static void EnsureTimelineOrder(SerializedProperty order, List<TrackIdentity> tracks)
+        {
+            for (int i = 0; i < tracks.Count; i++)
+                EnsureTrackKeyInOrder(order, GetTrackKey(tracks[i].Kind, tracks[i].TrackId));
+        }
+
+        private static void EnsureTrackKeyInOrder(SerializedProperty order, string key)
+        {
+            if (FindTrackKeyIndex(order, key) >= 0)
+                return;
+
+            int index = order.arraySize;
+            order.InsertArrayElementAtIndex(index);
+            order.GetArrayElementAtIndex(index).stringValue = key;
+        }
+
+        private static int FindTrackKeyIndex(SerializedProperty order, string key)
+        {
+            for (int i = 0; i < order.arraySize; i++)
+            {
+                if (order.GetArrayElementAtIndex(i).stringValue == key)
+                    return i;
+            }
+
+            return -1;
+        }
+
+        private static void RemoveTrackKeyFromOrder(SerializedProperty order, string key)
+        {
+            for (int i = order.arraySize - 1; i >= 0; i--)
+            {
+                if (order.GetArrayElementAtIndex(i).stringValue == key)
+                    order.DeleteArrayElementAtIndex(i);
+            }
+        }
+
+        private static string CreateUniqueTrackId(SerializedProperty tracks, string displayName)
+        {
+            int suffix = Mathf.Max(1, tracks.arraySize);
+            while (true)
+            {
+                string candidate = $"{displayName} {suffix}";
+                bool exists = false;
+                for (int i = 0; i < tracks.arraySize; i++)
+                {
+                    if (SanitizeTrackId(tracks.GetArrayElementAtIndex(i).stringValue) == candidate)
+                    {
+                        exists = true;
+                        break;
+                    }
+                }
+
+                if (!exists)
+                    return candidate;
+
+                suffix++;
+            }
+        }
+
+        private static string GetTrackPropertyName(TrackKind kind) =>
+            kind switch
+            {
+                TrackKind.Segment => "animationTracks",
+                TrackKind.Notify => "notifyTracks",
+                TrackKind.NotifyState => "notifyStateTracks",
+                _ => string.Empty
+            };
+
+        private static bool TryGetTrackKindByPropertyName(string propertyName, out TrackKind kind)
+        {
+            switch (propertyName)
+            {
+                case "animationTracks":
+                    kind = TrackKind.Segment;
+                    return true;
+
+                case "notifyTracks":
+                    kind = TrackKind.Notify;
+                    return true;
+
+                case "notifyStateTracks":
+                    kind = TrackKind.NotifyState;
+                    return true;
+
+                default:
+                    kind = default;
+                    return false;
+            }
+        }
+
         private void OnGenerateVisualContent(MeshGenerationContext ctx)
         {
             Rect rect = contentRect;
@@ -808,8 +1690,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return;
 
             segmentLayouts.Clear();
-            transitionLayouts.Clear();
+            notifyLayouts.Clear();
             notifyStateLayouts.Clear();
+            trackRows.Clear();
 
             var painter = ctx.painter2D;
             DrawBackground(painter, rect);
@@ -820,15 +1703,32 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             DrawRuler(painter, rect, montage.Length);
             DrawTimeGrid(painter, rect, montage.Length);
-            float y = RulerHeight + TrackGap;
-            segmentTrackTop = y;
-            y = DrawSegmentTrack(painter, rect, y, montage);
-            notifyTrackTop = y;
-            y = DrawNotifyTrack(painter, rect, y, montage, "Default");
-            notifyStateTrackTop = y;
-            DrawNotifyStateTrack(painter, rect, y, montage);
+            List<TrackIdentity> orderedTracks = GetOrderedTimelineTracks(montage);
+            totalTrackContentHeight = orderedTracks.Count * (TrackHeight + TrackGap);
+            ClampViewStartY();
+
+            float y = RulerHeight + TrackGap - viewStartY;
+            foreach (TrackIdentity track in orderedTracks)
+            {
+                switch (track.Kind)
+                {
+                    case TrackKind.Segment:
+                        y = DrawSegmentTrack(painter, rect, y, montage, track.TrackId);
+                        break;
+
+                    case TrackKind.Notify:
+                        y = DrawNotifyTrack(painter, rect, y, montage, track.TrackId);
+                        break;
+
+                    case TrackKind.NotifyState:
+                        y = DrawNotifyStateTrack(painter, rect, y, montage, track.TrackId);
+                        break;
+                }
+            }
+
             DrawSnapGuide(painter, rect);
             DrawPlayhead(painter, rect);
+            DrawBoxSelection(painter);
         }
 
         private void DrawBackground(Painter2D painter, Rect rect)
@@ -890,110 +1790,50 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
         }
 
-        private float DrawSegmentTrack(Painter2D painter, Rect rect, float y, AnimMontageSO montage)
+        private float DrawSegmentTrack(Painter2D painter, Rect rect, float y, AnimMontageSO montage, string trackId)
         {
-            DrawTrackRow(painter, rect, y, new Color(0.18f, 0.34f, 0.62f, 0.35f));
+            DrawTrackRow(painter, rect, y, new Color(0.18f, 0.34f, 0.62f, 0.35f), TrackKind.Segment, trackId);
+            trackRows.Add(new TrackRowLayout(TrackKind.Segment, trackId, new Rect(rect.xMin, y, rect.width, TrackHeight)));
+            Rect contentRect = GetTimelineContentRect(rect);
 
-            for (int i = 0; i < montage.Segments.Count - 1; i++)
+            List<int> segmentIndices = GetSegmentIndicesForTrack(montage, trackId);
+            for (int i = 0; i < segmentIndices.Count; i++)
             {
-                MontageSegment current = montage.Segments[i];
-                MontageSegment next = montage.Segments[i + 1];
-                if (current?.Clip == null || next?.Clip == null)
-                    continue;
-
-                float crossfade = MontageSegmentBlending.GetCrossfadeDuration(current, next);
-                float boundaryX = TimeToX(current.EndTime);
-                Rect transitionRect;
-                if (crossfade > 0f)
-                {
-                    float x0 = TimeToX(current.EndTime - crossfade);
-                    float x1 = TimeToX(current.EndTime + crossfade);
-                    transitionRect = new Rect(x0, y + 4f, Mathf.Max(TransitionHandleWidth, x1 - x0), TrackHeight - 8f);
-                    painter.fillColor = TransitionColor;
-                    FillRoundedRect(painter, transitionRect, 4f);
-                    DrawDiagonalHatch(painter, transitionRect, new Color(1f, 1f, 1f, 0.08f));
-                }
-                else
-                {
-                    transitionRect = new Rect(
-                        boundaryX - TransitionHandleWidth * 0.5f,
-                        y + 5f,
-                        TransitionHandleWidth,
-                        TrackHeight - 10f);
-                    painter.fillColor = new Color(TransitionHandleColor.r, TransitionHandleColor.g, TransitionHandleColor.b, 0.22f);
-                    FillRoundedRect(painter, transitionRect, 4f);
-                }
-
-                DrawTransitionHandle(painter, boundaryX, y + 4f, TrackHeight - 8f, crossfade > 0f);
-                transitionLayouts.Add(new TransitionLayout(i, transitionRect, crossfade));
-            }
-
-            for (int i = 0; i < montage.Segments.Count; i++)
-            {
-                MontageSegment segment = montage.Segments[i];
+                int segmentIndex = segmentIndices[i];
+                MontageSegment segment = montage.Segments[segmentIndex];
                 if (segment?.Clip == null)
                     continue;
 
                 float x0 = TimeToX(segment.StartTime);
                 float x1 = TimeToX(segment.EndTime);
                 var body = new Rect(x0, y + 2f, Mathf.Max(4f, x1 - x0), TrackHeight - 4f);
-                bool selected = context.SelectedSegmentIndex == i;
+                if (!TryClipRect(body, contentRect, out Rect clippedBody))
+                    continue;
+
+                bool selected = context.IsSegmentSelected(segmentIndex);
 
                 painter.fillColor = selected ? SegmentSelectedColor : SegmentCoreColor;
-                FillRoundedRect(painter, body, 3f);
+                FillRoundedRect(painter, clippedBody, 3f);
                 painter.strokeColor = selected ? new Color(1f, 1f, 1f, 0.7f) : new Color(1f, 1f, 1f, 0.22f);
                 painter.lineWidth = selected ? 1.6f : 1f;
-                StrokeRoundedRect(painter, body, 3f);
+                StrokeRoundedRect(painter, clippedBody, 3f);
 
-                float blendInWidth = segment.BlendIn > 0f
-                    ? Mathf.Clamp(segment.BlendIn * pixelsPerSecond, 3f, body.width * 0.5f)
-                    : 0f;
-                float blendOutWidth = segment.BlendOut > 0f
-                    ? Mathf.Clamp(segment.BlendOut * pixelsPerSecond, 3f, body.width * 0.5f)
-                    : 0f;
+                DrawSegmentAutoBlendOverlay(painter, clippedBody, montage, segment, segmentIndex, contentRect);
 
-                var visualBlendInRect = new Rect(body.xMin, body.yMin, blendInWidth, body.height);
-                var visualBlendOutRect = new Rect(body.xMax - blendOutWidth, body.yMin, blendOutWidth, body.height);
-                float blendHitWidth = Mathf.Min(BlendHandleHitWidth, body.width * 0.45f);
-                var blendInHitRect = new Rect(body.xMin, body.yMin, blendHitWidth, body.height);
-                var blendOutHitRect = new Rect(body.xMax - blendHitWidth, body.yMin, blendHitWidth, body.height);
-
-                if (blendInWidth > 0f)
-                {
-                    painter.fillColor = BlendOverlayColor;
-                    FillRect(painter, visualBlendInRect);
-                    DrawBlendHandle(painter, visualBlendInRect.xMax, body.yMin, body.height, true);
-                }
-                else
-                {
-                    DrawBlendHandle(painter, body.xMin + 4f, body.yMin, body.height, false);
-                }
-
-                if (blendOutWidth > 0f)
-                {
-                    painter.fillColor = BlendOverlayColor;
-                    FillRect(painter, visualBlendOutRect);
-                    DrawBlendHandle(painter, visualBlendOutRect.xMin, body.yMin, body.height, true);
-                }
-                else
-                {
-                    DrawBlendHandle(painter, body.xMax - 4f, body.yMin, body.height, false);
-                }
-
-                if (body.width > 28f)
+                if (clippedBody.width > 28f)
                 {
                     painter.strokeColor = new Color(1f, 1f, 1f, 0.12f);
                     painter.lineWidth = 1f;
-                    float midY = body.yMin + body.height * 0.5f;
+                    float midY = clippedBody.yMin + clippedBody.height * 0.5f;
                     painter.BeginPath();
-                    painter.MoveTo(new Vector2(body.xMin + 6f, midY));
-                    painter.LineTo(new Vector2(body.xMax - 6f, midY));
+                    painter.MoveTo(new Vector2(clippedBody.xMin + 6f, midY));
+                    painter.LineTo(new Vector2(clippedBody.xMax - 6f, midY));
                     painter.Stroke();
                 }
 
-                DrawSegmentEdgeTicks(painter, body);
+                DrawSegmentEdgeTicks(painter, clippedBody);
 
-                segmentLayouts.Add(new SegmentLayout(i, body, blendInHitRect, blendOutHitRect));
+                segmentLayouts.Add(new SegmentLayout(segmentIndex, clippedBody));
             }
 
             return y + TrackHeight + TrackGap;
@@ -1001,7 +1841,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private float DrawNotifyTrack(Painter2D painter, Rect rect, float y, AnimMontageSO montage, string trackId)
         {
-            DrawTrackRow(painter, rect, y, new Color(0.18f, 0.62f, 0.72f, 0.22f));
+            DrawTrackRow(painter, rect, y, new Color(0.18f, 0.62f, 0.72f, 0.22f), TrackKind.Notify, trackId);
+            trackRows.Add(new TrackRowLayout(TrackKind.Notify, trackId, new Rect(rect.xMin, y, rect.width, TrackHeight)));
+            Rect contentRect = GetTimelineContentRect(rect);
             for (int i = 0; i < montage.Notifies.Count; i++)
             {
                 AnimNotifyPlacement placement = montage.Notifies[i];
@@ -1009,86 +1851,125 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     continue;
 
                 Color color = placement.Notify != null ? placement.Notify.EditorColor : new Color(0.4f, 0.8f, 1f);
-                DrawDiamond(painter, TimeToX(placement.Time), y + TrackHeight * 0.5f, 7f, color);
+                float x = TimeToX(placement.Time);
+                if (x < contentRect.xMin - 8f || x > contentRect.xMax + 8f)
+                    continue;
+
+                DrawDiamond(painter, x, y + TrackHeight * 0.5f, 7f, color);
+                var hitRect = new Rect(x - 9f, y + TrackHeight * 0.5f - 9f, 18f, 18f);
+                notifyLayouts.Add(new NotifyLayout(i, hitRect));
+                if (context.IsNotifySelected(i))
+                {
+                    painter.strokeColor = new Color(1f, 1f, 1f, 0.78f);
+                    painter.lineWidth = 1.5f;
+                    StrokeDiamond(painter, x, y + TrackHeight * 0.5f, 9.5f);
+                }
             }
 
             return y + TrackHeight + TrackGap;
         }
 
-        private void DrawNotifyStateTrack(Painter2D painter, Rect rect, float y, AnimMontageSO montage)
+        private float DrawNotifyStateTrack(Painter2D painter, Rect rect, float y, AnimMontageSO montage, string trackId)
         {
-            DrawTrackRow(painter, rect, y, new Color(0.28f, 0.72f, 0.42f, 0.18f));
+            DrawTrackRow(painter, rect, y, new Color(0.28f, 0.72f, 0.42f, 0.18f), TrackKind.NotifyState, trackId);
+            trackRows.Add(new TrackRowLayout(TrackKind.NotifyState, trackId, new Rect(rect.xMin, y, rect.width, TrackHeight)));
+            Rect contentRect = GetTimelineContentRect(rect);
             for (int i = 0; i < montage.NotifyStates.Count; i++)
             {
                 AnimNotifyStatePlacement placement = montage.NotifyStates[i];
-                if (placement?.NotifyState == null)
+                if (placement == null || placement.TrackId != trackId || placement.NotifyState == null)
                     continue;
 
                 float x0 = TimeToX(placement.StartTime);
                 float x1 = TimeToX(placement.EndTime);
                 var bar = new Rect(x0, y, Mathf.Max(4f, x1 - x0), TrackHeight);
-                bool selected = context.SelectedNotifyStateIndex == i;
+                if (!TryClipRect(bar, contentRect, out Rect clippedBar))
+                    continue;
+
+                bool selected = context.IsNotifyStateSelected(i);
                 painter.fillColor = selected
                     ? placement.NotifyState.EditorColor * new Color(1f, 1f, 1f, 0.85f)
                     : placement.NotifyState.EditorColor * new Color(1f, 1f, 1f, 0.55f);
-                FillRoundedRect(painter, bar, 3f);
-                notifyStateLayouts.Add(new NotifyStateLayout(i, bar));
+                FillRoundedRect(painter, clippedBar, 3f);
+                notifyStateLayouts.Add(new NotifyStateLayout(i, clippedBar));
             }
+
+            return y + TrackHeight + TrackGap;
         }
 
-        private void DrawTrackRow(Painter2D painter, Rect rect, float y, Color accentColor)
+        private void DrawTrackRow(Painter2D painter, Rect rect, float y, Color accentColor, TrackKind kind, string trackId)
         {
+            bool hovered = hasHoverTrack && hoverTrackKind == kind && hoverTrackId == trackId;
+            bool selected = context.IsTimelineTrackSelected(GetTrackKey(kind, trackId));
             var row = new Rect(rect.xMin + TrackLabelWidth, y, rect.width - TrackLabelWidth, TrackHeight);
-            painter.fillColor = TrackRowColor;
+            painter.fillColor = hovered ? new Color(0.16f, 0.16f, 0.18f, 1f) : TrackRowColor;
             FillRect(painter, row);
 
             var labelRect = new Rect(rect.xMin + 2f, y + 1f, TrackLabelWidth - 4f, TrackHeight - 2f);
-            painter.fillColor = accentColor;
+            painter.fillColor = hovered || selected
+                ? accentColor * new Color(1.25f, 1.25f, 1.25f, 1.55f)
+                : accentColor;
             FillRoundedRect(painter, labelRect, 3f);
+            if (hovered || selected)
+            {
+                painter.strokeColor = selected ? new Color(1f, 0.86f, 0.28f, 0.95f) : new Color(1f, 1f, 1f, 0.45f);
+                painter.lineWidth = selected ? 1.8f : 1.4f;
+                StrokeRoundedRect(painter, labelRect, 3f);
+            }
+
+            DrawTrackGrip(painter, labelRect);
         }
 
-        private static void DrawBlendHandle(Painter2D painter, float x, float y, float height, bool active)
+        private static void DrawTrackGrip(Painter2D painter, Rect rect)
         {
-            painter.strokeColor = active ? BlendHandleColor : new Color(1f, 1f, 1f, 0.32f);
-            painter.lineWidth = 2f;
-            painter.BeginPath();
-            painter.MoveTo(new Vector2(x, y + 4f));
-            painter.LineTo(new Vector2(x, y + height - 4f));
-            painter.Stroke();
-
-            painter.lineWidth = 1f;
+            painter.strokeColor = new Color(1f, 1f, 1f, 0.45f);
+            painter.lineWidth = 1.5f;
+            float centerY = rect.center.y;
             for (int i = -1; i <= 1; i++)
             {
-                float gripX = x + i * 3f;
+                float y = centerY + i * 6f;
                 painter.BeginPath();
-                painter.MoveTo(new Vector2(gripX, y + height * 0.36f));
-                painter.LineTo(new Vector2(gripX, y + height * 0.64f));
+                painter.MoveTo(new Vector2(rect.xMin + 14f, y));
+                painter.LineTo(new Vector2(rect.xMax - 14f, y));
                 painter.Stroke();
             }
         }
 
-        private static void DrawTransitionHandle(Painter2D painter, float x, float y, float height, bool active)
+        private void DrawSegmentAutoBlendOverlay(
+            Painter2D painter,
+            Rect body,
+            AnimMontageSO montage,
+            MontageSegment segment,
+            int segmentIndex,
+            Rect contentRect)
         {
-            painter.strokeColor = active ? TransitionHandleColor : new Color(TransitionHandleColor.r, TransitionHandleColor.g, TransitionHandleColor.b, 0.45f);
-            painter.lineWidth = active ? 2.5f : 2f;
-            painter.BeginPath();
-            painter.MoveTo(new Vector2(x, y + 2f));
-            painter.LineTo(new Vector2(x, y + height - 2f));
-            painter.Stroke();
+            for (int i = 0; i < montage.Segments.Count; i++)
+            {
+                if (i == segmentIndex)
+                    continue;
 
-            float midY = y + height * 0.5f;
-            float halfWidth = active ? 8f : 6f;
-            painter.BeginPath();
-            painter.MoveTo(new Vector2(x - halfWidth, midY - 5f));
-            painter.LineTo(new Vector2(x, midY));
-            painter.LineTo(new Vector2(x - halfWidth, midY + 5f));
-            painter.Stroke();
+                MontageSegment other = montage.Segments[i];
+                if (other?.Clip == null)
+                    continue;
 
-            painter.BeginPath();
-            painter.MoveTo(new Vector2(x + halfWidth, midY - 5f));
-            painter.LineTo(new Vector2(x, midY));
-            painter.LineTo(new Vector2(x + halfWidth, midY + 5f));
-            painter.Stroke();
+                float overlapStart = Mathf.Max(segment.StartTime, other.StartTime);
+                float overlapEnd = Mathf.Min(segment.EndTime, other.EndTime);
+                if (overlapEnd <= overlapStart)
+                    continue;
+
+                float x0 = Mathf.Max(body.xMin, contentRect.xMin, TimeToX(overlapStart));
+                float x1 = Mathf.Min(body.xMax, contentRect.xMax, TimeToX(overlapEnd));
+                if (x1 <= x0)
+                    continue;
+
+                var blendRect = new Rect(x0, body.yMin + 6f, x1 - x0, body.height - 12f);
+                painter.fillColor = AutoBlendOverlayColor;
+                FillRoundedRect(painter, blendRect, 2f);
+                painter.strokeColor = new Color(1f, 0.88f, 0.36f, 0.82f);
+                painter.lineWidth = 1.3f;
+                StrokeRoundedRect(painter, blendRect, 2f);
+                DrawDiagonalHatch(painter, blendRect, new Color(1f, 1f, 1f, 0.22f));
+            }
         }
 
         private static void DrawSegmentEdgeTicks(Painter2D painter, Rect rect)
@@ -1197,6 +2078,28 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             painter.Stroke();
         }
 
+        private void DrawBoxSelection(Painter2D painter)
+        {
+            if (dragMode != DragMode.BoxSelect)
+                return;
+
+            Rect rect = GetBoxSelectionRect();
+            if (rect.width < 3f && rect.height < 3f)
+                return;
+
+            painter.fillColor = new Color(0.35f, 0.62f, 1f, 0.16f);
+            FillRect(painter, rect);
+            painter.strokeColor = new Color(0.68f, 0.84f, 1f, 0.9f);
+            painter.lineWidth = 1.2f;
+            painter.BeginPath();
+            painter.MoveTo(new Vector2(rect.xMin, rect.yMin));
+            painter.LineTo(new Vector2(rect.xMax, rect.yMin));
+            painter.LineTo(new Vector2(rect.xMax, rect.yMax));
+            painter.LineTo(new Vector2(rect.xMin, rect.yMax));
+            painter.ClosePath();
+            painter.Stroke();
+        }
+
         private static void FillRect(Painter2D painter, Rect rect)
         {
             painter.BeginPath();
@@ -1220,29 +2123,21 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             painter.Fill();
         }
 
+        private static void StrokeDiamond(Painter2D painter, float cx, float cy, float radius)
+        {
+            painter.BeginPath();
+            painter.MoveTo(new Vector2(cx, cy - radius));
+            painter.LineTo(new Vector2(cx + radius, cy));
+            painter.LineTo(new Vector2(cx, cy + radius));
+            painter.LineTo(new Vector2(cx - radius, cy));
+            painter.ClosePath();
+            painter.Stroke();
+        }
+
         private bool TryHitPlayhead(Vector2 local, out float distance)
         {
             distance = Mathf.Abs(local.x - TimeToX(context.PlayheadTime));
             return distance <= 6f;
-        }
-
-        private bool TryHitTransition(Vector2 local, out int lowerSegmentIndex, out float duration)
-        {
-            lowerSegmentIndex = -1;
-            duration = 0f;
-
-            for (int i = transitionLayouts.Count - 1; i >= 0; i--)
-            {
-                TransitionLayout layout = transitionLayouts[i];
-                if (!layout.Rect.Contains(local))
-                    continue;
-
-                lowerSegmentIndex = layout.LowerSegmentIndex;
-                duration = layout.Duration;
-                return true;
-            }
-
-            return false;
         }
 
         private bool TryHitSegment(Vector2 local, out int index, out DragMode mode)
@@ -1257,27 +2152,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     continue;
 
                 index = layout.Index;
-                if (layout.BlendIn.width > 0f && layout.BlendIn.Contains(local))
-                {
-                    mode = DragMode.SegmentBlendIn;
-                    return true;
-                }
-
-                if (layout.BlendOut.width > 0f && layout.BlendOut.Contains(local))
-                {
-                    mode = DragMode.SegmentBlendOut;
-                    return true;
-                }
-
                 if (Mathf.Abs(local.x - layout.Body.xMin) <= EdgeHandleWidth)
                 {
-                    mode = DragMode.SegmentMove;
+                    mode = DragMode.SegmentTrimStart;
                     return true;
                 }
 
                 if (Mathf.Abs(local.x - layout.Body.xMax) <= EdgeHandleWidth)
                 {
-                    mode = DragMode.SegmentBlendOut;
+                    mode = DragMode.SegmentTrimEnd;
                     return true;
                 }
 
@@ -1291,14 +2174,14 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private bool TryHitNotify(Vector2 local, out int index)
         {
             index = -1;
-            if (context.Montage == null || local.y < notifyTrackTop || local.y > notifyTrackTop + TrackHeight)
+            if (context.Montage == null || !TryGetTrackRow(local, TrackKind.Notify, out TrackRowLayout row))
                 return false;
 
             float best = 999f;
             for (int i = 0; i < context.Montage.Notifies.Count; i++)
             {
                 AnimNotifyPlacement placement = context.Montage.Notifies[i];
-                if (placement == null)
+                if (placement == null || placement.TrackId != row.TrackId)
                     continue;
 
                 float dx = Mathf.Abs(local.x - TimeToX(placement.Time));
@@ -1343,6 +2226,336 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return false;
         }
 
+        private bool TryGetTrackRow(Vector2 local, out TrackRowLayout row)
+        {
+            for (int i = trackRows.Count - 1; i >= 0; i--)
+            {
+                row = trackRows[i];
+                if (row.Rect.Contains(local))
+                    return true;
+            }
+
+            row = default;
+            return false;
+        }
+
+        private bool TryGetTrackRow(Vector2 local, TrackKind kind, out TrackRowLayout row)
+        {
+            if (!TryGetTrackRow(local, out row))
+                return false;
+
+            return row.Kind == kind;
+        }
+
+        private void UpdateHoverTrack(Vector2 local)
+        {
+            if (TryGetTrackRow(local, out TrackRowLayout row))
+            {
+                if (IsTrackLabel(local, row))
+                {
+                    bool changed = !hasHoverTrack || hoverTrackKind != row.Kind || hoverTrackId != row.TrackId;
+                    hasHoverTrack = true;
+                    hoverTrackKind = row.Kind;
+                    hoverTrackId = row.TrackId;
+                    UpdateHoverTooltip(local, new HoverTooltipInfo(GetTrackTypeName(row.Kind)));
+                    if (changed)
+                        MarkDirtyRepaint();
+
+                    return;
+                }
+
+                if (TryGetHoverElementTooltip(local, out HoverTooltipInfo tooltip))
+                {
+                    if (hasHoverTrack)
+                    {
+                        hasHoverTrack = false;
+                        MarkDirtyRepaint();
+                    }
+
+                    UpdateHoverTooltip(local, tooltip);
+                    return;
+                }
+
+                if (hasHoverTrack)
+                {
+                    hasHoverTrack = false;
+                    MarkDirtyRepaint();
+                }
+
+                HideHoverTooltip();
+
+                return;
+            }
+
+            if (!hasHoverTrack)
+                return;
+
+            hasHoverTrack = false;
+            HideHoverTooltip();
+            MarkDirtyRepaint();
+        }
+
+        private bool IsHoveredTrack(TrackKind kind, string trackId) =>
+            hasHoverTrack && hoverTrackKind == kind && hoverTrackId == trackId;
+
+        private static bool IsTrackLabel(Vector2 local, TrackRowLayout row) =>
+            local.x >= row.Rect.xMin && local.x <= row.Rect.xMin + TrackLabelWidth;
+
+        private bool TryGetHoverElementTooltip(Vector2 local, out HoverTooltipInfo tooltip)
+        {
+            tooltip = default;
+            if (context.Montage == null)
+                return false;
+
+            for (int i = segmentLayouts.Count - 1; i >= 0; i--)
+            {
+                SegmentLayout layout = segmentLayouts[i];
+                if (!layout.Body.Contains(local))
+                    continue;
+
+                MontageSegment segment = context.Montage.Segments[layout.Index];
+                string sectionName = string.IsNullOrEmpty(segment.SectionName) ? "Animation Clip" : segment.SectionName;
+                tooltip = new HoverTooltipInfo(sectionName, 120f);
+                return true;
+            }
+
+            for (int i = notifyStateLayouts.Count - 1; i >= 0; i--)
+            {
+                NotifyStateLayout layout = notifyStateLayouts[i];
+                if (!layout.Body.Contains(local))
+                    continue;
+
+                AnimNotifyStatePlacement placement = context.Montage.NotifyStates[layout.Index];
+                string stateName = placement.NotifyState != null ? placement.NotifyState.name : "Notify State";
+                tooltip = new HoverTooltipInfo(stateName, 120f);
+                return true;
+            }
+
+            if (TryHitNotify(local, out int notifyIndex))
+            {
+                AnimNotifyPlacement placement = context.Montage.Notifies[notifyIndex];
+                string notifyName = placement.Notify != null ? placement.Notify.name : "Notify";
+                tooltip = new HoverTooltipInfo(notifyName, 96f);
+                return true;
+            }
+
+            return false;
+        }
+
+        private void UpdateHoverTooltip(Vector2 local, HoverTooltipInfo tooltip)
+        {
+            hoverTooltip.text = tooltip.Text;
+            hoverTooltip.style.display = DisplayStyle.Flex;
+            float width = Mathf.Clamp(hoverTooltip.text.Length * 7.5f + 18f, tooltip.MinWidth, 240f);
+            hoverTooltip.style.width = width;
+            hoverTooltip.style.left = Mathf.Clamp(local.x + 14f, 4f, Mathf.Max(4f, contentRect.width - width - 4f));
+            hoverTooltip.style.top = Mathf.Clamp(local.y + 16f, RulerHeight + 4f, Mathf.Max(RulerHeight + 4f, contentRect.height - 28f));
+        }
+
+        private void HideHoverTooltip()
+        {
+            if (hoverTooltip != null)
+                hoverTooltip.style.display = DisplayStyle.None;
+        }
+
+        private static string GetTrackTypeName(TrackKind kind) =>
+            kind switch
+            {
+                TrackKind.Segment => "Animation",
+                TrackKind.Notify => "Notify",
+                TrackKind.NotifyState => "Notify State",
+                _ => "Track"
+            };
+
+        private static List<TrackIdentity> GetOrderedTimelineTracks(AnimMontageSO montage)
+        {
+            List<TrackIdentity> tracks = GetAllTimelineTracks(montage);
+            List<TrackIdentity> ordered = new();
+            IReadOnlyList<string> order = montage.TimelineTrackOrder;
+            for (int i = 0; i < order.Count; i++)
+            {
+                if (!TryParseTrackKey(order[i], out TrackIdentity identity))
+                    continue;
+
+                if (!ContainsTrack(tracks, identity.Kind, identity.TrackId)
+                    || ContainsTrack(ordered, identity.Kind, identity.TrackId))
+                    continue;
+
+                ordered.Add(identity);
+            }
+
+            for (int i = 0; i < tracks.Count; i++)
+            {
+                TrackIdentity identity = tracks[i];
+                if (!ContainsTrack(ordered, identity.Kind, identity.TrackId))
+                    ordered.Add(identity);
+            }
+
+            return ordered;
+        }
+
+        private static List<TrackIdentity> GetAllTimelineTracks(AnimMontageSO montage)
+        {
+            List<TrackIdentity> tracks = new();
+            AddTrackIdentities(tracks, TrackKind.Segment, GetAnimationTrackIds(montage));
+            AddTrackIdentities(tracks, TrackKind.Notify, GetNotifyTrackIds(montage));
+            AddTrackIdentities(tracks, TrackKind.NotifyState, GetNotifyStateTrackIds(montage));
+            return tracks;
+        }
+
+        private static void AddTrackIdentities(List<TrackIdentity> tracks, TrackKind kind, List<string> trackIds)
+        {
+            for (int i = 0; i < trackIds.Count; i++)
+            {
+                string trackId = SanitizeTrackId(trackIds[i]);
+                if (!ContainsTrack(tracks, kind, trackId))
+                    tracks.Add(new TrackIdentity(kind, trackId));
+            }
+        }
+
+        private static bool ContainsTrack(List<TrackIdentity> tracks, TrackKind kind, string trackId)
+        {
+            trackId = SanitizeTrackId(trackId);
+            for (int i = 0; i < tracks.Count; i++)
+            {
+                TrackIdentity track = tracks[i];
+                if (track.Kind == kind && track.TrackId == trackId)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static string GetTrackKey(TrackKind kind, string trackId) =>
+            $"{kind}:{SanitizeTrackId(trackId)}";
+
+        private static bool TryParseTrackKey(string key, out TrackIdentity identity)
+        {
+            identity = default;
+            if (string.IsNullOrEmpty(key))
+                return false;
+
+            int split = key.IndexOf(':');
+            if (split <= 0 || split >= key.Length - 1)
+                return false;
+
+            if (!Enum.TryParse(key.Substring(0, split), out TrackKind kind))
+                return false;
+
+            identity = new TrackIdentity(kind, SanitizeTrackId(key.Substring(split + 1)));
+            return true;
+        }
+
+        private static List<string> GetAnimationTrackIds(AnimMontageSO montage)
+        {
+            List<string> tracks = CreateTrackList(montage.AnimationTracks);
+            for (int i = 0; i < montage.Segments.Count; i++)
+            {
+                MontageSegment segment = montage.Segments[i];
+                if (segment != null)
+                    AddTrackId(tracks, segment.TrackId);
+            }
+
+            return tracks;
+        }
+
+        private static List<string> GetNotifyTrackIds(AnimMontageSO montage)
+        {
+            List<string> tracks = CreateTrackList(montage.NotifyTracks);
+            for (int i = 0; i < montage.Notifies.Count; i++)
+            {
+                AnimNotifyPlacement notify = montage.Notifies[i];
+                if (notify != null)
+                    AddTrackId(tracks, notify.TrackId);
+            }
+
+            return tracks;
+        }
+
+        private static List<string> GetNotifyStateTrackIds(AnimMontageSO montage)
+        {
+            List<string> tracks = CreateTrackList(montage.NotifyStateTracks);
+            for (int i = 0; i < montage.NotifyStates.Count; i++)
+            {
+                AnimNotifyStatePlacement state = montage.NotifyStates[i];
+                if (state != null)
+                    AddTrackId(tracks, state.TrackId);
+            }
+
+            return tracks;
+        }
+
+        private static List<string> CreateTrackList(IReadOnlyList<string> source)
+        {
+            List<string> tracks = new();
+            if (source != null)
+            {
+                for (int i = 0; i < source.Count; i++)
+                    AddTrackId(tracks, source[i]);
+            }
+
+            if (tracks.Count == 0)
+                tracks.Add("Default");
+
+            return tracks;
+        }
+
+        private static void AddTrackId(List<string> tracks, string trackId)
+        {
+            trackId = SanitizeTrackId(trackId);
+            for (int i = 0; i < tracks.Count; i++)
+            {
+                if (tracks[i] == trackId)
+                    return;
+            }
+
+            tracks.Add(trackId);
+        }
+
+        private static List<int> GetSegmentIndicesForTrack(AnimMontageSO montage, string trackId)
+        {
+            List<int> indices = new();
+            trackId = SanitizeTrackId(trackId);
+            for (int i = 0; i < montage.Segments.Count; i++)
+            {
+                MontageSegment segment = montage.Segments[i];
+                if (segment != null && segment.TrackId == trackId)
+                    indices.Add(i);
+            }
+
+            indices.Sort((left, right) =>
+            {
+                MontageSegment leftSegment = montage.Segments[left];
+                MontageSegment rightSegment = montage.Segments[right];
+                int timeCompare = leftSegment.StartTime.CompareTo(rightSegment.StartTime);
+                return timeCompare != 0 ? timeCompare : left.CompareTo(right);
+            });
+
+            return indices;
+        }
+
+        private static string SanitizeTrackId(string trackId) =>
+            string.IsNullOrEmpty(trackId) ? "Default" : trackId;
+
+        private static Rect GetTimelineContentRect(Rect rect) =>
+            new(rect.xMin + TrackLabelWidth + ContentPadding, RulerHeight, rect.width - TrackLabelWidth - ContentPadding, rect.height - RulerHeight);
+
+        private static bool TryClipRect(Rect rect, Rect clip, out Rect clipped)
+        {
+            float xMin = Mathf.Max(rect.xMin, clip.xMin);
+            float yMin = Mathf.Max(rect.yMin, clip.yMin);
+            float xMax = Mathf.Min(rect.xMax, clip.xMax);
+            float yMax = Mathf.Min(rect.yMax, clip.yMax);
+            if (xMax <= xMin || yMax <= yMin)
+            {
+                clipped = default;
+                return false;
+            }
+
+            clipped = Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+            return true;
+        }
+
         private void SetPlayheadFromX(float x) => context.SetPlayhead(XToTime(x));
 
         private void ClampViewStartTime()
@@ -1350,6 +2563,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             float visibleDuration = Mathf.Max(0f, (contentRect.width - TrackLabelWidth - ContentPadding) / Mathf.Max(1f, pixelsPerSecond));
             float maxStart = Mathf.Max(0f, (context.Montage?.Length ?? 0f) - visibleDuration * 0.35f);
             viewStartTime = Mathf.Clamp(viewStartTime, 0f, maxStart);
+        }
+
+        private void ClampViewStartY()
+        {
+            float visibleHeight = Mathf.Max(0f, contentRect.height - RulerHeight - TrackGap);
+            float maxStart = Mathf.Max(0f, totalTrackContentHeight - visibleHeight);
+            viewStartY = Mathf.Clamp(viewStartY, 0f, maxStart);
         }
 
         private float TimeToX(float time) => TrackLabelWidth + ContentPadding + (time - viewStartTime) * pixelsPerSecond;
