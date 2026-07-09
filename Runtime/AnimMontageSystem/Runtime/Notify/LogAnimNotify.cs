@@ -13,7 +13,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         public override void OnNotify(AnimNotifyContext context)
         {
-            CDebug.Log($"[AnimNotify] {message} @ {context.MontageTime:0.###} ({context.Montage?.name})");
+            CDebug.Log(message);
         }
     }
 }
