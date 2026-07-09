@@ -1,0 +1,321 @@
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.VFX;
+
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
+namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
+{
+    internal static class AnimNotifyRuntimeUtility
+    {
+        public static Transform GetOwnerTransform(AnimNotifyContext context)
+        {
+            if (context.Animator != null)
+            {
+                return context.Animator.transform;
+            }
+
+            return context.Owner != null ? context.Owner.transform : null;
+        }
+
+        public static GameObject GetOwnerKey(AnimNotifyContext context)
+        {
+            if (context.Owner != null)
+            {
+                return context.Owner;
+            }
+
+            return context.Animator != null ? context.Animator.gameObject : null;
+        }
+
+        public static void MoveToOwnerScene(GameObject instance, AnimNotifyContext context)
+        {
+            if (instance == null)
+            {
+                return;
+            }
+
+            GameObject owner = GetOwnerKey(context);
+            if (owner == null || !owner.scene.IsValid())
+            {
+                return;
+            }
+
+            if (instance.scene != owner.scene)
+                SceneManager.MoveGameObjectToScene(instance, owner.scene);
+
+            AttachToEditorPreviewOwner(instance, owner);
+        }
+
+        public static void PlayEffects(GameObject instance)
+        {
+            if (instance == null)
+            {
+                return;
+            }
+
+            ParticleSystem[] particleSystems = instance.GetComponentsInChildren<ParticleSystem>(true);
+            for (int i = 0; i < particleSystems.Length; i++)
+            {
+                ParticleSystem particleSystem = particleSystems[i];
+                if (particleSystem == null)
+                    continue;
+
+                particleSystem.Clear(true);
+                particleSystem.Play(true);
+            }
+
+            VisualEffect[] visualEffects = instance.GetComponentsInChildren<VisualEffect>(true);
+            for (int i = 0; i < visualEffects.Length; i++)
+            {
+                VisualEffect visualEffect = visualEffects[i];
+                if (visualEffect == null)
+                    continue;
+
+                visualEffect.Reinit();
+                visualEffect.Play();
+            }
+        }
+
+        private static void AttachToEditorPreviewOwner(GameObject instance, GameObject owner)
+        {
+            if (Application.isPlaying || instance == null || owner == null)
+            {
+                return;
+            }
+
+            Transform ownerTransform = owner.transform;
+            Transform instanceTransform = instance.transform;
+            if (ownerTransform == null || instanceTransform == null)
+            {
+                return;
+            }
+
+            if (instanceTransform == ownerTransform || instanceTransform.IsChildOf(ownerTransform))
+            {
+                return;
+            }
+
+            instanceTransform.SetParent(ownerTransform, true);
+        }
+
+        public static void DestroyObject(Object target, float delay = 0f)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            if (target is GameObject gameObject && HasEffects(gameObject))
+            {
+                StopEffectsThenDestroy(gameObject, Mathf.Max(0f, delay));
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                Object.Destroy(target, Mathf.Max(0f, delay));
+                return;
+            }
+
+#if UNITY_EDITOR
+            if (delay <= 0f)
+            {
+                Object.DestroyImmediate(target);
+                return;
+            }
+
+            double destroyTime = EditorApplication.timeSinceStartup + delay;
+            void Tick()
+            {
+                if (target == null)
+                {
+                    EditorApplication.update -= Tick;
+                    return;
+                }
+
+                if (EditorApplication.timeSinceStartup < destroyTime)
+                {
+                    return;
+                }
+
+                EditorApplication.update -= Tick;
+                Object.DestroyImmediate(target);
+            }
+
+            EditorApplication.update += Tick;
+#else
+            Object.DestroyImmediate(target);
+#endif
+        }
+
+        public static void DestroySpawnedEffect(GameObject target, float loopingStopDelay)
+        {
+            if (target == null)
+                return;
+
+            if (!HasEffects(target))
+            {
+                DestroyObject(target, Mathf.Max(0f, loopingStopDelay));
+                return;
+            }
+
+            DestroyEffectObject(target, Mathf.Max(0f, loopingStopDelay), stopLoopingEffectsOnly: true);
+        }
+
+        private static bool HasEffects(GameObject target)
+        {
+            if (target == null)
+                return false;
+
+            return target.GetComponentInChildren<ParticleSystem>(true) != null
+                   || target.GetComponentInChildren<VisualEffect>(true) != null;
+        }
+
+        private static void StopEffectsThenDestroy(GameObject target, float delay)
+        {
+            if (target == null)
+                return;
+
+            DestroyEffectObject(target, delay, stopLoopingEffectsOnly: false);
+        }
+
+        private static void DestroyEffectObject(GameObject target, float delay, bool stopLoopingEffectsOnly)
+        {
+            if (target == null)
+                return;
+
+            if (Application.isPlaying)
+            {
+                AnimNotifyEffectDestroyer destroyer = target.GetComponent<AnimNotifyEffectDestroyer>();
+                if (destroyer == null)
+                    destroyer = target.AddComponent<AnimNotifyEffectDestroyer>();
+
+                destroyer.Begin(delay, stopLoopingEffectsOnly);
+                return;
+            }
+
+#if UNITY_EDITOR
+            double stopTime = EditorApplication.timeSinceStartup + delay;
+            bool stopped = false;
+            ParticleSystem[] particleSystems = target.GetComponentsInChildren<ParticleSystem>(true);
+            VisualEffect[] visualEffects = target.GetComponentsInChildren<VisualEffect>(true);
+            bool hasLoopingEffects = HasLoopingEffects(particleSystems, visualEffects);
+            bool shouldStopEffects = !stopLoopingEffectsOnly || hasLoopingEffects;
+            double forceDestroyTime = (shouldStopEffects ? stopTime : EditorApplication.timeSinceStartup) + 10.0;
+
+            void Tick()
+            {
+                if (target == null)
+                {
+                    EditorApplication.update -= Tick;
+                    return;
+                }
+
+                double now = EditorApplication.timeSinceStartup;
+                if (shouldStopEffects && !stopped)
+                {
+                    if (now < stopTime)
+                        return;
+
+                    StopEffects(particleSystems, visualEffects, stopLoopingEffectsOnly);
+                    stopped = true;
+                }
+
+                SimulateEffects(particleSystems, visualEffects, 0.016f);
+                if (now < forceDestroyTime && AreEffectsAlive(particleSystems, visualEffects))
+                    return;
+
+                EditorApplication.update -= Tick;
+                Object.DestroyImmediate(target);
+            }
+
+            EditorApplication.update += Tick;
+#else
+            Object.DestroyImmediate(target);
+#endif
+        }
+
+        internal static bool HasLoopingEffects(ParticleSystem[] particleSystems, VisualEffect[] visualEffects)
+        {
+            for (int i = 0; i < particleSystems.Length; i++)
+            {
+                ParticleSystem particleSystem = particleSystems[i];
+                if (particleSystem == null)
+                    continue;
+
+                if (particleSystem.main.loop)
+                    return true;
+            }
+
+            return visualEffects.Length > 0;
+        }
+
+        internal static void StopEffects(ParticleSystem[] particleSystems, VisualEffect[] visualEffects, bool loopingOnly)
+        {
+            for (int i = 0; i < particleSystems.Length; i++)
+            {
+                ParticleSystem particleSystem = particleSystems[i];
+                if (particleSystem == null)
+                    continue;
+
+                if (loopingOnly && !particleSystem.main.loop)
+                    continue;
+
+                particleSystem.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+            }
+
+            for (int i = 0; i < visualEffects.Length; i++)
+            {
+                VisualEffect visualEffect = visualEffects[i];
+                if (visualEffect == null)
+                    continue;
+
+                visualEffect.Stop();
+            }
+        }
+
+        internal static bool AreEffectsAlive(ParticleSystem[] particleSystems, VisualEffect[] visualEffects)
+        {
+            for (int i = 0; i < particleSystems.Length; i++)
+            {
+                ParticleSystem particleSystem = particleSystems[i];
+                if (particleSystem != null && particleSystem.IsAlive(true))
+                    return true;
+            }
+
+            for (int i = 0; i < visualEffects.Length; i++)
+            {
+                VisualEffect visualEffect = visualEffects[i];
+                if (visualEffect != null && visualEffect.aliveParticleCount > 0)
+                    return true;
+            }
+
+            return false;
+        }
+
+        internal static void SimulateEffects(ParticleSystem[] particleSystems, VisualEffect[] visualEffects, float deltaTime)
+        {
+            for (int i = 0; i < particleSystems.Length; i++)
+            {
+                ParticleSystem particleSystem = particleSystems[i];
+                if (particleSystem == null)
+                    continue;
+
+                particleSystem.Simulate(deltaTime, true, false, false);
+            }
+
+            for (int i = 0; i < visualEffects.Length; i++)
+            {
+                VisualEffect visualEffect = visualEffects[i];
+                if (visualEffect == null)
+                    continue;
+
+                visualEffect.Simulate(deltaTime);
+            }
+        }
+
+    }
+}

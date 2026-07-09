@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
+using Object = UnityEngine.Object;
 
 namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 {
@@ -61,15 +62,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             lastEditorTime = EditorApplication.timeSinceStartup;
             MontageViewportInput.SetPlaybackToggleHandler(TryTogglePlaybackShortcut);
             EditorApplication.update += OnEditorUpdate;
+            Undo.undoRedoPerformed += OnUndoRedoPerformed;
         }
 
         internal void HandleBeforeAssemblyReload()
         {
             EditorApplication.update -= OnEditorUpdate;
+            Undo.undoRedoPerformed -= OnUndoRedoPerformed;
+            EndEditorNotifyPlayback();
             StopPreviewAnimationMode(force: true);
             previewController?.Dispose();
             previewController = null;
-            ResetEditorNotifyPlayback();
             DestroyEditorNotifyFallbackOwner();
         }
 
@@ -84,18 +87,19 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (previewPrefab == null)
                 return;
 
-            context.PreviewModel = previewPrefab;
+            context.SetPreviewModel(previewPrefab);
             previewController.SetPreviewModel(previewPrefab);
         }
 
         private void OnDisable()
         {
             EditorApplication.update -= OnEditorUpdate;
+            Undo.undoRedoPerformed -= OnUndoRedoPerformed;
             MontageViewportInput.SetPlaybackToggleHandler(null);
+            EndEditorNotifyPlayback();
             StopPreviewAnimationMode(force: true);
             previewController?.Dispose();
             previewController = null;
-            ResetEditorNotifyPlayback();
             DestroyEditorNotifyFallbackOwner();
         }
 
@@ -205,21 +209,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             var assetGroup = new VisualElement();
             assetGroup.AddToClassList(AnimMontageEditorStyles.AssetToolbarGroupClass);
 
-            montageField = new ObjectField("Montage")
+            var createMontageButton = new ToolbarButton(CreateMontageAsset)
             {
-                objectType = typeof(AnimMontageSO),
-                allowSceneObjects = false
+                text = "New Montage"
             };
-            montageField.style.width = 280;
-            montageField.style.flexShrink = 0;
-            montageField.RegisterValueChangedCallback(evt =>
-            {
-                ResetEditorNotifyPlayback();
-                SetMontageWithoutEditorScrubNotify(evt.newValue as AnimMontageSO);
-                UpdateStatus();
-                RefreshPlayheadViewWithoutEditorScrubNotify();
-            });
-            assetGroup.Add(montageField);
+            createMontageButton.style.flexShrink = 0;
+            assetGroup.Add(createMontageButton);
 
             previewModelField = new ObjectField("Preview Mesh")
             {
@@ -230,9 +225,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             previewModelField.style.flexShrink = 0;
             previewModelField.RegisterValueChangedCallback(evt =>
             {
-                context.PreviewModel = evt.newValue as GameObject;
+                bool wasPlaying = context.IsPlaying;
+                EndEditorNotifyPlayback();
+                context.SetPreviewModel(evt.newValue as GameObject);
                 previewController?.SetPreviewModel(context.PreviewModel);
-                ResyncEditorNotifyPlayback();
+                if (wasPlaying)
+                    BeginEditorNotifyPlayback();
                 RequestPreviewRepaint();
                 RefreshPlayheadViewWithoutEditorScrubNotify();
             });
@@ -240,6 +238,58 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             toolbar.Add(assetGroup);
             root.Add(toolbar);
+        }
+
+        private void CreateMontageAsset()
+        {
+            string directory = GetSelectedProjectDirectory();
+            string path = EditorUtility.SaveFilePanelInProject(
+                "Create Montage",
+                "Montage_New",
+                "asset",
+                "Choose where to create the montage asset.",
+                directory);
+            if (string.IsNullOrEmpty(path))
+                return;
+
+            path = path.Replace('\\', '/');
+            if (!path.StartsWith("Assets/"))
+            {
+                EditorUtility.DisplayDialog(
+                    "Create Montage",
+                    "Montage assets must be created inside the Assets folder.",
+                    "OK");
+                return;
+            }
+
+            path = AssetDatabase.GenerateUniqueAssetPath(path);
+            var montage = CreateInstance<AnimMontageSO>();
+            AssetDatabase.CreateAsset(montage, path);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            EditorGUIUtility.PingObject(montage);
+            Selection.activeObject = montage;
+            montageField?.SetValueWithoutNotify(montage);
+            SetMontageWithoutEditorScrubNotify(montage);
+            UpdateStatus();
+            RefreshPlayheadViewWithoutEditorScrubNotify();
+        }
+
+        private static string GetSelectedProjectDirectory()
+        {
+            Object selected = Selection.activeObject;
+            if (selected == null)
+                return "Assets";
+
+            string path = AssetDatabase.GetAssetPath(selected);
+            if (string.IsNullOrEmpty(path))
+                return "Assets";
+
+            if (AssetDatabase.IsValidFolder(path))
+                return path;
+
+            int slashIndex = path.LastIndexOf('/');
+            return slashIndex > 0 ? path[..slashIndex] : "Assets";
         }
 
         private void RegisterPlaybackShortcutHandler(VisualElement element)
@@ -257,6 +307,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
 
         private void OnFocus() => rootVisualElement?.Focus();
+
+        private void OnUndoRedoPerformed()
+        {
+            EndEditorNotifyPlayback();
+            context?.NotifyUndoRedo();
+            UpdateStatus();
+            transportBar?.Refresh();
+            timelineView?.MarkDirtyRepaint();
+            RequestPreviewRepaint();
+            RefreshPlayheadViewWithoutEditorScrubNotify();
+        }
 
         private bool IsShortcutInputBlocked()
         {
@@ -299,7 +360,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             try
             {
-                if (previewDriver != null && AnimationMode.InAnimationMode(previewDriver))
+            if (previewDriver != null && AnimationMode.InAnimationMode(previewDriver))
                     AnimationMode.StopAnimationMode(previewDriver);
             }
             catch
@@ -326,7 +387,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (shouldPlay)
                 BeginEditorNotifyPlayback();
             else
-                PauseEditorNotifyPlayback();
+                EndEditorNotifyPlayback();
 
             transportBar?.Refresh();
             UpdateStatus();
@@ -334,9 +395,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void StopPlayback()
         {
-            ResetEditorNotifyPlayback();
+            EndEditorNotifyPlayback();
             context.SetPlaying(false);
             SetPlayheadWithoutEditorScrubNotify(0f);
+            previewController?.ResetRootMotionPreviewPose();
             transportBar?.Refresh();
             UpdateStatus();
             RequestPreviewRepaint();
@@ -426,8 +488,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 {
                     AdvanceEditorNotifyPlayback(length);
                     context.SetPlayhead(length);
-                    ResetEditorNotifyPlayback();
+                    EndEditorNotifyPlayback();
                     context.SetPlaying(false);
+                    SetPlayheadWithoutEditorScrubNotify(0f);
+                    previewController?.ResetRootMotionPreviewPose();
                     transportBar?.Refresh();
                     UpdateStatus();
                     RequestPreviewRepaint();
@@ -461,6 +525,23 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return;
 
             editorNotifyPlayback.Pause(true);
+        }
+
+        private void EndEditorNotifyPlayback()
+        {
+            if (!editorNotifyPlaybackActive)
+            {
+                ResetEditorNotifyPlayback();
+                return;
+            }
+
+            GameObject owner = GetEditorNotifyOwner();
+            editorNotifyDispatcher.EndActiveStates(
+                owner,
+                previewController?.NotifyAnimator,
+                editorNotifyPlayback.Montage ?? context?.Montage,
+                editorNotifyPlayback.CurrentTime);
+            ResetEditorNotifyPlayback();
         }
 
         private void ResyncEditorNotifyPlayback()

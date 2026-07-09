@@ -8,6 +8,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     public sealed class AnimMontageSO : ScriptableObject
     {
         [SerializeField] private float rateScale = 1f;
+        [SerializeField] private bool applyRootMotion;
         [SerializeField] private MontageSegment[] segments = Array.Empty<MontageSegment>();
         [SerializeField] private AnimNotifyPlacement[] notifies = Array.Empty<AnimNotifyPlacement>();
         [SerializeField] private AnimNotifyStatePlacement[] notifyStates = Array.Empty<AnimNotifyStatePlacement>();
@@ -20,6 +21,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         [SerializeField] private string[] timelineTrackOrder = Array.Empty<string>();
 
         public float RateScale => rateScale <= 0f ? 1f : rateScale;
+        public bool ApplyRootMotion => applyRootMotion;
         public IReadOnlyList<MontageSegment> Segments => segments ?? Array.Empty<MontageSegment>();
         public IReadOnlyList<AnimNotifyPlacement> Notifies => notifies ?? Array.Empty<AnimNotifyPlacement>();
         public IReadOnlyList<AnimNotifyStatePlacement> NotifyStates => notifyStates ?? Array.Empty<AnimNotifyStatePlacement>();

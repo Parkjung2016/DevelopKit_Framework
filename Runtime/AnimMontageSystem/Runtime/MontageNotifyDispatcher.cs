@@ -21,6 +21,29 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             lastNotifyTimes.Clear();
         }
 
+        public void EndActiveStates(GameObject owner, Animator animator, AnimMontageSO montage, float montageTime, float deltaTime = 0f)
+        {
+            if (owner == null || activeStates.Count == 0)
+            {
+                Reset();
+                return;
+            }
+
+            for (int i = activeStates.Count - 1; i >= 0; i--)
+            {
+                AnimNotifyStatePlacement placement = activeStates[i];
+                AnimNotifyState state = placement?.NotifyState;
+                if (state == null)
+                    continue;
+
+                float endTime = placement.EndTime > 0f ? placement.EndTime : montageTime;
+                var context = new AnimNotifyContext(owner, animator, montage, endTime, deltaTime);
+                state.OnEnd(context);
+            }
+
+            Reset();
+        }
+
         public void Dispatch(MontagePlaybackState playback, GameObject owner, Animator animator, IAnimNotifyHandler handler)
         {
             if (playback?.Montage == null || owner == null)
@@ -90,6 +113,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         public void ScrubTo(MontagePlaybackState playback, GameObject owner, Animator animator)
         {
+            EndActiveStates(owner, animator, playback?.Montage, playback?.CurrentTime ?? 0f);
             activeStates.Clear();
             lastNotifyTimes.Clear();
             if (playback?.Montage == null)

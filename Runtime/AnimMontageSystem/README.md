@@ -60,6 +60,14 @@ public sealed class MyNotifyState : AnimNotifyState
 
 Montage Editor에서 Notify 트랙을 우클릭한 뒤 `Create/Notify...` 또는 `Create/Notify State...`를 선택하면 프로젝트에 존재하는 Notify 클래스 타입을 고를 수 있습니다.
 
+기본 제공 Notify:
+
+- `LogAnimNotify`: 로그 출력
+- `SpawnEffectAnimNotify`: 프리팹 이펙트 1회 생성
+- `PlaySoundAnimNotify`: 사운드 1회 재생
+- `SpawnEffectAnimNotifyState`: Notify State 구간 동안 프리팹 이펙트 유지
+- `PlayLoopSoundAnimNotifyState`: Notify State 구간 동안 루프 사운드 재생
+
 ## 에디터 동작 옵션
 
 Notify와 Notify State에는 `Trigger In Editor Scrub` 옵션이 있습니다.

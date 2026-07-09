@@ -1,5 +1,7 @@
 using UnityEditor;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.VFX;
 
 namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 {
@@ -16,10 +18,22 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private Bounds renderBounds;
         private bool hasBounds;
         private Transform previewMotionRoot;
+        private Vector3 initialPreviewPosition;
+        private Quaternion initialPreviewRotation;
+        private Vector3 initialPreviewScale;
+        private Vector3 initialMotionRootLocalPosition;
+        private Quaternion initialMotionRootLocalRotation;
+        private Vector3 initialMotionRootLocalScale;
+        private bool hasInitialPreviewTransform;
         private float lockedPreviewRootY;
         private float lockedMotionRootLocalY;
         private float previewGroundPlaneY;
         private bool hasPreviewHeightLock;
+        private double lastEffectCacheTime;
+        private readonly List<ParticlePreviewEffect> previewParticleSystems = new();
+        private readonly List<VisualEffectPreviewEffect> previewVisualEffects = new();
+        private readonly List<ParticleSystem> particleCacheBuffer = new();
+        private readonly List<VisualEffect> visualEffectCacheBuffer = new();
 
         public GameObject NotifyOwner => previewInstance;
         public Animator NotifyAnimator => previewInstance != null
@@ -40,11 +54,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             previewInstance = preview.InstantiatePrefabInScene(prefab);
             previewInstance.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             preview.AddSingleGO(previewInstance);
+            RefreshPreviewEffectCache(true);
             MontagePreviewSampling.BindInstance(previewInstance);
             previewMotionRoot = previewInstance.GetComponentInChildren<Animator>()?.transform ?? previewInstance.transform;
 
             CacheBounds();
             AlignModelFeetToGround();
+            StoreInitialPreviewTransform();
             CacheBounds();
             StorePreviewHeightLock();
             viewportCamera.FrameBounds(renderBounds);
@@ -98,6 +114,26 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         public void Sample(MontageEditorContext editorContext) =>
             MontagePreviewSampling.TrySample(previewInstance, editorContext ?? boundContext);
 
+        public void ResetRootMotionPreviewPose()
+        {
+            if (previewInstance == null || !hasInitialPreviewTransform)
+                return;
+
+            MontagePreviewSampling.Reset();
+            previewInstance.transform.SetPositionAndRotation(initialPreviewPosition, initialPreviewRotation);
+            previewInstance.transform.localScale = initialPreviewScale;
+
+            if (previewMotionRoot != null && previewMotionRoot != previewInstance.transform)
+            {
+                previewMotionRoot.localPosition = initialMotionRootLocalPosition;
+                previewMotionRoot.localRotation = initialMotionRootLocalRotation;
+                previewMotionRoot.localScale = initialMotionRootLocalScale;
+            }
+
+            StorePreviewHeightLock();
+            CacheBounds();
+        }
+
         public void DrawPreview(Rect rect, System.Action requestRepaint)
         {
             if (!ShaderUtil.hardwareSupportsRectRenderTexture)
@@ -138,7 +174,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 && localRect.Contains(evt.mousePosition))
             {
                 Sample(boundContext);
-                StabilizePreviewHeight();
+                StabilizePreviewTransform();
+                SimulatePreviewEffects();
                 CacheBounds();
                 viewportCamera.FrameBounds(renderBounds);
                 requestRepaint?.Invoke();
@@ -147,7 +184,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (evt.type == EventType.Repaint)
             {
                 Sample(boundContext);
-                StabilizePreviewHeight();
+                StabilizePreviewTransform();
+                SimulatePreviewEffects();
                 CacheBounds();
 
                 if (previewInstance != null)
@@ -174,7 +212,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     gridInstance,
                     viewportCamera,
                     MontageSceneViewNavigation.ShouldUseFrontGrid(viewportCamera),
-                    groundPlaneY);
+                    groundPlaneY,
+                    MontageSceneViewNavigation.GridHalfSize,
+                    MontageSceneViewNavigation.GridStep);
                 previewTexture = preview.EndPreview();
             }
 
@@ -217,12 +257,129 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return false;
 
             Sample(boundContext);
-            StabilizePreviewHeight();
+            StabilizePreviewTransform();
             CacheBounds();
             viewportCamera.FrameBounds(renderBounds);
             evt.Use();
             requestRepaint?.Invoke();
             return true;
+        }
+
+        private void SimulatePreviewEffects()
+        {
+            if (previewInstance == null)
+                return;
+
+            RefreshPreviewEffectCache(false);
+            double now = EditorApplication.timeSinceStartup;
+            SimulateParticleSystems(now);
+            SimulateVisualEffects(now);
+        }
+
+        private void RefreshPreviewEffectCache(bool force)
+        {
+            if (previewInstance == null)
+                return;
+
+            double now = EditorApplication.timeSinceStartup;
+            if (!force && now - lastEffectCacheTime < 0.05)
+                return;
+
+            lastEffectCacheTime = now;
+            particleCacheBuffer.Clear();
+            visualEffectCacheBuffer.Clear();
+            previewInstance.GetComponentsInChildren(true, particleCacheBuffer);
+            previewInstance.GetComponentsInChildren(true, visualEffectCacheBuffer);
+
+            for (int i = previewParticleSystems.Count - 1; i >= 0; i--)
+            {
+                if (previewParticleSystems[i].ParticleSystem == null
+                    || !particleCacheBuffer.Contains(previewParticleSystems[i].ParticleSystem))
+                {
+                    previewParticleSystems.RemoveAt(i);
+                }
+            }
+
+            for (int i = previewVisualEffects.Count - 1; i >= 0; i--)
+            {
+                if (previewVisualEffects[i].VisualEffect == null
+                    || !visualEffectCacheBuffer.Contains(previewVisualEffects[i].VisualEffect))
+                {
+                    previewVisualEffects.RemoveAt(i);
+                }
+            }
+
+            for (int i = 0; i < particleCacheBuffer.Count; i++)
+            {
+                ParticleSystem particleSystem = particleCacheBuffer[i];
+                if (particleSystem != null && !ContainsParticleSystem(particleSystem))
+                    previewParticleSystems.Add(new ParticlePreviewEffect(particleSystem, now));
+            }
+
+            for (int i = 0; i < visualEffectCacheBuffer.Count; i++)
+            {
+                VisualEffect visualEffect = visualEffectCacheBuffer[i];
+                if (visualEffect != null && !ContainsVisualEffect(visualEffect))
+                    previewVisualEffects.Add(new VisualEffectPreviewEffect(visualEffect, now));
+            }
+        }
+
+        private bool ContainsParticleSystem(ParticleSystem particleSystem)
+        {
+            for (int i = 0; i < previewParticleSystems.Count; i++)
+            {
+                if (previewParticleSystems[i].ParticleSystem == particleSystem)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private bool ContainsVisualEffect(VisualEffect visualEffect)
+        {
+            for (int i = 0; i < previewVisualEffects.Count; i++)
+            {
+                if (previewVisualEffects[i].VisualEffect == visualEffect)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private void SimulateParticleSystems(double now)
+        {
+            for (int i = previewParticleSystems.Count - 1; i >= 0; i--)
+            {
+                ParticlePreviewEffect effect = previewParticleSystems[i];
+                if (effect.ParticleSystem == null)
+                {
+                    previewParticleSystems.RemoveAt(i);
+                    continue;
+                }
+
+                float deltaTime = Mathf.Clamp((float)(now - effect.LastUpdateTime), 0f, 0.05f);
+                effect.LastUpdateTime = now;
+                if (deltaTime > 0f)
+                    effect.ParticleSystem.Simulate(deltaTime, true, false, false);
+            }
+        }
+
+        private void SimulateVisualEffects(double now)
+        {
+            for (int i = previewVisualEffects.Count - 1; i >= 0; i--)
+            {
+                VisualEffectPreviewEffect effect = previewVisualEffects[i];
+                if (effect.VisualEffect == null)
+                {
+                    previewVisualEffects.RemoveAt(i);
+                    continue;
+                }
+
+                float deltaTime = Mathf.Clamp((float)(now - effect.LastUpdateTime), 0f, 0.05f);
+                effect.LastUpdateTime = now;
+                if (deltaTime > 0f)
+                    effect.VisualEffect.Simulate(deltaTime);
+            }
         }
 
         public void Dispose()
@@ -328,8 +485,42 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             hasPreviewHeightLock = true;
         }
 
-        private void StabilizePreviewHeight()
+        private void StoreInitialPreviewTransform()
         {
+            if (previewInstance == null)
+            {
+                hasInitialPreviewTransform = false;
+                return;
+            }
+
+            initialPreviewPosition = previewInstance.transform.position;
+            initialPreviewRotation = previewInstance.transform.rotation;
+            initialPreviewScale = previewInstance.transform.localScale;
+
+            if (previewMotionRoot != null && previewMotionRoot != previewInstance.transform)
+            {
+                initialMotionRootLocalPosition = previewMotionRoot.localPosition;
+                initialMotionRootLocalRotation = previewMotionRoot.localRotation;
+                initialMotionRootLocalScale = previewMotionRoot.localScale;
+            }
+            else
+            {
+                initialMotionRootLocalPosition = Vector3.zero;
+                initialMotionRootLocalRotation = Quaternion.identity;
+                initialMotionRootLocalScale = Vector3.one;
+            }
+
+            hasInitialPreviewTransform = true;
+        }
+
+        private bool IsRootMotionPreviewEnabled() =>
+            (boundContext?.Montage?.ApplyRootMotion ?? false);
+
+        private void StabilizePreviewTransform()
+        {
+            if (IsRootMotionPreviewEnabled())
+                return;
+
             if (!hasPreviewHeightLock || previewInstance == null)
                 return;
 
@@ -360,8 +551,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Object.DestroyImmediate(previewInstance);
             previewInstance = null;
             previewMotionRoot = null;
+            previewParticleSystems.Clear();
+            previewVisualEffects.Clear();
+            particleCacheBuffer.Clear();
+            visualEffectCacheBuffer.Clear();
             hasBounds = false;
             hasPreviewHeightLock = false;
+            hasInitialPreviewTransform = false;
         }
 
         private void ClearGrid()
@@ -383,6 +579,30 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             MontagePreviewSceneGizmos.Destroy(gizmoInstance);
             gizmoInstance = null;
+        }
+
+        private sealed class ParticlePreviewEffect
+        {
+            public ParticlePreviewEffect(ParticleSystem particleSystem, double lastUpdateTime)
+            {
+                ParticleSystem = particleSystem;
+                LastUpdateTime = lastUpdateTime;
+            }
+
+            public ParticleSystem ParticleSystem { get; }
+            public double LastUpdateTime { get; set; }
+        }
+
+        private sealed class VisualEffectPreviewEffect
+        {
+            public VisualEffectPreviewEffect(VisualEffect visualEffect, double lastUpdateTime)
+            {
+                VisualEffect = visualEffect;
+                LastUpdateTime = lastUpdateTime;
+            }
+
+            public VisualEffect VisualEffect { get; }
+            public double LastUpdateTime { get; set; }
         }
     }
 }

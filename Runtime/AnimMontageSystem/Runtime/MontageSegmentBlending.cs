@@ -168,7 +168,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             bool overlapsPrevious = previous != null && previous.EndTime > start;
             float clipClockStart = crossfadeIn > 0f && !overlapsPrevious ? start - crossfadeIn : start;
             float local = segment.ClipStartTime + (montageTime - clipClockStart) * segment.PlayRate;
-            return Mathf.Clamp(local, segment.ClipStartTime, segment.ClipEndTime);
+            return segment.NormalizeClipTime(local);
         }
 
         private static MontageSegment FindPreviousOnTrack(int segmentIndex, IReadOnlyList<MontageSegment> segments)

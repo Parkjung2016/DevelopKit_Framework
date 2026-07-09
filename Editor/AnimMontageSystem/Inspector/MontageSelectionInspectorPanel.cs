@@ -46,6 +46,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return;
 
             UnityEngine.Object selected = context.SelectedObject ?? context.Montage;
+            if (selected is AnimMontageSO && TryBuildMontageInspector())
+                return;
+
             if (selected == null)
             {
                 host.Add(new Label("Select a montage or notify.")
@@ -112,6 +115,47 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     "customColor");
 
             return false;
+        }
+
+        private bool TryBuildMontageInspector()
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return false;
+
+            boundObject = new SerializedObject(montage);
+            host.Add(new Label("Montage")
+            {
+                style =
+                {
+                    unityFontStyleAndWeight = FontStyle.Bold,
+                    marginBottom = 6f
+                }
+            });
+
+            AddProperty("rateScale");
+            AddProperty("applyRootMotion");
+
+            host.Add(new Label(
+                $"Segments: {montage.Segments.Count} | Notifies: {montage.Notifies.Count} | States: {montage.NotifyStates.Count}")
+            {
+                style =
+                {
+                    marginTop = 8f,
+                    whiteSpace = WhiteSpace.Normal,
+                    color = new Color(0.78f, 0.82f, 0.9f, 0.82f)
+                }
+            });
+
+            host.Bind(boundObject);
+            return true;
+        }
+
+        private void AddProperty(string propertyName)
+        {
+            SerializedProperty property = boundObject.FindProperty(propertyName);
+            if (property != null)
+                host.Add(new PropertyField(property));
         }
 
         private bool BuildArrayElementInspector(string title, string arrayPropertyName, int index, params string[] propertyNames)

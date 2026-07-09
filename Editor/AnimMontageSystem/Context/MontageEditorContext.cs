@@ -14,7 +14,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         public bool IsPlaying { get; private set; }
         public float PlaybackSpeed { get; set; } = 1f;
         public bool Loop { get; set; }
-        public GameObject PreviewModel { get; set; }
+        public GameObject PreviewModel { get; private set; }
         public UnityEngine.Object SelectedObject { get; private set; }
 
         public int SelectedNotifyIndex { get; private set; } = -1;
@@ -49,6 +49,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             RaiseChanged();
             RaiseSelectionChanged();
             RaisePlayheadChanged();
+        }
+
+        public void SetPreviewModel(GameObject previewModel)
+        {
+            if (PreviewModel == previewModel)
+                return;
+
+            PreviewModel = previewModel;
+            RaiseChanged();
         }
 
         public void SetPlayhead(float time)
@@ -277,6 +286,29 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         public void NotifyExternalChange() => RaiseChanged();
 
+        public void NotifyUndoRedo()
+        {
+            if (Montage == null)
+            {
+                ClearTimelineSelection();
+                SelectedObject = null;
+                PlayheadTime = 0f;
+                PreviousPlayheadTime = 0f;
+            }
+            else
+            {
+                ClampTimelineSelection();
+                PlayheadTime = Mathf.Clamp(PlayheadTime, 0f, Montage.Length);
+                PreviousPlayheadTime = Mathf.Clamp(PreviousPlayheadTime, 0f, Montage.Length);
+                if (SelectedObject == null)
+                    SelectedObject = Montage;
+            }
+
+            RaiseChanged();
+            RaiseSelectionChanged();
+            RaisePlayheadChanged();
+        }
+
         private static void SetTimelineIndexSelection(HashSet<int> selection, int index, bool additive, bool toggle)
         {
             if (!additive && !toggle)
@@ -296,6 +328,20 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             selectedCustomElementIndices.Clear();
             selectedTimelineTrackKeys.Clear();
             SyncLegacySelection();
+        }
+
+        private void ClampTimelineSelection()
+        {
+            RemoveInvalidIndices(selectedSegmentIndices, Montage.Segments.Count);
+            RemoveInvalidIndices(selectedNotifyIndices, Montage.Notifies.Count);
+            RemoveInvalidIndices(selectedNotifyStateIndices, Montage.NotifyStates.Count);
+            RemoveInvalidIndices(selectedCustomElementIndices, Montage.CustomElements.Count);
+            SyncLegacySelection();
+        }
+
+        private static void RemoveInvalidIndices(HashSet<int> selection, int count)
+        {
+            selection.RemoveWhere(index => index < 0 || index >= count);
         }
 
         private void SyncLegacySelection()

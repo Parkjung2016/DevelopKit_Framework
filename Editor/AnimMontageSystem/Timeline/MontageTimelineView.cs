@@ -233,6 +233,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             private readonly List<UnityEngine.Object> assets = new();
             private Type objectType;
             private Action<UnityEngine.Object> onPick;
+            private Predicate<UnityEngine.Object> assetFilter;
             private string searchText = string.Empty;
             private Vector2 scroll;
             private bool consumed;
@@ -241,7 +242,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             private UnityEngine.Object previewAsset;
             private Editor previewEditor;
 
-            public static void Show<T>(string title, Action<T> onPick) where T : UnityEngine.Object
+            public static void Show<T>(string title, Action<T> onPick, Predicate<T> filter = null) where T : UnityEngine.Object
             {
                 ObjectPickerPopup window = CreateInstance<ObjectPickerPopup>();
                 window.titleContent = new GUIContent(title);
@@ -252,15 +253,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 {
                     if (picked is T typed)
                         onPick?.Invoke(typed);
-                });
+                }, filter != null ? asset => asset is T typed && filter(typed) : null);
                 window.ShowAuxWindow();
                 window.Focus();
             }
 
-            private void Initialize(Type type, Action<UnityEngine.Object> pickCallback)
+            private void Initialize(Type type, Action<UnityEngine.Object> pickCallback, Predicate<UnityEngine.Object> filter)
             {
                 objectType = type;
                 onPick = pickCallback;
+                assetFilter = filter;
                 assets.Clear();
 
                 string[] guids = AssetDatabase.FindAssets($"t:{objectType.Name}");
@@ -272,6 +274,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     {
                         UnityEngine.Object asset = loadedAssets[j];
                         if (asset == null || !objectType.IsInstanceOfType(asset) || IsInternalPreviewAsset(asset))
+                            continue;
+
+                        if (assetFilter != null && !assetFilter(asset))
                             continue;
 
                         if (!assets.Contains(asset))
@@ -301,6 +306,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                             bool selected = selectedAsset == asset;
                             if (selected && Event.current.type == EventType.Repaint)
                                 EditorGUI.DrawRect(rowRect, new Color(0.28f, 0.48f, 0.78f, 0.38f));
+
+                            if (Event.current.type == EventType.MouseDown
+                                && Event.current.button == 0
+                                && Event.current.clickCount == 2
+                                && rowRect.Contains(Event.current.mousePosition))
+                            {
+                                SelectAsset(asset);
+                                Pick(asset);
+                                Event.current.Use();
+                                GUIUtility.ExitGUI();
+                            }
 
                             if (GUI.Button(rowRect, content, EditorStyles.objectField))
                                 SelectAsset(asset);
@@ -457,6 +473,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     if (selected && Event.current.type == EventType.Repaint)
                         EditorGUI.DrawRect(rowRect, new Color(0.28f, 0.48f, 0.78f, 0.38f));
 
+                    if (Event.current.type == EventType.MouseDown
+                        && Event.current.button == 0
+                        && Event.current.clickCount == 2
+                        && rowRect.Contains(Event.current.mousePosition))
+                    {
+                        selectedType = type;
+                        Pick(type);
+                        Event.current.Use();
+                        GUIUtility.ExitGUI();
+                    }
+
                     if (GUI.Button(rowRect, content, EditorStyles.objectField))
                         selectedType = type;
 
@@ -572,26 +599,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             RegisterCallback<PointerUpEvent>(OnPointerUp);
             RegisterCallback<WheelEvent>(OnWheel);
             RegisterCallback<KeyDownEvent>(OnKeyDown);
-            RegisterCallback<AttachToPanelEvent>(_ =>
-            {
-                Undo.undoRedoPerformed += OnUndoRedoPerformed;
-            });
-            RegisterCallback<DetachFromPanelEvent>(_ =>
-            {
-                Undo.undoRedoPerformed -= OnUndoRedoPerformed;
-            });
-
+            RegisterCallback<DragUpdatedEvent>(OnDragUpdated);
+            RegisterCallback<DragPerformEvent>(OnDragPerform);
             context.Changed += RequestRepaint;
             context.PlayheadChanged += RequestRepaint;
         }
 
         private void RequestRepaint() => MarkDirtyRepaint();
-
-        private void OnUndoRedoPerformed()
-        {
-            context.NotifyExternalChange();
-            MarkDirtyRepaint();
-        }
 
         private void OnWheel(WheelEvent evt)
         {
@@ -657,6 +671,27 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (!DeleteHoveredTrack() && !DeleteSelected())
                 return;
 
+            evt.StopPropagation();
+        }
+
+        private void OnDragUpdated(DragUpdatedEvent evt)
+        {
+            if (CanDropProjectObjects(evt.localMousePosition))
+            {
+                DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
+                evt.StopPropagation();
+                return;
+            }
+
+            DragAndDrop.visualMode = DragAndDropVisualMode.Rejected;
+        }
+
+        private void OnDragPerform(DragPerformEvent evt)
+        {
+            if (!TryDropProjectObjects(evt.localMousePosition))
+                return;
+
+            DragAndDrop.AcceptDrag();
             evt.StopPropagation();
         }
 
@@ -794,9 +829,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return;
             }
 
-            if (evt.clickCount == 2 && TryGetTrackRow(local, TrackKind.Notify, out TrackRowLayout notifyRow))
+            if (evt.clickCount == 2 && TryCreateElementByDoubleClick(local))
             {
-                AddNotifyAtTime(XToTime(local.x), null, notifyRow.TrackId);
                 evt.StopPropagation();
                 return;
             }
@@ -972,7 +1006,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (TryHitSegment(local, out int segmentIndex, out _))
             {
                 menu.AddItem(new GUIContent("Segment/Replace Clip..."), false, () => OpenCreatePicker(PendingCreateKind.ReplaceSegmentClip, time, "Default", segmentIndex));
-                if (Selection.activeObject is AnimationClip replacementClip)
+                if (Selection.activeObject is AnimationClip replacementClip && IsCompatibleAnimationClip(replacementClip))
                     menu.AddItem(new GUIContent("Segment/Replace Clip From Project Selection"), false, () => ReplaceSegmentClip(segmentIndex, replacementClip));
                 else
                     menu.AddDisabledItem(new GUIContent("Segment/Replace Clip From Project Selection"));
@@ -1010,7 +1044,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 string trackId = row.TrackId;
                 menu.AddItem(new GUIContent("Create/Animation Segment..."), false, () => OpenCreatePicker(PendingCreateKind.Segment, time, trackId));
-                if (Selection.activeObject is AnimationClip selectedClip)
+                if (Selection.activeObject is AnimationClip selectedClip && IsCompatibleAnimationClip(selectedClip))
                     menu.AddItem(new GUIContent("Create/Segment From Project Selection"), false, () => AddSegmentAtTime(time, selectedClip, trackId));
                 else
                     menu.AddDisabledItem(new GUIContent("Create/Segment From Project Selection"));
@@ -1053,6 +1087,73 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
 
             menu.ShowAsContext();
+        }
+
+        private bool TryCreateElementByDoubleClick(Vector2 local)
+        {
+            if (!TryGetTrackRow(local, out TrackRowLayout row))
+                return false;
+
+            float time = Snap(XToTime(local.x));
+            string trackId = row.TrackId;
+            switch (row.Kind)
+            {
+                case TrackKind.Segment:
+                    if (Selection.activeObject is AnimationClip selectedClip && IsCompatibleAnimationClip(selectedClip))
+                        AddSegmentAtTime(time, selectedClip, trackId);
+                    else
+                        OpenCreatePicker(PendingCreateKind.Segment, time, trackId);
+                    return true;
+
+                case TrackKind.Notify:
+                    OpenCreatePicker(PendingCreateKind.Notify, time, trackId);
+                    return true;
+
+                case TrackKind.NotifyState:
+                    OpenCreatePicker(PendingCreateKind.NotifyState, time, trackId);
+                    return true;
+
+                case TrackKind.Custom:
+                    OpenCreatePicker(PendingCreateKind.CustomElement, time, trackId);
+                    return true;
+
+                default:
+                    return false;
+            }
+        }
+
+        private bool CanDropProjectObjects(Vector2 local)
+        {
+            if (context.Montage == null || !TryGetTrackRow(local, TrackKind.Segment, out _))
+                return false;
+
+            foreach (UnityEngine.Object draggedObject in DragAndDrop.objectReferences)
+            {
+                if (draggedObject is AnimationClip clip && IsCompatibleAnimationClip(clip))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private bool TryDropProjectObjects(Vector2 local)
+        {
+            if (context.Montage == null || !TryGetTrackRow(local, TrackKind.Segment, out TrackRowLayout row))
+                return false;
+
+            float time = Snap(XToTime(local.x));
+            bool added = false;
+            foreach (UnityEngine.Object draggedObject in DragAndDrop.objectReferences)
+            {
+                if (draggedObject is not AnimationClip clip || !IsCompatibleAnimationClip(clip))
+                    continue;
+
+                AddSegmentAtTime(time, clip, row.TrackId);
+                time = Snap(time + Mathf.Max(MinSegmentDuration, clip.length));
+                added = true;
+            }
+
+            return added;
         }
 
         private void AddElementColorMenuItems(GenericMenu menu, TrackKind kind, int index)
@@ -1140,11 +1241,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             switch (kind)
             {
                 case PendingCreateKind.Segment:
-                    ObjectPickerPopup.Show<AnimationClip>("Create Animation Segment", clip => AddSegmentAtTime(time, clip, trackId));
+                    ObjectPickerPopup.Show<AnimationClip>(
+                        "Create Animation Segment",
+                        clip => AddSegmentAtTime(time, clip, trackId),
+                        IsCompatibleAnimationClip);
                     break;
 
                 case PendingCreateKind.ReplaceSegmentClip:
-                    ObjectPickerPopup.Show<AnimationClip>("Replace Animation Clip", clip => ReplaceSegmentClip(editIndex, clip));
+                    ObjectPickerPopup.Show<AnimationClip>(
+                        "Replace Animation Clip",
+                        clip => ReplaceSegmentClip(editIndex, clip),
+                        IsCompatibleAnimationClip);
                     break;
 
                 case PendingCreateKind.Notify:
@@ -1172,6 +1279,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     break;
             }
         }
+
+        private bool IsCompatibleAnimationClip(AnimationClip clip) =>
+            MontageAnimationClipCompatibility.IsCompatible(context.PreviewModel, clip);
 
         private float GetSegmentDragValue(DragMode mode, int segmentIndex)
         {
@@ -1337,8 +1447,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             float playRate = segment.PlayRate;
             float minEndTime = segment.StartTime + MinSegmentDuration;
-            endTime = Snap(Mathf.Clamp(endTime, minEndTime, segment.StartTime + (segment.Clip.length - dragAnchorClipStart) / playRate));
-            float clipEnd = Mathf.Clamp(dragAnchorClipStart + (endTime - segment.StartTime) * playRate, dragAnchorClipStart + MinSegmentDuration * playRate, segment.Clip.length);
+            float maxEndTime = segment.IsLoopingClip
+                ? float.PositiveInfinity
+                : segment.StartTime + (segment.Clip.length - dragAnchorClipStart) / playRate;
+            endTime = Snap(segment.IsLoopingClip
+                ? Mathf.Max(minEndTime, endTime)
+                : Mathf.Clamp(endTime, minEndTime, maxEndTime));
+            float clipEnd = dragAnchorClipStart + (endTime - segment.StartTime) * playRate;
+            if (!segment.IsLoopingClip)
+                clipEnd = Mathf.Clamp(clipEnd, dragAnchorClipStart + MinSegmentDuration * playRate, segment.Clip.length);
+            else
+                clipEnd = Mathf.Max(dragAnchorClipStart + MinSegmentDuration * playRate, clipEnd);
 
             Undo.RecordObject(montage, "Trim Montage Segment End");
             SerializedObject so = new(montage);
@@ -2848,10 +2967,59 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 Color stateColor = placement.HasCustomColor
                     ? placement.CustomColor
                     : placement.NotifyState.EditorColor;
-                painter.fillColor = selected
-                    ? HighlightColor(stateColor) * new Color(1f, 1f, 1f, 0.85f)
-                    : stateColor * new Color(1f, 1f, 1f, 0.55f);
-                FillRoundedRect(painter, clippedBar, 3f);
+                Color bodyColor = selected
+                    ? HighlightColor(stateColor) * new Color(1f, 1f, 1f, 0.9f)
+                    : stateColor * new Color(1f, 1f, 1f, 0.62f);
+                Rect body = new(
+                    clippedBar.xMin,
+                    clippedBar.yMin + 3f,
+                    clippedBar.width,
+                    Mathf.Max(1f, clippedBar.height - 6f));
+                painter.fillColor = bodyColor;
+                FillRoundedRect(painter, body, 4f);
+
+                painter.strokeColor = selected
+                    ? new Color(1f, 1f, 1f, 0.9f)
+                    : new Color(1f, 1f, 1f, 0.36f);
+                painter.lineWidth = selected ? 1.6f : 1f;
+                StrokeRoundedRect(painter, body, 4f);
+
+                Rect inner = new(
+                    body.xMin + 2f,
+                    body.yMin + 2f,
+                    Mathf.Max(0f, body.width - 4f),
+                    Mathf.Max(0f, body.height * 0.42f));
+                if (inner.width > 0f && inner.height > 0f)
+                {
+                    painter.fillColor = new Color(1f, 1f, 1f, selected ? 0.22f : 0.14f);
+                    FillRoundedRect(painter, inner, 3f);
+                }
+
+                float gripWidth = Mathf.Min(5f, Mathf.Max(2f, body.width * 0.25f));
+                if (body.width >= 8f)
+                {
+                    painter.fillColor = new Color(0f, 0f, 0f, selected ? 0.34f : 0.22f);
+                    painter.BeginPath();
+                    painter.MoveTo(new Vector2(body.xMin + gripWidth, body.yMin));
+                    painter.LineTo(new Vector2(body.xMin, body.center.y));
+                    painter.LineTo(new Vector2(body.xMin + gripWidth, body.yMax));
+                    painter.ClosePath();
+                    painter.Fill();
+
+                    painter.BeginPath();
+                    painter.MoveTo(new Vector2(body.xMax - gripWidth, body.yMin));
+                    painter.LineTo(new Vector2(body.xMax, body.center.y));
+                    painter.LineTo(new Vector2(body.xMax - gripWidth, body.yMax));
+                    painter.ClosePath();
+                    painter.Fill();
+                }
+
+                painter.strokeColor = new Color(0f, 0f, 0f, selected ? 0.34f : 0.2f);
+                painter.lineWidth = 1f;
+                painter.BeginPath();
+                painter.MoveTo(new Vector2(body.xMin + gripWidth, body.center.y));
+                painter.LineTo(new Vector2(body.xMax - gripWidth, body.center.y));
+                painter.Stroke();
                 notifyStateLayouts.Add(new NotifyStateLayout(i, clippedBar));
             }
 

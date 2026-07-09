@@ -18,6 +18,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private GameObject boundInstance;
         private Animator boundAnimator;
         private bool animatorPrepared;
+        private bool preparedApplyRootMotion;
         private int mixerInputCount;
 
         public void Bind(GameObject instance)
@@ -28,12 +29,20 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             boundInstance = instance;
             boundAnimator = instance != null ? instance.GetComponentInChildren<Animator>() : null;
             animatorPrepared = false;
+            preparedApplyRootMotion = false;
             DestroyGraph();
         }
 
         public void Dispose() => DestroyGraph();
 
-        public bool TrySample(GameObject instance, AnimMontageSO montage, float montageTime)
+        public void Reset()
+        {
+            animatorPrepared = false;
+            preparedApplyRootMotion = false;
+            DestroyGraph();
+        }
+
+        public bool TrySample(GameObject instance, AnimMontageSO montage, float montageTime, bool applyRootMotion)
         {
             if (instance == null || montage == null)
                 return false;
@@ -43,7 +52,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (samples.Count == 0)
                 return false;
 
-            bool requiresMixer = samples.Count > 1 || MontageSegmentBlending.MontageHasBlends(montage.Segments);
+            bool requiresMixer = samples.Count > 1
+                                 || MontageSegmentBlending.MontageHasBlends(montage.Segments)
+                                 || applyRootMotion;
             if (!requiresMixer && AnimationMode.InAnimationMode())
             {
                 MontageSegmentSample sample = samples[0];
@@ -54,7 +65,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (boundAnimator == null)
                 return SampleFallbackClip(instance, samples[0]);
 
-            PrepareAnimatorForPlayables();
+            PrepareAnimatorForPlayables(applyRootMotion);
             EnsureGraph(samples.Count);
 
             for (int i = 0; i < samples.Count; i++)
@@ -101,17 +112,18 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return true;
         }
 
-        private void PrepareAnimatorForPlayables()
+        private void PrepareAnimatorForPlayables(bool applyRootMotion)
         {
-            if (boundAnimator == null || animatorPrepared)
+            if (boundAnimator == null || animatorPrepared && preparedApplyRootMotion == applyRootMotion)
                 return;
 
             boundAnimator.runtimeAnimatorController = null;
-            boundAnimator.applyRootMotion = false;
+            boundAnimator.applyRootMotion = applyRootMotion;
             boundAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             boundAnimator.updateMode = AnimatorUpdateMode.Normal;
             boundAnimator.Rebind();
             animatorPrepared = true;
+            preparedApplyRootMotion = applyRootMotion;
         }
 
         private void EnsureGraph(int inputCount)

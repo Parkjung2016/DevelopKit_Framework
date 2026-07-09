@@ -8,8 +8,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private const float MinimumGridStep = 0.05f;
         private const int LinesPerDirection = 80;
         private const int MajorLineFrequency = 5;
-        private const float Fixed3DGridHalfSize = 5f;
-        private const float Fixed3DGridStep = 0.5f;
 
         private static readonly Color MinorLineColor = new(0.46f, 0.46f, 0.46f, 0.34f);
         private static readonly Color MajorLineColor = new(0.58f, 0.58f, 0.58f, 0.46f);
@@ -51,12 +49,14 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             GameObject gridObject,
             MontageViewportCamera viewportCamera,
             bool useFrontGrid,
-            float groundPlaneY)
+            float groundPlaneY,
+            float gridHalfSize,
+            float gridStep)
         {
             if (camera == null || viewportCamera == null)
                 return;
 
-            UpdateGrid(gridObject, viewportCamera, useFrontGrid, groundPlaneY);
+            UpdateGrid(gridObject, viewportCamera, useFrontGrid, groundPlaneY, gridHalfSize, gridStep);
             camera.Render();
         }
 
@@ -64,7 +64,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             GameObject gridObject,
             MontageViewportCamera viewportCamera,
             bool useFrontGrid,
-            float groundPlaneY)
+            float groundPlaneY,
+            float gridHalfSize,
+            float gridStep)
         {
             if (gridObject == null || viewportCamera == null)
                 return;
@@ -72,7 +74,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (!gridObject.TryGetComponent(out MeshFilter filter) || filter.sharedMesh == null)
                 return;
 
-            float step = GetNiceStep(Mathf.Max(viewportCamera.Size, 1f) / 12f);
+            float halfSize = Mathf.Clamp(gridHalfSize, 1f, 100f);
+            float fixedStep = Mathf.Clamp(gridStep, MinimumGridStep, 10f);
+            float step = useFrontGrid || viewportCamera.Is2DMode
+                ? GetNiceStep(Mathf.Max(viewportCamera.Size, 1f) / 12f)
+                : fixedStep;
             Vector3 pivot = viewportCamera.Pivot;
             Vertices.Clear();
             Colors.Clear();
@@ -93,7 +99,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 BuildFixedPlaneGrid(
                     Axis.X,
                     Axis.Z,
-                    groundPlaneY);
+                    groundPlaneY,
+                    halfSize,
+                    fixedStep);
             }
 
             Mesh mesh = filter.sharedMesh;
@@ -131,15 +139,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
         }
 
-        private static void BuildFixedPlaneGrid(Axis axisA, Axis axisB, float planeOffset)
+        private static void BuildFixedPlaneGrid(Axis axisA, Axis axisB, float planeOffset, float halfSize, float step)
         {
-            int lineCount = Mathf.RoundToInt(Fixed3DGridHalfSize / Fixed3DGridStep);
-            float min = -Fixed3DGridHalfSize;
-            float max = Fixed3DGridHalfSize;
+            int lineCount = Mathf.Clamp(Mathf.RoundToInt(halfSize / step), 1, 400);
+            float min = -lineCount * step;
+            float max = lineCount * step;
 
             for (int i = -lineCount; i <= lineCount; i++)
             {
-                float position = i * Fixed3DGridStep;
+                float position = i * step;
                 AddLine(
                     BuildPoint(position, min, axisA, axisB, planeOffset),
                     BuildPoint(position, max, axisA, axisB, planeOffset),

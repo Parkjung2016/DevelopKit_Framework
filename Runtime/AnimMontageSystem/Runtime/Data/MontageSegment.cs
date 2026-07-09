@@ -25,6 +25,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         }
         public AnimationClip Clip => clip;
         public float ClipStartTime => Clip != null ? Mathf.Clamp(clipStartTime, 0f, Clip.length) : 0f;
+        public bool IsLoopingClip => Clip != null && (Clip.isLooping || Clip.wrapMode == WrapMode.Loop);
         public float ClipEndTime
         {
             get
@@ -33,7 +34,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                     return 0f;
 
                 float end = clipEndTime <= 0f ? Clip.length : clipEndTime;
-                return Mathf.Clamp(end, ClipStartTime, Clip.length);
+                return IsLoopingClip
+                    ? Mathf.Max(ClipStartTime, end)
+                    : Mathf.Clamp(end, ClipStartTime, Clip.length);
             }
         }
         public float StartTime
@@ -57,10 +60,20 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public float ToClipTime(float montageTime)
         {
             float local = ClipStartTime + (montageTime - StartTime) * PlayRate;
+            return NormalizeClipTime(local);
+        }
+
+        public float NormalizeClipTime(float clipTime)
+        {
             if (Clip == null)
                 return 0f;
 
-            return Mathf.Clamp(local, ClipStartTime, ClipEndTime);
+            if (!IsLoopingClip)
+                return Mathf.Clamp(clipTime, ClipStartTime, ClipEndTime);
+
+            float loopStart = ClipStartTime;
+            float loopLength = Mathf.Max(0.0001f, Clip.length - loopStart);
+            return loopStart + Mathf.Repeat(clipTime - loopStart, loopLength);
         }
     }
 }

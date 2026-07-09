@@ -10,6 +10,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         public static void BindInstance(GameObject instance) => BlendSampler.Bind(instance);
 
+        public static void Reset() => BlendSampler.Reset();
+
         public static void Dispose() => BlendSampler.Dispose();
 
         public static bool TrySample(GameObject instance, MontageEditorContext context)
@@ -17,7 +19,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (instance == null || context?.Montage == null)
                 return false;
 
-            if (BlendSampler.TrySample(instance, context.Montage, context.PlayheadTime))
+            if (BlendSampler.TrySample(instance, context.Montage, context.PlayheadTime, context.Montage.ApplyRootMotion))
                 return true;
 
             if (!context.Montage.TryGetSegmentAtTime(context.PlayheadTime, out MontageSegment segment, out _))

@@ -21,6 +21,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private AnimationPlayableOutput output;
         private AnimationMixerPlayable mixer;
         private int mixerInputCount;
+        private bool cachedAnimatorRootMotion;
+        private bool hasCachedAnimatorRootMotion;
 
         public AnimMontageSO CurrentMontage => playback.Montage;
         public float CurrentTime => playback.CurrentTime;
@@ -58,6 +60,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 return;
 
             EnsureGraph();
+            ApplyAnimatorRootMotion(montage.ApplyRootMotion);
             playback.Begin(montage, Mathf.Clamp(startTime, 0f, montage.Length));
             dispatcher.Reset();
             UpdateAnimationSample(force: true);
@@ -66,11 +69,19 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         public void Stop()
         {
+            dispatcher.EndActiveStates(gameObject, animator, playback.Montage, playback.CurrentTime);
             playback.Stop();
             DestroyGraph();
+            RestoreAnimatorRootMotion();
         }
 
-        public void Pause(bool paused = true) => playback.Pause(paused);
+        public void Pause(bool paused = true)
+        {
+            if (paused)
+                dispatcher.EndActiveStates(gameObject, animator, playback.Montage, playback.CurrentTime);
+
+            playback.Pause(paused);
+        }
 
         public void SetTime(float montageTime)
         {
@@ -102,6 +113,29 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             clipPlayables.Clear();
             mixer = default;
             mixerInputCount = 0;
+            RestoreAnimatorRootMotion();
+        }
+
+        private void ApplyAnimatorRootMotion(bool applyRootMotion)
+        {
+            if (animator == null)
+                return;
+
+            if (!hasCachedAnimatorRootMotion)
+            {
+                cachedAnimatorRootMotion = animator.applyRootMotion;
+                hasCachedAnimatorRootMotion = true;
+            }
+
+            animator.applyRootMotion = applyRootMotion;
+        }
+
+        private void RestoreAnimatorRootMotion()
+        {
+            if (animator != null && hasCachedAnimatorRootMotion)
+                animator.applyRootMotion = cachedAnimatorRootMotion;
+
+            hasCachedAnimatorRootMotion = false;
         }
 
         private void UpdateAnimationSample(bool force = false)
