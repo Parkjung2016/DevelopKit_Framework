@@ -1,7 +1,7 @@
 {
     "name": "PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime",
     "rootNamespace": "PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime",
-    "references": [],
+    "references": ["GUID:406d82ec2f4cd104699d60414ec8fcdb"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

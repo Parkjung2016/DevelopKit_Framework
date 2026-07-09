@@ -46,6 +46,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Segment,
             Notify,
             NotifyState,
+            CustomTrack,
+            CustomElement,
             ReplaceSegmentClip,
             ReplaceNotify,
             ReplaceNotifyState
@@ -55,7 +57,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         {
             Segment,
             Notify,
-            NotifyState
+            NotifyState,
+            Custom
+        }
+
+        private enum ClipboardContentKind
+        {
+            None,
+            Tracks,
+            Elements
         }
 
         private readonly struct TrackRowLayout
@@ -120,6 +130,18 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             public Rect Body { get; }
         }
 
+        private readonly struct CustomElementLayout
+        {
+            public CustomElementLayout(int index, Rect body)
+            {
+                Index = index;
+                Body = body;
+            }
+
+            public int Index { get; }
+            public Rect Body { get; }
+        }
+
         private readonly struct HoverTooltipInfo
         {
             public HoverTooltipInfo(string text, float minWidth = 96f)
@@ -130,6 +152,80 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             public string Text { get; }
             public float MinWidth { get; }
+        }
+
+        private readonly struct SegmentClipboardData
+        {
+            public SegmentClipboardData(
+                string sectionName,
+                string trackId,
+                AnimationClip clip,
+                float startTime,
+                float clipStartTime,
+                float clipEndTime,
+                float playRate,
+                float blendIn,
+                float blendOut,
+                Color customColor)
+            {
+                SectionName = sectionName;
+                TrackId = trackId;
+                Clip = clip;
+                StartTime = startTime;
+                ClipStartTime = clipStartTime;
+                ClipEndTime = clipEndTime;
+                PlayRate = playRate;
+                BlendIn = blendIn;
+                BlendOut = blendOut;
+                CustomColor = customColor;
+            }
+
+            public string SectionName { get; }
+            public string TrackId { get; }
+            public AnimationClip Clip { get; }
+            public float StartTime { get; }
+            public float ClipStartTime { get; }
+            public float ClipEndTime { get; }
+            public float PlayRate { get; }
+            public float BlendIn { get; }
+            public float BlendOut { get; }
+            public Color CustomColor { get; }
+        }
+
+        private readonly struct NotifyClipboardData
+        {
+            public NotifyClipboardData(float time, AnimNotify notify, string trackId, float triggerWeightThreshold, Color customColor)
+            {
+                Time = time;
+                Notify = notify;
+                TrackId = trackId;
+                TriggerWeightThreshold = triggerWeightThreshold;
+                CustomColor = customColor;
+            }
+
+            public float Time { get; }
+            public AnimNotify Notify { get; }
+            public string TrackId { get; }
+            public float TriggerWeightThreshold { get; }
+            public Color CustomColor { get; }
+        }
+
+        private readonly struct NotifyStateClipboardData
+        {
+            public NotifyStateClipboardData(float startTime, float endTime, AnimNotifyState notifyState, string trackId, Color customColor)
+            {
+                StartTime = startTime;
+                EndTime = endTime;
+                NotifyState = notifyState;
+                TrackId = trackId;
+                CustomColor = customColor;
+            }
+
+            public float StartTime { get; }
+            public float EndTime { get; }
+            public AnimNotifyState NotifyState { get; }
+            public string TrackId { get; }
+            public Color CustomColor { get; }
         }
 
         private sealed class ObjectPickerPopup : EditorWindow
@@ -304,14 +400,112 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
         }
 
+        private sealed class TypePickerPopup : EditorWindow
+        {
+            private readonly List<Type> types = new();
+            private Action<Type> onPick;
+            private string searchText = string.Empty;
+            private Vector2 scroll;
+            private bool consumed;
+            private string actionLabel = "Create";
+            private Type selectedType;
+
+            public static void Show<T>(string title, Action<T> onPick) where T : class
+            {
+                TypePickerPopup window = CreateInstance<TypePickerPopup>();
+                window.titleContent = new GUIContent(title);
+                window.minSize = new Vector2(300f, 360f);
+                window.position = new Rect(180f, 180f, 340f, 420f);
+                window.actionLabel = title.StartsWith("Replace", StringComparison.OrdinalIgnoreCase) ? "Replace" : "Create";
+                window.Initialize(typeof(T), picked =>
+                {
+                    if (Activator.CreateInstance(picked) is T instance)
+                        onPick?.Invoke(instance);
+                });
+                window.ShowAuxWindow();
+                window.Focus();
+            }
+
+            private void Initialize(Type baseType, Action<Type> pickCallback)
+            {
+                onPick = pickCallback;
+                types.Clear();
+                foreach (Type type in TypeCache.GetTypesDerivedFrom(baseType))
+                {
+                    if (type.IsAbstract || type.IsGenericType || type.GetConstructor(Type.EmptyTypes) == null)
+                        continue;
+
+                    types.Add(type);
+                }
+
+                types.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            }
+
+            private void OnGUI()
+            {
+                searchText = EditorGUILayout.TextField(searchText, EditorStyles.toolbarSearchField);
+                scroll = EditorGUILayout.BeginScrollView(scroll);
+                for (int i = 0; i < types.Count; i++)
+                {
+                    Type type = types[i];
+                    if (!MatchesSearch(type))
+                        continue;
+
+                    GUIContent content = new(type.Name, type.FullName);
+                    Rect rowRect = GUILayoutUtility.GetRect(content, EditorStyles.objectField, GUILayout.Height(20f));
+                    bool selected = selectedType == type;
+                    if (selected && Event.current.type == EventType.Repaint)
+                        EditorGUI.DrawRect(rowRect, new Color(0.28f, 0.48f, 0.78f, 0.38f));
+
+                    if (GUI.Button(rowRect, content, EditorStyles.objectField))
+                        selectedType = type;
+
+                    if (selected && Event.current.type == EventType.Repaint)
+                        GUI.Box(rowRect, GUIContent.none, EditorStyles.helpBox);
+                }
+
+                EditorGUILayout.EndScrollView();
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.FlexibleSpace();
+                    using (new EditorGUI.DisabledScope(selectedType == null || consumed))
+                    {
+                        if (GUILayout.Button(actionLabel, GUILayout.Width(96f), GUILayout.Height(24f)))
+                            Pick(selectedType);
+                    }
+                }
+            }
+
+            private bool MatchesSearch(Type type) =>
+                string.IsNullOrWhiteSpace(searchText)
+                || type.Name.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0
+                || type.FullName.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+
+            private void Pick(Type type)
+            {
+                if (consumed)
+                    return;
+
+                consumed = true;
+                onPick?.Invoke(type);
+                Close();
+            }
+        }
+
         private readonly MontageEditorContext context;
         private readonly List<SegmentLayout> segmentLayouts = new();
         private readonly List<NotifyLayout> notifyLayouts = new();
         private readonly List<NotifyStateLayout> notifyStateLayouts = new();
+        private readonly List<CustomElementLayout> customElementLayouts = new();
         private readonly List<TrackRowLayout> trackRows = new();
         private readonly Dictionary<int, float> dragSegmentStartTimes = new();
         private readonly Dictionary<int, float> dragNotifyTimes = new();
         private readonly Dictionary<int, Vector2> dragNotifyStateRanges = new();
+        private readonly List<TrackIdentity> copiedTracks = new();
+        private readonly List<SegmentClipboardData> copiedSegments = new();
+        private readonly List<NotifyClipboardData> copiedNotifies = new();
+        private readonly List<NotifyStateClipboardData> copiedNotifyStates = new();
         private readonly Label hoverTooltip;
 
         private float pixelsPerSecond = 120f;
@@ -341,6 +535,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private bool hasHoverTrack;
         private TrackKind hoverTrackKind;
         private string hoverTrackId = "Default";
+        private ClipboardContentKind clipboardKind = ClipboardContentKind.None;
+        private Vector2 lastPointerLocal;
 
         public MontageTimelineView(MontageEditorContext context)
         {
@@ -419,6 +615,42 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (evt.target is TextField)
                 return;
 
+            bool actionKey = evt.ctrlKey || evt.commandKey;
+            if (actionKey && evt.shiftKey && evt.keyCode == KeyCode.Z)
+            {
+                Undo.PerformRedo();
+                evt.StopPropagation();
+                return;
+            }
+
+            if (actionKey && evt.keyCode == KeyCode.C)
+            {
+                if (CopySelectionToClipboard())
+                    evt.StopPropagation();
+                return;
+            }
+
+            if (actionKey && evt.keyCode == KeyCode.V)
+            {
+                if (PasteClipboard(true))
+                    evt.StopPropagation();
+                return;
+            }
+
+            if (actionKey && evt.keyCode == KeyCode.D)
+            {
+                if (DuplicateSelection())
+                    evt.StopPropagation();
+                return;
+            }
+
+            if ((evt.ctrlKey || evt.commandKey) && evt.keyCode == KeyCode.A)
+            {
+                SelectAllTimelineElements();
+                evt.StopPropagation();
+                return;
+            }
+
             if (evt.keyCode != KeyCode.Delete && evt.keyCode != KeyCode.Backspace)
                 return;
 
@@ -436,6 +668,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             focusController?.IgnoreEvent(evt);
             Focus();
             Vector2 local = evt.localPosition;
+            lastPointerLocal = local;
 
             if (evt.button == 2)
             {
@@ -550,6 +783,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return;
             }
 
+            if (TryHitCustomElement(local, out int customElementIndex))
+            {
+                bool additive = evt.shiftKey;
+                bool toggle = evt.ctrlKey || evt.commandKey;
+                if (additive || toggle || !context.IsCustomElementSelected(customElementIndex))
+                    context.SetSelectedCustomElement(customElementIndex, additive, toggle);
+
+                evt.StopPropagation();
+                return;
+            }
+
             if (evt.clickCount == 2 && TryGetTrackRow(local, TrackKind.Notify, out TrackRowLayout notifyRow))
             {
                 AddNotifyAtTime(XToTime(local.x), null, notifyRow.TrackId);
@@ -565,19 +809,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return;
             }
 
-            if (TryGetTrackRow(local, out _))
-            {
-                BeginDrag(DragMode.BoxSelect, evt.pointerId);
-                boxSelectStart = local;
-                boxSelectEnd = local;
-                boxSelectAdditive = evt.shiftKey || evt.ctrlKey || evt.commandKey;
-                HideHoverTooltip();
-                evt.StopPropagation();
-            }
+            BeginDrag(DragMode.BoxSelect, evt.pointerId);
+            boxSelectStart = local;
+            boxSelectEnd = local;
+            boxSelectAdditive = evt.shiftKey || evt.ctrlKey || evt.commandKey;
+            HideHoverTooltip();
+            evt.StopPropagation();
         }
 
         private void OnPointerMove(PointerMoveEvent evt)
         {
+            lastPointerLocal = evt.localPosition;
             if (!this.HasPointerCapture(evt.pointerId))
             {
                 UpdateHoverTrack(evt.localPosition);
@@ -681,6 +923,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void BeginDrag(DragMode mode, int pointerId)
         {
             dragMode = mode;
+            HideHoverTooltip();
             this.CapturePointer(pointerId);
         }
 
@@ -734,6 +977,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 else
                     menu.AddDisabledItem(new GUIContent("Segment/Replace Clip From Project Selection"));
                 menu.AddItem(new GUIContent("Segment/Reset Trim"), false, () => ResetSegmentTrim(segmentIndex));
+                AddElementColorMenuItems(menu, TrackKind.Segment, segmentIndex);
                 menu.AddItem(new GUIContent("Segment/Delete"), false, () => DeleteArrayElement("segments", segmentIndex, "Delete Montage Segment"));
                 menu.AddItem(new GUIContent("Segment/Select"), false, () => context.SetSelectedSegment(segmentIndex));
                 menu.AddSeparator("");
@@ -742,10 +986,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (TryHitNotify(local, out int notifyIndex))
             {
                 menu.AddItem(new GUIContent("Notify/Replace Notify..."), false, () => OpenCreatePicker(PendingCreateKind.ReplaceNotify, time, "Default", notifyIndex));
-                if (Selection.activeObject is AnimNotifySO replacementNotify)
-                    menu.AddItem(new GUIContent("Notify/Replace Notify From Project Selection"), false, () => ReplaceNotify(notifyIndex, replacementNotify));
-                else
-                    menu.AddDisabledItem(new GUIContent("Notify/Replace Notify From Project Selection"));
+                AddElementColorMenuItems(menu, TrackKind.Notify, notifyIndex);
                 menu.AddItem(new GUIContent("Notify/Delete"), false, () => DeleteArrayElement("notifies", notifyIndex, "Delete Anim Notify"));
                 menu.AddSeparator("");
             }
@@ -753,11 +994,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (TryHitNotifyState(local, out int notifyStateIndex, out _))
             {
                 menu.AddItem(new GUIContent("Notify State/Replace Notify State..."), false, () => OpenCreatePicker(PendingCreateKind.ReplaceNotifyState, time, "Default", notifyStateIndex));
-                if (Selection.activeObject is AnimNotifyStateSO replacementState)
-                    menu.AddItem(new GUIContent("Notify State/Replace Notify State From Project Selection"), false, () => ReplaceNotifyState(notifyStateIndex, replacementState));
-                else
-                    menu.AddDisabledItem(new GUIContent("Notify State/Replace Notify State From Project Selection"));
+                AddElementColorMenuItems(menu, TrackKind.NotifyState, notifyStateIndex);
                 menu.AddItem(new GUIContent("Notify State/Delete"), false, () => DeleteArrayElement("notifyStates", notifyStateIndex, "Delete Anim Notify State"));
+                menu.AddSeparator("");
+            }
+
+            if (TryHitCustomElement(local, out int customElementIndex))
+            {
+                menu.AddItem(new GUIContent("Custom Element/Delete"), false, () => DeleteArrayElement("customElements", customElementIndex, "Delete Custom Montage Element"));
+                menu.AddItem(new GUIContent("Custom Element/Select"), false, () => context.SetSelectedCustomElement(customElementIndex));
                 menu.AddSeparator("");
             }
 
@@ -774,19 +1019,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 string trackId = row.TrackId;
                 menu.AddItem(new GUIContent("Create/Notify..."), false, () => OpenCreatePicker(PendingCreateKind.Notify, time, trackId));
-                if (Selection.activeObject is AnimNotifySO selectedNotify)
-                    menu.AddItem(new GUIContent("Create/Notify From Project Selection"), false, () => AddNotifyAtTime(time, selectedNotify, trackId));
-                else
-                    menu.AddDisabledItem(new GUIContent("Create/Notify From Project Selection"));
             }
             else if (hasRow && row.Kind == TrackKind.NotifyState)
             {
                 string trackId = row.TrackId;
                 menu.AddItem(new GUIContent("Create/Notify State..."), false, () => OpenCreatePicker(PendingCreateKind.NotifyState, time, trackId));
-                if (Selection.activeObject is AnimNotifyStateSO selectedState)
-                    menu.AddItem(new GUIContent("Create/Notify State From Project Selection"), false, () => AddNotifyStateAtTime(time, selectedState, trackId));
-                else
-                    menu.AddDisabledItem(new GUIContent("Create/Notify State From Project Selection"));
+            }
+            else if (hasRow && row.Kind == TrackKind.Custom)
+            {
+                string trackId = row.TrackId;
+                menu.AddItem(new GUIContent("Create/Custom Element..."), false, () => OpenCreatePicker(PendingCreateKind.CustomElement, time, trackId));
             }
             else
             {
@@ -797,6 +1039,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             menu.AddItem(new GUIContent("Track/Add Animation Track"), false, () => AddTrack("animationTracks", "Animation"));
             menu.AddItem(new GUIContent("Track/Add Notify Track"), false, () => AddTrack("notifyTracks", "Notify"));
             menu.AddItem(new GUIContent("Track/Add Notify State Track"), false, () => AddTrack("notifyStateTracks", "Notify State"));
+            menu.AddItem(new GUIContent("Track/Add Custom Track..."), false, () => OpenCreatePicker(PendingCreateKind.CustomTrack, time, "Default"));
+
             if (hasRow && !string.IsNullOrEmpty(row.TrackId) && row.TrackId != "Default")
             {
                 string propertyName = GetTrackPropertyName(row.Kind);
@@ -809,6 +1053,75 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
 
             menu.ShowAsContext();
+        }
+
+        private void AddElementColorMenuItems(GenericMenu menu, TrackKind kind, int index)
+        {
+            string prefix = kind switch
+            {
+                TrackKind.Segment => "Segment/Color",
+                TrackKind.Notify => "Notify/Color",
+                TrackKind.NotifyState => "Notify State/Color",
+                _ => "Color"
+            };
+
+            menu.AddItem(new GUIContent($"{prefix}/Reset"), false, () => ApplyElementColor(kind, index, Color.clear));
+            menu.AddItem(new GUIContent($"{prefix}/Blue"), false, () => ApplyElementColor(kind, index, new Color(0.32f, 0.58f, 1f, 0.95f)));
+            menu.AddItem(new GUIContent($"{prefix}/Green"), false, () => ApplyElementColor(kind, index, new Color(0.34f, 0.86f, 0.48f, 0.95f)));
+            menu.AddItem(new GUIContent($"{prefix}/Orange"), false, () => ApplyElementColor(kind, index, new Color(1f, 0.58f, 0.22f, 0.95f)));
+            menu.AddItem(new GUIContent($"{prefix}/Pink"), false, () => ApplyElementColor(kind, index, new Color(1f, 0.42f, 0.68f, 0.95f)));
+            menu.AddItem(new GUIContent($"{prefix}/Purple"), false, () => ApplyElementColor(kind, index, new Color(0.72f, 0.46f, 1f, 0.95f)));
+        }
+
+        private void ApplyElementColor(TrackKind kind, int clickedIndex, Color color)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || clickedIndex < 0)
+                return;
+
+            string propertyName = kind switch
+            {
+                TrackKind.Segment => "segments",
+                TrackKind.Notify => "notifies",
+                TrackKind.NotifyState => "notifyStates",
+                TrackKind.Custom => "customElements",
+                _ => null
+            };
+
+            if (string.IsNullOrEmpty(propertyName))
+                return;
+
+            IReadOnlyCollection<int> targets = GetColorTargets(kind, clickedIndex);
+            Undo.RecordObject(montage, "Set Montage Element Color");
+            SerializedObject so = new(montage);
+            SerializedProperty items = so.FindProperty(propertyName);
+            if (items == null)
+                return;
+
+            foreach (int index in targets)
+            {
+                if (index < 0 || index >= items.arraySize)
+                    continue;
+
+                SerializedProperty colorProperty = items.GetArrayElementAtIndex(index).FindPropertyRelative("customColor");
+                if (colorProperty != null)
+                    colorProperty.colorValue = color;
+            }
+
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            MarkDirtyRepaint();
+        }
+
+        private IReadOnlyCollection<int> GetColorTargets(TrackKind kind, int clickedIndex)
+        {
+            return kind switch
+            {
+                TrackKind.Segment when context.IsSegmentSelected(clickedIndex) => context.SelectedSegmentIndices,
+                TrackKind.Notify when context.IsNotifySelected(clickedIndex) => context.SelectedNotifyIndices,
+                TrackKind.NotifyState when context.IsNotifyStateSelected(clickedIndex) => context.SelectedNotifyStateIndices,
+                _ => new[] { clickedIndex }
+            };
         }
 
         private bool IsSegmentTrack(Vector2 local) =>
@@ -835,19 +1148,27 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     break;
 
                 case PendingCreateKind.Notify:
-                    ObjectPickerPopup.Show<AnimNotifySO>("Create Notify", notify => AddNotifyAtTime(time, notify, trackId));
+                    TypePickerPopup.Show<AnimNotify>("Create Notify", notify => AddNotifyAtTime(time, notify, trackId));
                     break;
 
                 case PendingCreateKind.ReplaceNotify:
-                    ObjectPickerPopup.Show<AnimNotifySO>("Replace Notify", notify => ReplaceNotify(editIndex, notify));
+                    TypePickerPopup.Show<AnimNotify>("Replace Notify", notify => ReplaceNotify(editIndex, notify));
                     break;
 
                 case PendingCreateKind.NotifyState:
-                    ObjectPickerPopup.Show<AnimNotifyStateSO>("Create Notify State", state => AddNotifyStateAtTime(time, state, trackId));
+                    TypePickerPopup.Show<AnimNotifyState>("Create Notify State", state => AddNotifyStateAtTime(time, state, trackId));
                     break;
 
                 case PendingCreateKind.ReplaceNotifyState:
-                    ObjectPickerPopup.Show<AnimNotifyStateSO>("Replace Notify State", state => ReplaceNotifyState(editIndex, state));
+                    TypePickerPopup.Show<AnimNotifyState>("Replace Notify State", state => ReplaceNotifyState(editIndex, state));
+                    break;
+
+                case PendingCreateKind.CustomTrack:
+                    TypePickerPopup.Show<MontageTimelineTrack>("Create Custom Track", AddCustomTrack);
+                    break;
+
+                case PendingCreateKind.CustomElement:
+                    TypePickerPopup.Show<MontageTimelineElement>("Create Custom Element", element => AddCustomElementAtTime(time, element, trackId));
                     break;
             }
         }
@@ -882,8 +1203,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (montage == null)
                 return;
 
+            deltaTime = ClampSelectedTimelineMoveDelta(deltaTime, montage);
+
             string targetTrackId = null;
-            if (TryGetTrackRow(local, activeKind, out TrackRowLayout targetRow))
+            bool allowTrackTransfer = dragSegmentStartTimes.Count + dragNotifyTimes.Count + dragNotifyStateRanges.Count <= 1;
+            if (allowTrackTransfer && TryGetTrackRow(local, activeKind, out TrackRowLayout targetRow))
                 targetTrackId = targetRow.TrackId;
 
             Undo.RecordObject(montage, "Move Montage Timeline Elements");
@@ -895,6 +1219,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 if (segments == null || entry.Key < 0 || entry.Key >= segments.arraySize)
                     continue;
 
+                MontageSegment montageSegment = entry.Key < montage.Segments.Count ? montage.Segments[entry.Key] : null;
+                float duration = montageSegment?.Duration ?? 0f;
                 SerializedProperty segment = segments.GetArrayElementAtIndex(entry.Key);
                 segment.FindPropertyRelative("startTime").floatValue = Snap(Mathf.Max(0f, entry.Value + deltaTime));
                 if (activeKind == TrackKind.Segment && targetTrackId != null)
@@ -931,6 +1257,45 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             so.ApplyModifiedProperties();
             context.MarkDirty();
+        }
+
+        private float ClampSelectedTimelineMoveDelta(float deltaTime, AnimMontageSO montage)
+        {
+            if (montage == null)
+                return deltaTime;
+
+            float minTime = float.PositiveInfinity;
+            float maxTime = float.NegativeInfinity;
+
+            foreach (KeyValuePair<int, float> entry in dragSegmentStartTimes)
+            {
+                if (entry.Key < 0 || entry.Key >= montage.Segments.Count)
+                    continue;
+
+                MontageSegment segment = montage.Segments[entry.Key];
+                if (segment == null)
+                    continue;
+
+                minTime = Mathf.Min(minTime, entry.Value);
+                maxTime = Mathf.Max(maxTime, entry.Value + segment.Duration);
+            }
+
+            foreach (KeyValuePair<int, float> entry in dragNotifyTimes)
+            {
+                minTime = Mathf.Min(minTime, entry.Value);
+                maxTime = Mathf.Max(maxTime, entry.Value);
+            }
+
+            foreach (KeyValuePair<int, Vector2> entry in dragNotifyStateRanges)
+            {
+                minTime = Mathf.Min(minTime, entry.Value.x);
+                maxTime = Mathf.Max(maxTime, entry.Value.y);
+            }
+
+            if (float.IsPositiveInfinity(minTime) || float.IsNegativeInfinity(maxTime))
+                return deltaTime;
+
+            return Mathf.Max(deltaTime, -minTime);
         }
 
         private void ApplySegmentTrimStart(int segmentIndex, float startTime)
@@ -1096,8 +1461,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         {
             startTime = Snap(Mathf.Max(0f, startTime));
             endTime = Snap(Mathf.Max(startTime + MinSegmentDuration, endTime));
-            float maxTime = context.Montage.Length;
-            endTime = Mathf.Min(endTime, maxTime);
 
             Undo.RecordObject(context.Montage, "Adjust Notify State");
             AnimNotifyStatePlacement placement = context.Montage.NotifyStates[notifyStateIndex];
@@ -1128,9 +1491,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void AddNotifyAtTime(float time) => AddNotifyAtTime(time, null, "Default");
 
-        private void AddNotifyAtTime(float time, AnimNotifySO notify) => AddNotifyAtTime(time, notify, "Default");
+        private void AddNotifyAtTime(float time, AnimNotify notify) => AddNotifyAtTime(time, notify, "Default");
 
-        private void AddNotifyAtTime(float time, AnimNotifySO notify, string trackId)
+        private void AddNotifyAtTime(float time, AnimNotify notify, string trackId)
         {
             AnimMontageSO montage = context.Montage;
             if (montage == null)
@@ -1143,9 +1506,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             prop.InsertArrayElementAtIndex(index);
             SerializedProperty element = prop.GetArrayElementAtIndex(index);
             element.FindPropertyRelative("time").floatValue = Snap(time);
-            element.FindPropertyRelative("notify").objectReferenceValue = notify;
+            element.FindPropertyRelative("notify").managedReferenceValue = notify;
             element.FindPropertyRelative("trackId").stringValue = SanitizeTrackId(trackId);
-            so.ApplyModifiedPropertiesWithoutUndo();
+            element.FindPropertyRelative("customColor").colorValue = Color.clear;
+            so.ApplyModifiedProperties();
             context.MarkDirty();
             context.SetPlayhead(time);
             context.SetSelectedNotify(index);
@@ -1153,9 +1517,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void AddNotifyStateAtTime(float time) => AddNotifyStateAtTime(time, null, "Default");
 
-        private void AddNotifyStateAtTime(float time, AnimNotifyStateSO notifyState) => AddNotifyStateAtTime(time, notifyState, "Default");
+        private void AddNotifyStateAtTime(float time, AnimNotifyState notifyState) => AddNotifyStateAtTime(time, notifyState, "Default");
 
-        private void AddNotifyStateAtTime(float time, AnimNotifyStateSO notifyState, string trackId)
+        private void AddNotifyStateAtTime(float time, AnimNotifyState notifyState, string trackId)
         {
             AnimMontageSO montage = context.Montage;
             if (montage == null)
@@ -1169,12 +1533,37 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             SerializedProperty element = prop.GetArrayElementAtIndex(index);
             element.FindPropertyRelative("startTime").floatValue = Snap(time);
             element.FindPropertyRelative("endTime").floatValue = Snap(time + DefaultQuickBlendDuration);
-            element.FindPropertyRelative("notifyState").objectReferenceValue = notifyState;
+            element.FindPropertyRelative("notifyState").managedReferenceValue = notifyState;
             element.FindPropertyRelative("trackId").stringValue = SanitizeTrackId(trackId);
+            element.FindPropertyRelative("customColor").colorValue = Color.clear;
             so.ApplyModifiedProperties();
             context.MarkDirty();
             context.SetPlayhead(time);
             context.SetSelectedNotifyState(index);
+        }
+
+        private void AddCustomElementAtTime(float time, MontageTimelineElement elementAsset, string trackId)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return;
+
+            float duration = Mathf.Max(MinSegmentDuration, elementAsset != null ? elementAsset.DefaultDuration : DefaultQuickBlendDuration);
+            Undo.RecordObject(montage, "Add Custom Montage Element");
+            SerializedObject so = new(montage);
+            SerializedProperty prop = so.FindProperty("customElements");
+            int index = prop.arraySize;
+            prop.InsertArrayElementAtIndex(index);
+            SerializedProperty element = prop.GetArrayElementAtIndex(index);
+            element.FindPropertyRelative("startTime").floatValue = Snap(time);
+            element.FindPropertyRelative("endTime").floatValue = Snap(time + duration);
+            element.FindPropertyRelative("trackId").stringValue = SanitizeTrackId(trackId);
+            element.FindPropertyRelative("element").managedReferenceValue = elementAsset;
+            element.FindPropertyRelative("customColor").colorValue = Color.clear;
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetPlayhead(time);
+            context.SetSelected(montage);
         }
 
         private void AddSegmentAtTime(float time, AnimationClip clip) => AddSegmentAtTime(time, clip, "Default");
@@ -1200,6 +1589,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             element.FindPropertyRelative("playRate").floatValue = 1f;
             element.FindPropertyRelative("blendIn").floatValue = 0f;
             element.FindPropertyRelative("blendOut").floatValue = 0f;
+            element.FindPropertyRelative("customColor").colorValue = Color.clear;
             so.ApplyModifiedProperties();
             context.MarkDirty();
             context.SetPlayhead(time);
@@ -1245,7 +1635,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             context.SetSelectedSegment(segmentIndex);
         }
 
-        private void ReplaceNotify(int notifyIndex, AnimNotifySO notify)
+        private void ReplaceNotify(int notifyIndex, AnimNotify notify)
         {
             AnimMontageSO montage = context.Montage;
             if (montage == null || notifyIndex < 0 || notifyIndex >= montage.Notifies.Count)
@@ -1254,13 +1644,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Undo.RecordObject(montage, "Replace Anim Notify");
             SerializedObject so = new(montage);
             SerializedProperty placement = so.FindProperty("notifies").GetArrayElementAtIndex(notifyIndex);
-            placement.FindPropertyRelative("notify").objectReferenceValue = notify;
+            placement.FindPropertyRelative("notify").managedReferenceValue = notify;
             so.ApplyModifiedProperties();
             context.MarkDirty();
             context.SetSelectedNotify(notifyIndex);
         }
 
-        private void ReplaceNotifyState(int notifyStateIndex, AnimNotifyStateSO notifyState)
+        private void ReplaceNotifyState(int notifyStateIndex, AnimNotifyState notifyState)
         {
             AnimMontageSO montage = context.Montage;
             if (montage == null || notifyStateIndex < 0 || notifyStateIndex >= montage.NotifyStates.Count)
@@ -1269,7 +1659,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Undo.RecordObject(montage, "Replace Anim Notify State");
             SerializedObject so = new(montage);
             SerializedProperty placement = so.FindProperty("notifyStates").GetArrayElementAtIndex(notifyStateIndex);
-            placement.FindPropertyRelative("notifyState").objectReferenceValue = notifyState;
+            placement.FindPropertyRelative("notifyState").managedReferenceValue = notifyState;
             so.ApplyModifiedProperties();
             context.MarkDirty();
             context.SetSelectedNotifyState(notifyStateIndex);
@@ -1282,8 +1672,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (context.SelectedSegmentIndices.Count > 0
                 || context.SelectedNotifyIndices.Count > 0
-                || context.SelectedNotifyStateIndices.Count > 0)
+                || context.SelectedNotifyStateIndices.Count > 0
+                || context.SelectedCustomElementIndices.Count > 0)
                 return DeleteSelectedTimelineElements();
+
+            if (context.SelectedTimelineTrackKeys.Count > 0)
+                return DeleteSelectedTimelineTracks();
 
             return false;
         }
@@ -1336,9 +1730,67 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             DeleteArrayElementsWithoutApply(so.FindProperty("segments"), context.SelectedSegmentIndices);
             DeleteArrayElementsWithoutApply(so.FindProperty("notifies"), context.SelectedNotifyIndices);
             DeleteArrayElementsWithoutApply(so.FindProperty("notifyStates"), context.SelectedNotifyStateIndices);
+            DeleteArrayElementsWithoutApply(so.FindProperty("customElements"), context.SelectedCustomElementIndices);
             so.ApplyModifiedProperties();
             context.MarkDirty();
             context.SetSelected(montage);
+            return true;
+        }
+
+        private bool DeleteSelectedTimelineTracks()
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || context.SelectedTimelineTrackKeys.Count == 0)
+                return false;
+
+            var tracksToDelete = new List<TrackIdentity>();
+            foreach (string key in context.SelectedTimelineTrackKeys)
+            {
+                if (!TryParseTrackKey(key, out TrackIdentity identity) || identity.TrackId == "Default")
+                    continue;
+
+                tracksToDelete.Add(identity);
+            }
+
+            if (tracksToDelete.Count == 0)
+                return false;
+
+            int itemCount = 0;
+            for (int i = 0; i < tracksToDelete.Count; i++)
+                itemCount += CountTrackItems(montage, tracksToDelete[i].Kind, tracksToDelete[i].TrackId);
+
+            string message = itemCount > 0
+                ? $"Delete {tracksToDelete.Count} track(s) and {itemCount} item(s) on them?"
+                : $"Delete {tracksToDelete.Count} track(s)?";
+            if (!EditorUtility.DisplayDialog("Delete Montage Track", message, "Delete", "Cancel"))
+                return false;
+
+            Undo.RecordObject(montage, "Delete Montage Track");
+            SerializedObject so = new(montage);
+            SerializedProperty order = so.FindProperty("timelineTrackOrder");
+            for (int i = 0; i < tracksToDelete.Count; i++)
+            {
+                TrackIdentity track = tracksToDelete[i];
+                DeleteTrackItems(so, track.Kind, track.TrackId);
+
+                SerializedProperty tracks = so.FindProperty(GetTrackPropertyName(track.Kind));
+                if (tracks != null)
+                {
+                    for (int j = tracks.arraySize - 1; j >= 0; j--)
+                    {
+                        if (SanitizeTrackId(tracks.GetArrayElementAtIndex(j).stringValue) == track.TrackId)
+                            tracks.DeleteArrayElementAtIndex(j);
+                    }
+                }
+
+                if (order != null)
+                    RemoveTrackKeyFromOrder(order, GetTrackKey(track.Kind, track.TrackId));
+            }
+
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetSelected(montage);
+            MarkDirtyRepaint();
             return true;
         }
 
@@ -1401,6 +1853,36 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             MarkDirtyRepaint();
         }
 
+        private void AddCustomTrack(MontageTimelineTrack trackType)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return;
+
+            Undo.RecordObject(montage, "Add Custom Montage Track");
+            SerializedObject so = new(montage);
+            SerializedProperty tracks = so.FindProperty("customTracks");
+            if (tracks == null)
+                return;
+
+            string displayName = trackType != null ? trackType.DisplayName : "Custom";
+            string trackId = CreateUniqueCustomTrackId(tracks, displayName);
+            int index = tracks.arraySize;
+            tracks.InsertArrayElementAtIndex(index);
+            SerializedProperty track = tracks.GetArrayElementAtIndex(index);
+            track.FindPropertyRelative("trackId").stringValue = trackId;
+            track.FindPropertyRelative("trackType").managedReferenceValue = trackType;
+            track.FindPropertyRelative("customColor").colorValue = Color.clear;
+
+            SerializedProperty order = so.FindProperty("timelineTrackOrder");
+            if (order != null)
+                EnsureTrackKeyInOrder(order, GetTrackKey(TrackKind.Custom, trackId));
+
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            MarkDirtyRepaint();
+        }
+
         private void DeleteTrack(TrackKind kind, string propertyName, string trackId)
         {
             AnimMontageSO montage = context.Montage;
@@ -1424,7 +1906,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 for (int i = tracks.arraySize - 1; i >= 0; i--)
                 {
-                    if (SanitizeTrackId(tracks.GetArrayElementAtIndex(i).stringValue) == trackId)
+                    SerializedProperty track = tracks.GetArrayElementAtIndex(i);
+                    SerializedProperty customTrackId = track.FindPropertyRelative("trackId");
+                    string currentTrackId = customTrackId != null
+                        ? customTrackId.stringValue
+                        : track.stringValue;
+                    if (SanitizeTrackId(currentTrackId) == trackId)
                         tracks.DeleteArrayElementAtIndex(i);
                 }
             }
@@ -1464,8 +1951,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             Undo.RecordObject(montage, "Reorder Montage Track");
             SerializedObject so = new(montage);
-            EnsureTrackInProperty(so.FindProperty(GetTrackPropertyName(sourceKind)), sourceTrackId);
-            EnsureTrackInProperty(so.FindProperty(GetTrackPropertyName(targetKind)), targetTrackId);
+            if (sourceKind != TrackKind.Custom)
+                EnsureTrackInProperty(so.FindProperty(GetTrackPropertyName(sourceKind)), sourceTrackId);
+            if (targetKind != TrackKind.Custom)
+                EnsureTrackInProperty(so.FindProperty(GetTrackPropertyName(targetKind)), targetTrackId);
 
             SerializedProperty order = so.FindProperty("timelineTrackOrder");
             if (order == null)
@@ -1492,7 +1981,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         {
             Rect selectionRect = GetBoxSelectionRect();
             if (selectionRect.width < 3f && selectionRect.height < 3f)
+            {
+                if (!boxSelectAdditive)
+                    context.SetSelected(context.Montage);
+
                 return;
+            }
 
             var segmentSelection = new List<int>();
             for (int i = 0; i < segmentLayouts.Count; i++)
@@ -1518,6 +2012,14 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     stateSelection.Add(layout.Index);
             }
 
+            var customElementSelection = new List<int>();
+            for (int i = 0; i < customElementLayouts.Count; i++)
+            {
+                CustomElementLayout layout = customElementLayouts[i];
+                if (layout.Body.Overlaps(selectionRect))
+                    customElementSelection.Add(layout.Index);
+            }
+
             var trackSelection = new List<string>();
             for (int i = 0; i < trackRows.Count; i++)
             {
@@ -1527,10 +2029,378 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     trackSelection.Add(GetTrackKey(row.Kind, row.TrackId));
             }
 
-            if (segmentSelection.Count > 0 || notifySelection.Count > 0 || stateSelection.Count > 0 || trackSelection.Count > 0)
-                context.SetSelectedTimelineElements(segmentSelection, notifySelection, stateSelection, trackSelection, boxSelectAdditive);
+            if (segmentSelection.Count > 0
+                || notifySelection.Count > 0
+                || stateSelection.Count > 0
+                || customElementSelection.Count > 0
+                || trackSelection.Count > 0)
+                context.SetSelectedTimelineElements(segmentSelection, notifySelection, stateSelection, customElementSelection, trackSelection, boxSelectAdditive);
             else if (!boxSelectAdditive)
                 context.SetSelected(context.Montage);
+        }
+
+        private void SelectAllTimelineElements()
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return;
+
+            var segmentSelection = new List<int>();
+            for (int i = 0; i < montage.Segments.Count; i++)
+                segmentSelection.Add(i);
+
+            var notifySelection = new List<int>();
+            for (int i = 0; i < montage.Notifies.Count; i++)
+                notifySelection.Add(i);
+
+            var stateSelection = new List<int>();
+            for (int i = 0; i < montage.NotifyStates.Count; i++)
+                stateSelection.Add(i);
+
+            var customElementSelection = new List<int>();
+            for (int i = 0; i < montage.CustomElements.Count; i++)
+                customElementSelection.Add(i);
+
+            context.SetSelectedTimelineElements(segmentSelection, notifySelection, stateSelection, customElementSelection, Array.Empty<string>());
+            MarkDirtyRepaint();
+        }
+
+        private bool CopySelectionToClipboard()
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return false;
+
+            ClearClipboard();
+
+            bool hasElementSelection = context.SelectedSegmentIndices.Count > 0
+                || context.SelectedNotifyIndices.Count > 0
+                || context.SelectedNotifyStateIndices.Count > 0;
+
+            if (hasElementSelection)
+            {
+                SerializedObject so = new(montage);
+                CopySelectedSegments(so.FindProperty("segments"));
+                CopySelectedNotifies(so.FindProperty("notifies"));
+                CopySelectedNotifyStates(so.FindProperty("notifyStates"));
+                clipboardKind = copiedSegments.Count > 0 || copiedNotifies.Count > 0 || copiedNotifyStates.Count > 0
+                    ? ClipboardContentKind.Elements
+                    : ClipboardContentKind.None;
+                return clipboardKind != ClipboardContentKind.None;
+            }
+
+            foreach (string key in context.SelectedTimelineTrackKeys)
+            {
+                if (TryParseTrackKey(key, out TrackIdentity identity))
+                    copiedTracks.Add(identity);
+            }
+
+            clipboardKind = copiedTracks.Count > 0 ? ClipboardContentKind.Tracks : ClipboardContentKind.None;
+            return clipboardKind != ClipboardContentKind.None;
+        }
+
+        private bool DuplicateSelection()
+        {
+            if (!CopySelectionToClipboard())
+                return false;
+
+            return PasteClipboard(false);
+        }
+
+        private bool PasteClipboard(bool alignToPointer)
+        {
+            return clipboardKind switch
+            {
+                ClipboardContentKind.Tracks => PasteCopiedTracks(),
+                ClipboardContentKind.Elements => PasteCopiedElements(alignToPointer),
+                _ => false
+            };
+        }
+
+        private void ClearClipboard()
+        {
+            copiedTracks.Clear();
+            copiedSegments.Clear();
+            copiedNotifies.Clear();
+            copiedNotifyStates.Clear();
+            clipboardKind = ClipboardContentKind.None;
+        }
+
+        private static T CloneManagedReference<T>(T source) where T : class
+        {
+            if (source == null)
+                return null;
+
+            Type type = source.GetType();
+            if (Activator.CreateInstance(type) is not T clone)
+                return null;
+
+            JsonUtility.FromJsonOverwrite(JsonUtility.ToJson(source), clone);
+            return clone;
+        }
+
+        private void CopySelectedSegments(SerializedProperty segments)
+        {
+            if (segments == null)
+                return;
+
+            foreach (int index in context.SelectedSegmentIndices)
+            {
+                if (index < 0 || index >= segments.arraySize)
+                    continue;
+
+                SerializedProperty segment = segments.GetArrayElementAtIndex(index);
+                copiedSegments.Add(new SegmentClipboardData(
+                    segment.FindPropertyRelative("sectionName")?.stringValue ?? "Default",
+                    SanitizeTrackId(segment.FindPropertyRelative("trackId")?.stringValue),
+                    segment.FindPropertyRelative("clip")?.objectReferenceValue as AnimationClip,
+                    segment.FindPropertyRelative("startTime")?.floatValue ?? 0f,
+                    segment.FindPropertyRelative("clipStartTime")?.floatValue ?? 0f,
+                    segment.FindPropertyRelative("clipEndTime")?.floatValue ?? 0f,
+                    segment.FindPropertyRelative("playRate")?.floatValue ?? 1f,
+                    segment.FindPropertyRelative("blendIn")?.floatValue ?? 0f,
+                    segment.FindPropertyRelative("blendOut")?.floatValue ?? 0f,
+                    segment.FindPropertyRelative("customColor")?.colorValue ?? Color.clear));
+            }
+        }
+
+        private void CopySelectedNotifies(SerializedProperty notifies)
+        {
+            if (notifies == null)
+                return;
+
+            foreach (int index in context.SelectedNotifyIndices)
+            {
+                if (index < 0 || index >= notifies.arraySize)
+                    continue;
+
+                SerializedProperty notify = notifies.GetArrayElementAtIndex(index);
+                copiedNotifies.Add(new NotifyClipboardData(
+                    notify.FindPropertyRelative("time")?.floatValue ?? 0f,
+                    notify.FindPropertyRelative("notify")?.managedReferenceValue as AnimNotify,
+                    SanitizeTrackId(notify.FindPropertyRelative("trackId")?.stringValue),
+                    notify.FindPropertyRelative("triggerWeightThreshold")?.floatValue ?? 0f,
+                    notify.FindPropertyRelative("customColor")?.colorValue ?? Color.clear));
+            }
+        }
+
+        private void CopySelectedNotifyStates(SerializedProperty notifyStates)
+        {
+            if (notifyStates == null)
+                return;
+
+            foreach (int index in context.SelectedNotifyStateIndices)
+            {
+                if (index < 0 || index >= notifyStates.arraySize)
+                    continue;
+
+                SerializedProperty state = notifyStates.GetArrayElementAtIndex(index);
+                copiedNotifyStates.Add(new NotifyStateClipboardData(
+                    state.FindPropertyRelative("startTime")?.floatValue ?? 0f,
+                    state.FindPropertyRelative("endTime")?.floatValue ?? 0f,
+                    state.FindPropertyRelative("notifyState")?.managedReferenceValue as AnimNotifyState,
+                    SanitizeTrackId(state.FindPropertyRelative("trackId")?.stringValue),
+                    state.FindPropertyRelative("customColor")?.colorValue ?? Color.clear));
+            }
+        }
+
+        private bool PasteCopiedTracks()
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || copiedTracks.Count == 0)
+                return false;
+
+            Undo.RecordObject(montage, "Duplicate Montage Track");
+            SerializedObject so = new(montage);
+            SerializedProperty order = so.FindProperty("timelineTrackOrder");
+            var newTrackKeys = new List<string>();
+
+            for (int i = 0; i < copiedTracks.Count; i++)
+            {
+                TrackIdentity source = copiedTracks[i];
+                SerializedProperty tracks = so.FindProperty(GetTrackPropertyName(source.Kind));
+                if (tracks == null)
+                    continue;
+
+                int index = tracks.arraySize;
+                tracks.InsertArrayElementAtIndex(index);
+                string trackId;
+                SerializedProperty track = tracks.GetArrayElementAtIndex(index);
+                if (source.Kind == TrackKind.Custom)
+                {
+                    CustomMontageTrack sourceTrack = FindCustomTrack(montage, source.TrackId);
+                    trackId = CreateUniqueCustomTrackId(tracks, $"{source.TrackId} Copy");
+                    track.FindPropertyRelative("trackId").stringValue = trackId;
+                    track.FindPropertyRelative("trackType").managedReferenceValue = CloneManagedReference(sourceTrack?.TrackType);
+                    track.FindPropertyRelative("customColor").colorValue = sourceTrack?.CustomColor ?? Color.clear;
+                }
+                else
+                {
+                    trackId = CreateUniqueTrackId(tracks, $"{source.TrackId} Copy");
+                    track.stringValue = trackId;
+                }
+
+                string key = GetTrackKey(source.Kind, trackId);
+                if (order != null)
+                    EnsureTrackKeyInOrder(order, key);
+
+                newTrackKeys.Add(key);
+            }
+
+            if (newTrackKeys.Count == 0)
+                return false;
+
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetSelectedTimelineTracks(newTrackKeys);
+            MarkDirtyRepaint();
+            return true;
+        }
+
+        private bool PasteCopiedElements(bool alignToPointer)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || (copiedSegments.Count == 0 && copiedNotifies.Count == 0 && copiedNotifyStates.Count == 0))
+                return false;
+
+            TrackIdentity? pasteTarget = GetElementPasteTarget();
+            float timeOffset = alignToPointer ? Snap(XToTime(lastPointerLocal.x) - GetCopiedElementsMinTime()) : 0f;
+            Undo.RecordObject(montage, "Paste Montage Timeline Elements");
+            SerializedObject so = new(montage);
+            var newSegments = new List<int>();
+            var newNotifies = new List<int>();
+            var newStates = new List<int>();
+
+            PasteSegments(so.FindProperty("segments"), pasteTarget, timeOffset, newSegments);
+            PasteNotifies(so.FindProperty("notifies"), pasteTarget, timeOffset, newNotifies);
+            PasteNotifyStates(so.FindProperty("notifyStates"), pasteTarget, timeOffset, newStates);
+
+            if (newSegments.Count == 0 && newNotifies.Count == 0 && newStates.Count == 0)
+                return false;
+
+            so.ApplyModifiedProperties();
+            context.MarkDirty();
+            context.SetSelectedTimelineElements(newSegments, newNotifies, newStates, Array.Empty<int>(), Array.Empty<string>());
+            MarkDirtyRepaint();
+            return true;
+        }
+
+        private float GetCopiedElementsMinTime()
+        {
+            float minTime = float.PositiveInfinity;
+
+            for (int i = 0; i < copiedSegments.Count; i++)
+                minTime = Mathf.Min(minTime, copiedSegments[i].StartTime);
+
+            for (int i = 0; i < copiedNotifies.Count; i++)
+                minTime = Mathf.Min(minTime, copiedNotifies[i].Time);
+
+            for (int i = 0; i < copiedNotifyStates.Count; i++)
+                minTime = Mathf.Min(minTime, copiedNotifyStates[i].StartTime);
+
+            return float.IsPositiveInfinity(minTime) ? 0f : minTime;
+        }
+
+        private TrackIdentity? GetElementPasteTarget()
+        {
+            int typeCount = 0;
+            TrackKind onlyKind = TrackKind.Segment;
+            if (copiedSegments.Count > 0)
+            {
+                typeCount++;
+                onlyKind = TrackKind.Segment;
+            }
+
+            if (copiedNotifies.Count > 0)
+            {
+                typeCount++;
+                onlyKind = TrackKind.Notify;
+            }
+
+            if (copiedNotifyStates.Count > 0)
+            {
+                typeCount++;
+                onlyKind = TrackKind.NotifyState;
+            }
+
+            if (typeCount != 1 || !TryGetTrackRow(lastPointerLocal, onlyKind, out TrackRowLayout row))
+                return null;
+
+            return new TrackIdentity(row.Kind, row.TrackId);
+        }
+
+        private void PasteSegments(SerializedProperty segments, TrackIdentity? pasteTarget, float timeOffset, List<int> newIndices)
+        {
+            if (segments == null)
+                return;
+
+            for (int i = 0; i < copiedSegments.Count; i++)
+            {
+                SegmentClipboardData source = copiedSegments[i];
+                int index = segments.arraySize;
+                segments.InsertArrayElementAtIndex(index);
+                SerializedProperty segment = segments.GetArrayElementAtIndex(index);
+                segment.FindPropertyRelative("sectionName").stringValue = source.SectionName;
+                segment.FindPropertyRelative("trackId").stringValue = pasteTarget.HasValue && pasteTarget.Value.Kind == TrackKind.Segment
+                    ? pasteTarget.Value.TrackId
+                    : source.TrackId;
+                segment.FindPropertyRelative("clip").objectReferenceValue = source.Clip;
+                segment.FindPropertyRelative("startTime").floatValue = Snap(Mathf.Max(0f, source.StartTime + timeOffset));
+                segment.FindPropertyRelative("clipStartTime").floatValue = source.ClipStartTime;
+                segment.FindPropertyRelative("clipEndTime").floatValue = source.ClipEndTime;
+                segment.FindPropertyRelative("playRate").floatValue = source.PlayRate;
+                segment.FindPropertyRelative("blendIn").floatValue = source.BlendIn;
+                segment.FindPropertyRelative("blendOut").floatValue = source.BlendOut;
+                segment.FindPropertyRelative("customColor").colorValue = source.CustomColor;
+                newIndices.Add(index);
+            }
+        }
+
+        private void PasteNotifies(SerializedProperty notifies, TrackIdentity? pasteTarget, float timeOffset, List<int> newIndices)
+        {
+            if (notifies == null)
+                return;
+
+            for (int i = 0; i < copiedNotifies.Count; i++)
+            {
+                NotifyClipboardData source = copiedNotifies[i];
+                int index = notifies.arraySize;
+                notifies.InsertArrayElementAtIndex(index);
+                SerializedProperty notify = notifies.GetArrayElementAtIndex(index);
+                notify.FindPropertyRelative("time").floatValue = Snap(Mathf.Max(0f, source.Time + timeOffset));
+                notify.FindPropertyRelative("notify").managedReferenceValue = CloneManagedReference(source.Notify);
+                notify.FindPropertyRelative("trackId").stringValue = pasteTarget.HasValue && pasteTarget.Value.Kind == TrackKind.Notify
+                    ? pasteTarget.Value.TrackId
+                    : source.TrackId;
+                SerializedProperty trigger = notify.FindPropertyRelative("triggerWeightThreshold");
+                if (trigger != null)
+                    trigger.floatValue = source.TriggerWeightThreshold;
+                notify.FindPropertyRelative("customColor").colorValue = source.CustomColor;
+                newIndices.Add(index);
+            }
+        }
+
+        private void PasteNotifyStates(SerializedProperty notifyStates, TrackIdentity? pasteTarget, float timeOffset, List<int> newIndices)
+        {
+            if (notifyStates == null)
+                return;
+
+            for (int i = 0; i < copiedNotifyStates.Count; i++)
+            {
+                NotifyStateClipboardData source = copiedNotifyStates[i];
+                int index = notifyStates.arraySize;
+                notifyStates.InsertArrayElementAtIndex(index);
+                SerializedProperty state = notifyStates.GetArrayElementAtIndex(index);
+                float startTime = Snap(Mathf.Max(0f, source.StartTime + timeOffset));
+                state.FindPropertyRelative("startTime").floatValue = startTime;
+                state.FindPropertyRelative("endTime").floatValue = Snap(Mathf.Max(startTime, source.EndTime + timeOffset));
+                state.FindPropertyRelative("notifyState").managedReferenceValue = CloneManagedReference(source.NotifyState);
+                state.FindPropertyRelative("trackId").stringValue = pasteTarget.HasValue && pasteTarget.Value.Kind == TrackKind.NotifyState
+                    ? pasteTarget.Value.TrackId
+                    : source.TrackId;
+                state.FindPropertyRelative("customColor").colorValue = source.CustomColor;
+                newIndices.Add(index);
+            }
         }
 
         private Rect GetBoxSelectionRect()
@@ -1566,6 +2436,59 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 if (itemTrack != null && SanitizeTrackId(itemTrack.stringValue) == trackId)
                     items.DeleteArrayElementAtIndex(i);
             }
+        }
+
+        private static int CountTrackItems(AnimMontageSO montage, TrackKind kind, string trackId)
+        {
+            if (montage == null)
+                return 0;
+
+            int count = 0;
+            trackId = SanitizeTrackId(trackId);
+            switch (kind)
+            {
+                case TrackKind.Segment:
+                    for (int i = 0; i < montage.Segments.Count; i++)
+                    {
+                        MontageSegment segment = montage.Segments[i];
+                        if (segment != null && segment.TrackId == trackId)
+                            count++;
+                    }
+
+                    break;
+
+                case TrackKind.Notify:
+                    for (int i = 0; i < montage.Notifies.Count; i++)
+                    {
+                        AnimNotifyPlacement notify = montage.Notifies[i];
+                        if (notify != null && notify.TrackId == trackId)
+                            count++;
+                    }
+
+                    break;
+
+                case TrackKind.NotifyState:
+                    for (int i = 0; i < montage.NotifyStates.Count; i++)
+                    {
+                        AnimNotifyStatePlacement state = montage.NotifyStates[i];
+                        if (state != null && state.TrackId == trackId)
+                            count++;
+                    }
+
+                    break;
+
+                case TrackKind.Custom:
+                    for (int i = 0; i < montage.CustomElements.Count; i++)
+                    {
+                        CustomMontageElementPlacement element = montage.CustomElements[i];
+                        if (element != null && element.TrackId == trackId)
+                            count++;
+                    }
+
+                    break;
+            }
+
+            return count;
         }
 
         private static void EnsureTrackInProperty(SerializedProperty tracks, string trackId)
@@ -1652,12 +2575,39 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
         }
 
+        private static string CreateUniqueCustomTrackId(SerializedProperty tracks, string displayName)
+        {
+            displayName = string.IsNullOrWhiteSpace(displayName) ? "Custom" : displayName.Trim();
+            int suffix = Mathf.Max(1, tracks.arraySize);
+            while (true)
+            {
+                string candidate = $"{displayName} {suffix}";
+                bool exists = false;
+                for (int i = 0; i < tracks.arraySize; i++)
+                {
+                    SerializedProperty track = tracks.GetArrayElementAtIndex(i);
+                    SerializedProperty trackId = track.FindPropertyRelative("trackId");
+                    if (trackId != null && SanitizeTrackId(trackId.stringValue) == candidate)
+                    {
+                        exists = true;
+                        break;
+                    }
+                }
+
+                if (!exists)
+                    return candidate;
+
+                suffix++;
+            }
+        }
+
         private static string GetTrackPropertyName(TrackKind kind) =>
             kind switch
             {
                 TrackKind.Segment => "animationTracks",
                 TrackKind.Notify => "notifyTracks",
                 TrackKind.NotifyState => "notifyStateTracks",
+                TrackKind.Custom => "customTracks",
                 _ => string.Empty
             };
 
@@ -1692,6 +2642,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             segmentLayouts.Clear();
             notifyLayouts.Clear();
             notifyStateLayouts.Clear();
+            customElementLayouts.Clear();
             trackRows.Clear();
 
             var painter = ctx.painter2D;
@@ -1722,6 +2673,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
                     case TrackKind.NotifyState:
                         y = DrawNotifyStateTrack(painter, rect, y, montage, track.TrackId);
+                        break;
+
+                    case TrackKind.Custom:
+                        y = DrawCustomTrack(painter, rect, y, montage, track.TrackId);
                         break;
                 }
             }
@@ -1811,8 +2766,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     continue;
 
                 bool selected = context.IsSegmentSelected(segmentIndex);
+                Color segmentColor = segment.HasCustomColor ? segment.CustomColor : SegmentCoreColor;
 
-                painter.fillColor = selected ? SegmentSelectedColor : SegmentCoreColor;
+                painter.fillColor = selected ? HighlightColor(segmentColor) : segmentColor;
                 FillRoundedRect(painter, clippedBody, 3f);
                 painter.strokeColor = selected ? new Color(1f, 1f, 1f, 0.7f) : new Color(1f, 1f, 1f, 0.22f);
                 painter.lineWidth = selected ? 1.6f : 1f;
@@ -1850,7 +2806,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 if (placement == null || placement.TrackId != trackId)
                     continue;
 
-                Color color = placement.Notify != null ? placement.Notify.EditorColor : new Color(0.4f, 0.8f, 1f);
+                Color color = placement.HasCustomColor
+                    ? placement.CustomColor
+                    : placement.Notify != null ? placement.Notify.EditorColor : new Color(0.4f, 0.8f, 1f);
                 float x = TimeToX(placement.Time);
                 if (x < contentRect.xMin - 8f || x > contentRect.xMax + 8f)
                     continue;
@@ -1887,11 +2845,53 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     continue;
 
                 bool selected = context.IsNotifyStateSelected(i);
+                Color stateColor = placement.HasCustomColor
+                    ? placement.CustomColor
+                    : placement.NotifyState.EditorColor;
                 painter.fillColor = selected
-                    ? placement.NotifyState.EditorColor * new Color(1f, 1f, 1f, 0.85f)
-                    : placement.NotifyState.EditorColor * new Color(1f, 1f, 1f, 0.55f);
+                    ? HighlightColor(stateColor) * new Color(1f, 1f, 1f, 0.85f)
+                    : stateColor * new Color(1f, 1f, 1f, 0.55f);
                 FillRoundedRect(painter, clippedBar, 3f);
                 notifyStateLayouts.Add(new NotifyStateLayout(i, clippedBar));
+            }
+
+            return y + TrackHeight + TrackGap;
+        }
+
+        private float DrawCustomTrack(Painter2D painter, Rect rect, float y, AnimMontageSO montage, string trackId)
+        {
+            CustomMontageTrack track = FindCustomTrack(montage, trackId);
+            Color trackColor = track != null && track.HasCustomColor
+                ? track.CustomColor
+                : track?.TrackType != null ? track.TrackType.EditorColor : new Color(0.62f, 0.44f, 0.86f, 0.32f);
+            DrawTrackRow(painter, rect, y, trackColor * new Color(1f, 1f, 1f, 0.35f), TrackKind.Custom, trackId);
+            trackRows.Add(new TrackRowLayout(TrackKind.Custom, trackId, new Rect(rect.xMin, y, rect.width, TrackHeight)));
+            Rect contentRect = GetTimelineContentRect(rect);
+
+            for (int i = 0; i < montage.CustomElements.Count; i++)
+            {
+                CustomMontageElementPlacement placement = montage.CustomElements[i];
+                if (placement == null || placement.TrackId != trackId)
+                    continue;
+
+                float x0 = TimeToX(placement.StartTime);
+                float x1 = TimeToX(placement.EndTime);
+                var body = new Rect(x0, y + 4f, Mathf.Max(4f, x1 - x0), TrackHeight - 8f);
+                if (!TryClipRect(body, contentRect, out Rect clippedBody))
+                    continue;
+
+                Color elementColor = placement.HasCustomColor
+                    ? placement.CustomColor
+                    : placement.Element != null ? placement.Element.EditorColor : trackColor;
+                bool selected = context.IsCustomElementSelected(i);
+                painter.fillColor = selected
+                    ? HighlightColor(elementColor)
+                    : elementColor * new Color(1f, 1f, 1f, 0.72f);
+                FillRoundedRect(painter, clippedBody, 3f);
+                painter.strokeColor = selected ? new Color(1f, 1f, 1f, 0.72f) : new Color(1f, 1f, 1f, 0.28f);
+                painter.lineWidth = selected ? 1.6f : 1f;
+                StrokeRoundedRect(painter, clippedBody, 3f);
+                customElementLayouts.Add(new CustomElementLayout(i, clippedBody));
             }
 
             return y + TrackHeight + TrackGap;
@@ -2226,6 +3226,22 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return false;
         }
 
+        private bool TryHitCustomElement(Vector2 local, out int index)
+        {
+            index = -1;
+            for (int i = customElementLayouts.Count - 1; i >= 0; i--)
+            {
+                CustomElementLayout layout = customElementLayouts[i];
+                if (!layout.Body.Contains(local))
+                    continue;
+
+                index = layout.Index;
+                return true;
+            }
+
+            return false;
+        }
+
         private bool TryGetTrackRow(Vector2 local, out TrackRowLayout row)
         {
             for (int i = trackRows.Count - 1; i >= 0; i--)
@@ -2326,7 +3342,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     continue;
 
                 AnimNotifyStatePlacement placement = context.Montage.NotifyStates[layout.Index];
-                string stateName = placement.NotifyState != null ? placement.NotifyState.name : "Notify State";
+                string stateName = placement.NotifyState != null ? placement.NotifyState.DisplayName : "Notify State";
                 tooltip = new HoverTooltipInfo(stateName, 120f);
                 return true;
             }
@@ -2334,8 +3350,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (TryHitNotify(local, out int notifyIndex))
             {
                 AnimNotifyPlacement placement = context.Montage.Notifies[notifyIndex];
-                string notifyName = placement.Notify != null ? placement.Notify.name : "Notify";
+                string notifyName = placement.Notify != null ? placement.Notify.DisplayName : "Notify";
                 tooltip = new HoverTooltipInfo(notifyName, 96f);
+                return true;
+            }
+
+            if (TryHitCustomElement(local, out int customElementIndex))
+            {
+                CustomMontageElementPlacement placement = context.Montage.CustomElements[customElementIndex];
+                string elementName = placement.Element != null ? placement.Element.DisplayName : "Custom Element";
+                tooltip = new HoverTooltipInfo(elementName, 120f);
                 return true;
             }
 
@@ -2364,8 +3388,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 TrackKind.Segment => "Animation",
                 TrackKind.Notify => "Notify",
                 TrackKind.NotifyState => "Notify State",
+                TrackKind.Custom => "Custom",
                 _ => "Track"
             };
+
+        private static Color HighlightColor(Color color) =>
+            new(
+                Mathf.Clamp01(color.r + 0.12f),
+                Mathf.Clamp01(color.g + 0.12f),
+                Mathf.Clamp01(color.b + 0.12f),
+                Mathf.Clamp(color.a <= 0f ? 0.98f : color.a, 0.55f, 1f));
 
         private static List<TrackIdentity> GetOrderedTimelineTracks(AnimMontageSO montage)
         {
@@ -2400,6 +3432,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             AddTrackIdentities(tracks, TrackKind.Segment, GetAnimationTrackIds(montage));
             AddTrackIdentities(tracks, TrackKind.Notify, GetNotifyTrackIds(montage));
             AddTrackIdentities(tracks, TrackKind.NotifyState, GetNotifyStateTrackIds(montage));
+            AddTrackIdentities(tracks, TrackKind.Custom, GetCustomTrackIds(montage));
             return tracks;
         }
 
@@ -2483,6 +3516,39 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
 
             return tracks;
+        }
+
+        private static List<string> GetCustomTrackIds(AnimMontageSO montage)
+        {
+            List<string> tracks = new();
+            for (int i = 0; i < montage.CustomTracks.Count; i++)
+            {
+                CustomMontageTrack track = montage.CustomTracks[i];
+                if (track != null)
+                    AddTrackId(tracks, track.TrackId);
+            }
+
+            for (int i = 0; i < montage.CustomElements.Count; i++)
+            {
+                CustomMontageElementPlacement element = montage.CustomElements[i];
+                if (element != null)
+                    AddTrackId(tracks, element.TrackId);
+            }
+
+            return tracks;
+        }
+
+        private static CustomMontageTrack FindCustomTrack(AnimMontageSO montage, string trackId)
+        {
+            trackId = SanitizeTrackId(trackId);
+            for (int i = 0; i < montage.CustomTracks.Count; i++)
+            {
+                CustomMontageTrack track = montage.CustomTracks[i];
+                if (track != null && track.TrackId == trackId)
+                    return track;
+            }
+
+            return null;
         }
 
         private static List<string> CreateTrackList(IReadOnlyList<string> source)

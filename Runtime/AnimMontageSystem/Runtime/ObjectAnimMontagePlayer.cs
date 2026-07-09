@@ -27,7 +27,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public bool IsPlaying => playback.IsPlaying;
         public bool IsPaused => playback.IsPaused;
 
-        public event Action<AnimNotifySO, AnimNotifyContext> NotifyFired;
+        public event Action<AnimNotify, AnimNotifyContext> NotifyFired;
 
         private void Awake()
         {
@@ -79,7 +79,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             dispatcher.ScrubTo(playback, gameObject, animator);
         }
 
-        public bool TryHandle(AnimNotifySO notify, AnimNotifyContext context) => false;
+        public bool TryHandle(AnimNotify notify, AnimNotifyContext context) => false;
 
         private void EnsureGraph()
         {
@@ -156,7 +156,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (mixer.IsValid())
                 mixer.Destroy();
 
-            mixer = AnimationMixerPlayable.Create(graph, required, true);
+            mixer = AnimationMixerPlayable.Create(graph, required);
             mixerInputCount = required;
             output.SetSourcePlayable(mixer);
             clipPlayables.Clear();

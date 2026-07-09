@@ -78,7 +78,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     "startTime",
                     "clipStartTime",
                     "clipEndTime",
-                    "playRate");
+                    "playRate",
+                    "customColor");
 
             if (context.SelectedNotifyIndex >= 0)
                 return BuildArrayElementInspector(
@@ -86,7 +87,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     "notifies",
                     context.SelectedNotifyIndex,
                     "notify",
-                    "time");
+                    "time",
+                    "customColor");
 
             if (context.SelectedNotifyStateIndex >= 0)
                 return BuildArrayElementInspector(
@@ -95,7 +97,19 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     context.SelectedNotifyStateIndex,
                     "notifyState",
                     "startTime",
-                    "endTime");
+                    "endTime",
+                    "customColor");
+
+            if (context.SelectedCustomElementIndex >= 0)
+                return BuildArrayElementInspector(
+                    "Custom Timeline Element",
+                    "customElements",
+                    context.SelectedCustomElementIndex,
+                    "element",
+                    "startTime",
+                    "endTime",
+                    "trackId",
+                    "customColor");
 
             return false;
         }

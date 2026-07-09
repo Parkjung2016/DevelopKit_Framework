@@ -4,13 +4,13 @@ using UnityEngine;
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
     [Serializable]
-    public sealed class AnimNotifyStatePlacement
+    public sealed class CustomMontageElementPlacement
     {
         [SerializeField] private float startTime;
         [SerializeField] private float endTime;
-        [SerializeReference]
-        [SerializeField] private AnimNotifyState notifyState;
         [SerializeField] private string trackId = "Default";
+        [SerializeReference]
+        [SerializeField] private MontageTimelineElement element;
         [SerializeField] private Color customColor = Color.clear;
 
         public float StartTime
@@ -25,23 +25,20 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             set => endTime = Mathf.Max(startTime, value);
         }
 
-        public AnimNotifyState NotifyState
-        {
-            get => notifyState;
-            set => notifyState = value;
-        }
-
         public string TrackId
         {
             get => string.IsNullOrEmpty(trackId) ? "Default" : trackId;
-            set => trackId = value;
+            set => trackId = string.IsNullOrEmpty(value) ? "Default" : value;
+        }
+
+        public MontageTimelineElement Element
+        {
+            get => element;
+            set => element = value;
         }
 
         public float Duration => Mathf.Max(0f, endTime - startTime);
         public Color CustomColor => customColor;
         public bool HasCustomColor => customColor.a > 0f;
-
-        public bool ContainsTime(float montageTime) =>
-            montageTime >= startTime && montageTime <= endTime;
     }
 }

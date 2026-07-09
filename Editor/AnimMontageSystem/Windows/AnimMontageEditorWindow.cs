@@ -1,4 +1,5 @@
 using PJDev.DevelopKit.Editors;
+using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -20,6 +21,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private double lastEditorTime;
         private bool animationModeStarted;
         private AnimationModeDriver previewDriver;
+        private readonly MontagePlaybackState editorNotifyPlayback = new();
+        private readonly MontageNotifyDispatcher editorNotifyDispatcher = new();
+        private readonly List<AnimNotifyPlacement> editorScrubNotifyBuffer = new();
+        private readonly List<AnimNotifyStatePlacement> editorScrubBeginBuffer = new();
+        private readonly List<AnimNotifyStatePlacement> editorScrubEndBuffer = new();
+        private readonly List<AnimNotifyStatePlacement> editorScrubTickBuffer = new();
+        private bool editorNotifyPlaybackActive;
+        private bool suppressEditorScrubNotify;
+        private GameObject editorNotifyFallbackOwner;
 
         [MenuItem("PJDev/Animation/Montage Editor", priority = PJDevMenuPriority.AnimMontage)]
         public static void Open()
@@ -36,7 +46,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             window.titleContent = new GUIContent("Montage Editor");
             window.minSize = new Vector2(1200, 680);
             window.Show();
-            window.context?.SetMontage(montage);
+            window.SetMontageWithoutEditorScrubNotify(montage);
             if (window.montageField != null)
                 window.montageField.SetValueWithoutNotify(montage);
         }
@@ -59,6 +69,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             StopPreviewAnimationMode(force: true);
             previewController?.Dispose();
             previewController = null;
+            ResetEditorNotifyPlayback();
+            DestroyEditorNotifyFallbackOwner();
         }
 
         internal Object GetPreferredSelectionForReload() => context?.Montage;
@@ -83,6 +95,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             StopPreviewAnimationMode(force: true);
             previewController?.Dispose();
             previewController = null;
+            ResetEditorNotifyPlayback();
+            DestroyEditorNotifyFallbackOwner();
         }
 
         private void CreateGUI()
@@ -115,7 +129,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             context.SelectionChanged += UpdateStatus;
             MontageViewportInput.SetPlaybackToggleHandler(TryTogglePlaybackShortcut);
             UpdateStatus();
-            OnPlayheadChanged();
+            RefreshPlayheadViewWithoutEditorScrubNotify();
         }
 
         private void BuildMainLayout(VisualElement root)
@@ -170,9 +184,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             previewTimelineSplit.Add(timelinePanel);
 
+            var inspectorLogSplit = new TwoPaneSplitView(1, 220, TwoPaneSplitViewOrientation.Vertical);
+            MontageEditorLayoutHelper.ConfigureSplit(inspectorLogSplit, "am-split-log-viewer");
+            centerInspectorSplit.Add(inspectorLogSplit);
+
             var inspectorPanel = new MontageSelectionInspectorPanel(context);
             MontageEditorLayoutHelper.ConfigurePane(inspectorPanel);
-            centerInspectorSplit.Add(inspectorPanel);
+            inspectorLogSplit.Add(inspectorPanel);
+
+            var logViewerPanel = new MontageLogViewerPanel();
+            MontageEditorLayoutHelper.ConfigurePane(logViewerPanel);
+            inspectorLogSplit.Add(logViewerPanel);
         }
 
         private void BuildToolbar(VisualElement root)
@@ -192,9 +214,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             montageField.style.flexShrink = 0;
             montageField.RegisterValueChangedCallback(evt =>
             {
-                context.SetMontage(evt.newValue as AnimMontageSO);
+                ResetEditorNotifyPlayback();
+                SetMontageWithoutEditorScrubNotify(evt.newValue as AnimMontageSO);
                 UpdateStatus();
-                OnPlayheadChanged();
+                RefreshPlayheadViewWithoutEditorScrubNotify();
             });
             assetGroup.Add(montageField);
 
@@ -209,8 +232,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 context.PreviewModel = evt.newValue as GameObject;
                 previewController?.SetPreviewModel(context.PreviewModel);
+                ResyncEditorNotifyPlayback();
                 RequestPreviewRepaint();
-                OnPlayheadChanged();
+                RefreshPlayheadViewWithoutEditorScrubNotify();
             });
             assetGroup.Add(previewModelField);
 
@@ -297,15 +321,22 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (context.Montage == null)
                 return;
 
-            context.SetPlaying(!context.IsPlaying);
+            bool shouldPlay = !context.IsPlaying;
+            context.SetPlaying(shouldPlay);
+            if (shouldPlay)
+                BeginEditorNotifyPlayback();
+            else
+                PauseEditorNotifyPlayback();
+
             transportBar?.Refresh();
             UpdateStatus();
         }
 
         private void StopPlayback()
         {
+            ResetEditorNotifyPlayback();
             context.SetPlaying(false);
-            context.SetPlayhead(0f);
+            SetPlayheadWithoutEditorScrubNotify(0f);
             transportBar?.Refresh();
             UpdateStatus();
             RequestPreviewRepaint();
@@ -382,10 +413,20 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (nextTime >= length)
             {
                 if (context.Loop && length > 0f)
+                {
+                    AdvanceEditorNotifyPlayback(length);
                     nextTime = 0f;
+                    context.SetPlayhead(nextTime);
+                    BeginEditorNotifyPlayback();
+                    UpdateStatus();
+                    RequestPreviewRepaint();
+                    return;
+                }
                 else
                 {
+                    AdvanceEditorNotifyPlayback(length);
                     context.SetPlayhead(length);
+                    ResetEditorNotifyPlayback();
                     context.SetPlaying(false);
                     transportBar?.Refresh();
                     UpdateStatus();
@@ -394,17 +435,219 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 }
             }
 
+            AdvanceEditorNotifyPlayback(nextTime);
             context.SetPlayhead(nextTime);
             UpdateStatus();
             RequestPreviewRepaint();
         }
 
+        private void BeginEditorNotifyPlayback()
+        {
+            if (context?.Montage == null)
+            {
+                ResetEditorNotifyPlayback();
+                return;
+            }
+
+            editorNotifyPlayback.Begin(context.Montage, context.PlayheadTime);
+            editorNotifyDispatcher.Reset();
+            editorNotifyPlaybackActive = true;
+            DispatchEditorNotifyPlayback();
+        }
+
+        private void PauseEditorNotifyPlayback()
+        {
+            if (!editorNotifyPlaybackActive)
+                return;
+
+            editorNotifyPlayback.Pause(true);
+        }
+
+        private void ResyncEditorNotifyPlayback()
+        {
+            if (context == null || !context.IsPlaying)
+            {
+                ResetEditorNotifyPlayback();
+                return;
+            }
+
+            BeginEditorNotifyPlayback();
+        }
+
+        private void ResetEditorNotifyPlayback()
+        {
+            editorNotifyPlayback.Stop();
+            editorNotifyDispatcher.Reset();
+            editorNotifyPlaybackActive = false;
+        }
+
+        private void AdvanceEditorNotifyPlayback(float nextTime)
+        {
+            if (context?.Montage == null)
+                return;
+
+            if (!editorNotifyPlaybackActive
+                || editorNotifyPlayback.Montage != context.Montage
+                || Mathf.Abs(editorNotifyPlayback.CurrentTime - context.PlayheadTime) > 0.001f)
+            {
+                BeginEditorNotifyPlayback();
+            }
+
+            editorNotifyPlayback.SetTime(nextTime);
+
+            DispatchEditorNotifyPlayback();
+        }
+
+        private void DispatchEditorNotifyPlayback()
+        {
+            if (!editorNotifyPlaybackActive || editorNotifyPlayback.Montage == null)
+                return;
+
+            editorNotifyDispatcher.Dispatch(
+                editorNotifyPlayback,
+                GetEditorNotifyOwner(),
+                previewController?.NotifyAnimator,
+                null);
+        }
+
+        private GameObject GetEditorNotifyOwner()
+        {
+            GameObject previewOwner = previewController?.NotifyOwner;
+            if (previewOwner != null)
+                return previewOwner;
+
+            if (editorNotifyFallbackOwner == null)
+            {
+                editorNotifyFallbackOwner = new GameObject("Montage Editor Notify Owner")
+                {
+                    hideFlags = HideFlags.HideAndDontSave
+                };
+            }
+
+            return editorNotifyFallbackOwner;
+        }
+
+        private void DestroyEditorNotifyFallbackOwner()
+        {
+            if (editorNotifyFallbackOwner == null)
+                return;
+
+            Object.DestroyImmediate(editorNotifyFallbackOwner);
+            editorNotifyFallbackOwner = null;
+        }
+
+        private void SetMontageWithoutEditorScrubNotify(AnimMontageSO montage)
+        {
+            suppressEditorScrubNotify = true;
+            try
+            {
+                context?.SetMontage(montage);
+            }
+            finally
+            {
+                suppressEditorScrubNotify = false;
+            }
+        }
+
+        private void SetPlayheadWithoutEditorScrubNotify(float time)
+        {
+            suppressEditorScrubNotify = true;
+            try
+            {
+                context?.SetPlayhead(time);
+            }
+            finally
+            {
+                suppressEditorScrubNotify = false;
+            }
+        }
+
+        private void RefreshPlayheadViewWithoutEditorScrubNotify()
+        {
+            suppressEditorScrubNotify = true;
+            try
+            {
+                OnPlayheadChanged();
+            }
+            finally
+            {
+                suppressEditorScrubNotify = false;
+            }
+        }
+
         private void OnPlayheadChanged()
         {
+            DispatchEditorScrubNotifies();
             transportBar?.Refresh();
             previewController?.Sample(context);
             timelineView?.MarkDirtyRepaint();
             RequestPreviewRepaint();
+        }
+
+        private void DispatchEditorScrubNotifies()
+        {
+            if (suppressEditorScrubNotify || context == null || context.IsPlaying || context.Montage == null)
+                return;
+
+            AnimMontageSO montage = context.Montage;
+            float previousTime = context.PreviousPlayheadTime;
+            float currentTime = context.PlayheadTime;
+            float deltaTime = currentTime - previousTime;
+            GameObject owner = GetEditorNotifyOwner();
+            Animator animator = previewController?.NotifyAnimator;
+
+            MontageEvaluator.CollectNotifyEvents(montage, previousTime, currentTime, editorScrubNotifyBuffer);
+            for (int i = 0; i < editorScrubNotifyBuffer.Count; i++)
+            {
+                AnimNotifyPlacement placement = editorScrubNotifyBuffer[i];
+                AnimNotify notify = placement.Notify;
+                if (notify == null || !notify.TriggerInEditorScrub)
+                    continue;
+
+                var notifyContext = new AnimNotifyContext(owner, animator, montage, placement.Time, deltaTime);
+                notify.OnNotify(notifyContext);
+            }
+
+            MontageEvaluator.CollectNotifyStateTransitions(
+                montage,
+                previousTime,
+                currentTime,
+                editorScrubBeginBuffer,
+                editorScrubEndBuffer,
+                editorScrubTickBuffer);
+
+            for (int i = 0; i < editorScrubEndBuffer.Count; i++)
+            {
+                AnimNotifyStatePlacement placement = editorScrubEndBuffer[i];
+                AnimNotifyState state = placement.NotifyState;
+                if (state == null || !state.TriggerInEditorScrub)
+                    continue;
+
+                var endContext = new AnimNotifyContext(owner, animator, montage, placement.EndTime, deltaTime);
+                state.OnEnd(endContext);
+            }
+
+            for (int i = 0; i < editorScrubBeginBuffer.Count; i++)
+            {
+                AnimNotifyStatePlacement placement = editorScrubBeginBuffer[i];
+                AnimNotifyState state = placement.NotifyState;
+                if (state == null || !state.TriggerInEditorScrub)
+                    continue;
+
+                var beginContext = new AnimNotifyContext(owner, animator, montage, placement.StartTime, deltaTime);
+                state.OnBegin(beginContext);
+            }
+
+            for (int i = 0; i < editorScrubTickBuffer.Count; i++)
+            {
+                AnimNotifyStatePlacement placement = editorScrubTickBuffer[i];
+                AnimNotifyState state = placement.NotifyState;
+                if (state == null || !state.TriggerInEditorScrub)
+                    continue;
+
+                var tickContext = new AnimNotifyContext(owner, animator, montage, currentTime, deltaTime);
+                state.OnTick(tickContext, Mathf.Abs(deltaTime));
+            }
         }
 
         private void UpdateStatus()

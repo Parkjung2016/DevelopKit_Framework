@@ -2,10 +2,14 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
-    public abstract class AnimNotifyStateSO : ScriptableObject
+    [System.Serializable]
+    public abstract class AnimNotifyState
     {
-        public virtual string DisplayName => name;
+        [SerializeField] private bool triggerInEditorScrub;
+
+        public virtual string DisplayName => GetType().Name;
         public virtual Color EditorColor => new(1f, 0.65f, 0.2f, 1f);
+        public bool TriggerInEditorScrub => triggerInEditorScrub;
 
         public virtual void OnBegin(AnimNotifyContext context)
         {

@@ -11,6 +11,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         [SerializeField] private MontageSegment[] segments = Array.Empty<MontageSegment>();
         [SerializeField] private AnimNotifyPlacement[] notifies = Array.Empty<AnimNotifyPlacement>();
         [SerializeField] private AnimNotifyStatePlacement[] notifyStates = Array.Empty<AnimNotifyStatePlacement>();
+        [SerializeField] private CustomMontageTrack[] customTracks = Array.Empty<CustomMontageTrack>();
+        [SerializeField] private CustomMontageElementPlacement[] customElements = Array.Empty<CustomMontageElementPlacement>();
         [SerializeField] private MontageSlotDefinition[] slots = Array.Empty<MontageSlotDefinition>();
         [SerializeField] private string[] animationTracks = { "Default" };
         [SerializeField] private string[] notifyTracks = { "Default" };
@@ -21,6 +23,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public IReadOnlyList<MontageSegment> Segments => segments ?? Array.Empty<MontageSegment>();
         public IReadOnlyList<AnimNotifyPlacement> Notifies => notifies ?? Array.Empty<AnimNotifyPlacement>();
         public IReadOnlyList<AnimNotifyStatePlacement> NotifyStates => notifyStates ?? Array.Empty<AnimNotifyStatePlacement>();
+        public IReadOnlyList<CustomMontageTrack> CustomTracks => customTracks ?? Array.Empty<CustomMontageTrack>();
+        public IReadOnlyList<CustomMontageElementPlacement> CustomElements => customElements ?? Array.Empty<CustomMontageElementPlacement>();
         public IReadOnlyList<MontageSlotDefinition> Slots => slots ?? Array.Empty<MontageSlotDefinition>();
         public IReadOnlyList<string> AnimationTracks => animationTracks ?? Array.Empty<string>();
         public IReadOnlyList<string> NotifyTracks => notifyTracks ?? Array.Empty<string>();
@@ -32,14 +36,32 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             get
             {
                 float max = 0f;
-                if (segments == null)
-                    return 0f;
-
-                for (int i = 0; i < segments.Length; i++)
+                for (int i = 0; segments != null && i < segments.Length; i++)
                 {
                     MontageSegment segment = segments[i];
                     if (segment != null)
                         max = Mathf.Max(max, segment.EndTime);
+                }
+
+                for (int i = 0; notifies != null && i < notifies.Length; i++)
+                {
+                    AnimNotifyPlacement notify = notifies[i];
+                    if (notify != null)
+                        max = Mathf.Max(max, notify.Time);
+                }
+
+                for (int i = 0; notifyStates != null && i < notifyStates.Length; i++)
+                {
+                    AnimNotifyStatePlacement state = notifyStates[i];
+                    if (state != null)
+                        max = Mathf.Max(max, state.EndTime);
+                }
+
+                for (int i = 0; customElements != null && i < customElements.Length; i++)
+                {
+                    CustomMontageElementPlacement element = customElements[i];
+                    if (element != null)
+                        max = Mathf.Max(max, element.EndTime);
                 }
 
                 return max;
@@ -99,7 +121,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             {
                 AnimNotifyPlacement notify = notifies[i];
                 if (notify != null)
-                    notify.Time = Mathf.Clamp(notify.Time, 0f, Length);
+                    notify.Time = Mathf.Max(0f, notify.Time);
             }
 
             for (int i = 0; i < notifyStates?.Length; i++)
@@ -108,8 +130,26 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 if (state == null)
                     continue;
 
-                state.StartTime = Mathf.Clamp(state.StartTime, 0f, Length);
-                state.EndTime = Mathf.Clamp(state.EndTime, state.StartTime, Length);
+                state.StartTime = Mathf.Max(0f, state.StartTime);
+                state.EndTime = Mathf.Max(state.StartTime, state.EndTime);
+            }
+
+            for (int i = 0; i < customTracks?.Length; i++)
+            {
+                CustomMontageTrack track = customTracks[i];
+                if (track != null)
+                    track.TrackId = track.TrackId;
+            }
+
+            for (int i = 0; i < customElements?.Length; i++)
+            {
+                CustomMontageElementPlacement element = customElements[i];
+                if (element == null)
+                    continue;
+
+                element.TrackId = element.TrackId;
+                element.StartTime = Mathf.Max(0f, element.StartTime);
+                element.EndTime = Mathf.Max(element.StartTime, element.EndTime);
             }
         }
 

@@ -21,6 +21,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private float previewGroundPlaneY;
         private bool hasPreviewHeightLock;
 
+        public GameObject NotifyOwner => previewInstance;
+        public Animator NotifyAnimator => previewInstance != null
+            ? previewInstance.GetComponentInChildren<Animator>()
+            : null;
+
         public void Bind(MontageEditorContext editorContext) => boundContext = editorContext;
 
         public void SetPreviewModel(GameObject prefab)

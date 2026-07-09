@@ -15,6 +15,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         [SerializeField] private float playRate = 1f;
         [SerializeField] private float blendIn;
         [SerializeField] private float blendOut;
+        [SerializeField] private Color customColor = Color.clear;
 
         public string SectionName => sectionName;
         public string TrackId
@@ -43,6 +44,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public float PlayRate => playRate <= 0f ? 1f : playRate;
         public float BlendIn => Mathf.Max(0f, blendIn);
         public float BlendOut => Mathf.Max(0f, blendOut);
+        public Color CustomColor => customColor;
+        public bool HasCustomColor => customColor.a > 0f;
 
         public float TrimmedClipDuration => Mathf.Max(0f, ClipEndTime - ClipStartTime);
         public float Duration => Clip != null ? TrimmedClipDuration / PlayRate : 0f;

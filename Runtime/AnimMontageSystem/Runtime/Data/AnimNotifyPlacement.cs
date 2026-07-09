@@ -7,9 +7,11 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     public sealed class AnimNotifyPlacement
     {
         [SerializeField] private float time;
-        [SerializeField] private AnimNotifySO notify;
+        [SerializeReference]
+        [SerializeField] private AnimNotify notify;
         [SerializeField] private string trackId = "Default";
         [SerializeField] private float triggerWeightThreshold;
+        [SerializeField] private Color customColor = Color.clear;
 
         public float Time
         {
@@ -17,7 +19,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             set => time = Mathf.Max(0f, value);
         }
 
-        public AnimNotifySO Notify
+        public AnimNotify Notify
         {
             get => notify;
             set => notify = value;
@@ -30,5 +32,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         }
 
         public float TriggerWeightThreshold => triggerWeightThreshold;
+        public Color CustomColor => customColor;
+        public bool HasCustomColor => customColor.a > 0f;
     }
 }

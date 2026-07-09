@@ -1,17 +1,19 @@
+using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
-    [CreateAssetMenu(fileName = "Notify_Log", menuName = "PJDev/Animation/Notify/Log")]
-    public sealed class LogAnimNotifySO : AnimNotifySO
+    [System.Serializable]
+    public sealed class LogAnimNotify : AnimNotify
     {
         [SerializeField] private string message = "AnimNotify";
 
+        public override string DisplayName => "Log";
         public override Color EditorColor => new(0.6f, 0.9f, 0.5f, 1f);
 
         public override void OnNotify(AnimNotifyContext context)
         {
-            Debug.Log($"[AnimNotify] {message} @ {context.MontageTime:0.###} ({context.Montage?.name})");
+            CDebug.Log($"[AnimNotify] {message} @ {context.MontageTime:0.###} ({context.Montage?.name})");
         }
     }
 }

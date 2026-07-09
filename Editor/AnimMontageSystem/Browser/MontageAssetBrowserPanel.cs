@@ -73,8 +73,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     PopulateAssets<AnimMontageSO>(filter);
                     break;
                 case MontageBrowserTab.Notifies:
-                    PopulateAssets<AnimNotifySO>(filter);
-                    PopulateAssets<AnimNotifyStateSO>(filter);
+                    PopulateNotifyTypes<AnimNotify>(filter, "Notify");
+                    PopulateNotifyTypes<AnimNotifyState>(filter, "Notify State");
                     break;
                 case MontageBrowserTab.Clips:
                     PopulateClips(filter);
@@ -103,6 +103,21 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     else
                         context.SetSelected(asset);
                 }));
+            }
+        }
+
+        private void PopulateNotifyTypes<T>(string filter, string category)
+        {
+            foreach (Type type in TypeCache.GetTypesDerivedFrom<T>())
+            {
+                if (type.IsAbstract || type.IsGenericType)
+                    continue;
+
+                if (!string.IsNullOrEmpty(filter) &&
+                    type.Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+
+                scrollView.Add(CreateTypeRow($"{category}: {type.Name}", type));
             }
         }
 
@@ -138,6 +153,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             icon.style.height = 16;
             icon.style.marginRight = 6;
             row.Add(icon);
+
+            row.Add(new Label(label));
+            return row;
+        }
+
+        private VisualElement CreateTypeRow(string label, Type type)
+        {
+            var row = new VisualElement();
+            row.AddToClassList(AnimMontageEditorStyles.BrowserRowClass);
+            row.RegisterCallback<ClickEvent>(_ => Debug.Log(type.FullName));
 
             row.Add(new Label(label));
             return row;

@@ -51,7 +51,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 bool wasActive = placement.ContainsTime(previousTime);
                 bool isActive = placement.ContainsTime(currentTime);
 
-                if (!wasActive && isActive)
+                bool sameTime = Math.Abs(previousTime - currentTime) < 0.00001f;
+                if ((sameTime && isActive) || (!wasActive && isActive))
                     beginStates?.Add(placement);
                 else if (wasActive && !isActive)
                     endStates?.Add(placement);
@@ -64,7 +65,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private static bool Crossed(float previousTime, float currentTime, float markerTime)
         {
             if (Math.Abs(previousTime - currentTime) < 0.00001f)
-                return false;
+                return Math.Abs(markerTime - currentTime) < 0.00001f;
 
             if (previousTime <= currentTime)
                 return markerTime > previousTime && markerTime <= currentTime;
