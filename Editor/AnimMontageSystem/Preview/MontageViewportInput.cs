@@ -361,6 +361,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Vector3 cameraPosition = camera.Pivot + rotation * new Vector3(0f, 0f, -camera.Size);
             rotation = Quaternion.AngleAxis(evt.delta.y * 0.003f * Mathf.Rad2Deg, rotation * Vector3.right) * rotation;
             rotation = Quaternion.AngleAxis(evt.delta.x * 0.003f * Mathf.Rad2Deg, Vector3.up) * rotation;
+            rotation = RemoveRoll(rotation);
             camera.Rotation = rotation;
             camera.Pivot = cameraPosition + rotation * new Vector3(0f, 0f, camera.Size);
             return true;
@@ -376,8 +377,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             Quaternion yaw = Quaternion.AngleAxis(evt.delta.x * 0.5f, Vector3.up);
             Quaternion pitch = Quaternion.AngleAxis(evt.delta.y * 0.5f, camera.Rotation * Vector3.right);
-            camera.Rotation = pitch * yaw * camera.Rotation;
+            camera.Rotation = RemoveRoll(pitch * yaw * camera.Rotation);
             return true;
+        }
+
+        private static Quaternion RemoveRoll(Quaternion rotation)
+        {
+            Vector3 forward = rotation * Vector3.forward;
+            if (forward.sqrMagnitude <= 0.000001f)
+                return rotation;
+
+            return Quaternion.LookRotation(forward.normalized, Vector3.up);
         }
 
         private static bool TryPan(MontageViewportCamera camera, Event evt)

@@ -17,6 +17,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private MontagePreviewViewportPanel viewportPanel;
         private MontageTransportBar transportBar;
         private ObjectField montageField;
+        private ObjectField montageLibraryField;
         private ObjectField previewModelField;
         private Label statusLabel;
         private double lastEditorTime;
@@ -128,7 +129,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             RegisterPlaybackShortcutHandler(rootVisualElement);
 
+            context.Changed -= UpdateStatus;
+            context.MontageChanged -= OnMontageChanged;
+            context.PlayheadChanged -= OnPlayheadChanged;
+            context.SelectionChanged -= UpdateStatus;
             context.Changed += UpdateStatus;
+            context.MontageChanged += OnMontageChanged;
             context.PlayheadChanged += OnPlayheadChanged;
             context.SelectionChanged += UpdateStatus;
             MontageViewportInput.SetPlaybackToggleHandler(TryTogglePlaybackShortcut);
@@ -142,7 +148,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             MontageEditorLayoutHelper.ConfigureSplit(browserSplit, "am-split-browser");
             root.Add(browserSplit);
 
-            var browserPanel = new MontageAssetBrowserPanel(context);
+            var browserPanel = new MontageAssetBrowserPanel(context, CreateMontageAsset, CreateMontageLibraryAsset);
             MontageEditorLayoutHelper.ConfigurePane(browserPanel);
             browserSplit.Add(browserPanel);
 
@@ -209,12 +215,32 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             var assetGroup = new VisualElement();
             assetGroup.AddToClassList(AnimMontageEditorStyles.AssetToolbarGroupClass);
 
-            var createMontageButton = new ToolbarButton(CreateMontageAsset)
+            var createMenu = new ToolbarMenu { text = "Create" };
+            createMenu.style.flexShrink = 0;
+            createMenu.menu.AppendAction("Montage", _ => CreateMontageAsset());
+            createMenu.menu.AppendAction("Montage Library", _ => CreateMontageLibraryAsset());
+            assetGroup.Add(createMenu);
+
+            montageLibraryField = new ObjectField("Montage Library")
             {
-                text = "New Montage"
+                objectType = typeof(AnimMontageLibrarySO),
+                allowSceneObjects = false
             };
-            createMontageButton.style.flexShrink = 0;
-            assetGroup.Add(createMontageButton);
+            montageLibraryField.style.width = 260;
+            montageLibraryField.style.flexShrink = 0;
+            montageLibraryField.RegisterValueChangedCallback(evt =>
+            {
+                bool wasPlaying = context.IsPlaying;
+                EndEditorNotifyPlayback();
+                context.SetMontageLibrary(evt.newValue as AnimMontageLibrarySO);
+                previewModelField?.SetValueWithoutNotify(context.PreviewModel);
+                previewController?.SetPreviewModel(context.PreviewModel);
+                if (wasPlaying)
+                    BeginEditorNotifyPlayback();
+                RequestPreviewRepaint();
+                RefreshPlayheadViewWithoutEditorScrubNotify();
+            });
+            assetGroup.Add(montageLibraryField);
 
             previewModelField = new ObjectField("Preview Mesh")
             {
@@ -228,6 +254,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 bool wasPlaying = context.IsPlaying;
                 EndEditorNotifyPlayback();
                 context.SetPreviewModel(evt.newValue as GameObject);
+                SetCurrentLibraryPreviewModel(context.PreviewModel);
                 previewController?.SetPreviewModel(context.PreviewModel);
                 if (wasPlaying)
                     BeginEditorNotifyPlayback();
@@ -242,29 +269,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void CreateMontageAsset()
         {
-            string directory = GetSelectedProjectDirectory();
-            string path = EditorUtility.SaveFilePanelInProject(
+            string path = ChooseAssetCreationPath(
                 "Create Montage",
                 "Montage_New",
-                "asset",
-                "Choose where to create the montage asset.",
-                directory);
+                "Choose where to create the montage asset.");
             if (string.IsNullOrEmpty(path))
                 return;
 
-            path = path.Replace('\\', '/');
-            if (!path.StartsWith("Assets/"))
-            {
-                EditorUtility.DisplayDialog(
-                    "Create Montage",
-                    "Montage assets must be created inside the Assets folder.",
-                    "OK");
-                return;
-            }
-
-            path = AssetDatabase.GenerateUniqueAssetPath(path);
             var montage = CreateInstance<AnimMontageSO>();
             AssetDatabase.CreateAsset(montage, path);
+            AddMontageToCurrentLibrary(montage);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             EditorGUIUtility.PingObject(montage);
@@ -273,6 +287,87 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             SetMontageWithoutEditorScrubNotify(montage);
             UpdateStatus();
             RefreshPlayheadViewWithoutEditorScrubNotify();
+        }
+
+        private void CreateMontageLibraryAsset()
+        {
+            string path = ChooseAssetCreationPath(
+                "Create Montage Library",
+                "MontageLibrary_New",
+                "Choose where to create the montage library asset.");
+            if (string.IsNullOrEmpty(path))
+                return;
+
+            var library = CreateInstance<AnimMontageLibrarySO>();
+            AssetDatabase.CreateAsset(library, path);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            EditorGUIUtility.PingObject(library);
+            Selection.activeObject = library;
+            montageLibraryField?.SetValueWithoutNotify(library);
+            context.SetMontageLibrary(library);
+            previewModelField?.SetValueWithoutNotify(context.PreviewModel);
+            previewController?.SetPreviewModel(context.PreviewModel);
+            UpdateStatus();
+            RefreshPlayheadViewWithoutEditorScrubNotify();
+        }
+
+        private static string ChooseAssetCreationPath(string title, string defaultName, string message)
+        {
+            string directory = GetSelectedProjectDirectory();
+            string path = EditorUtility.SaveFilePanelInProject(
+                title,
+                defaultName,
+                "asset",
+                message,
+                directory);
+            if (string.IsNullOrEmpty(path))
+                return string.Empty;
+
+            path = path.Replace('\\', '/');
+            if (!path.StartsWith("Assets/"))
+            {
+                EditorUtility.DisplayDialog(
+                    title,
+                    "Assets must be created inside the Assets folder.",
+                    "OK");
+                return string.Empty;
+            }
+
+            return AssetDatabase.GenerateUniqueAssetPath(path);
+        }
+
+        private void AddMontageToCurrentLibrary(AnimMontageSO montage)
+        {
+            AnimMontageLibrarySO library = context?.MontageLibrary;
+            if (library == null || montage == null || library.Contains(montage))
+                return;
+
+            Undo.RecordObject(library, "Add Montage To Library");
+            SerializedObject so = new(library);
+            SerializedProperty montages = so.FindProperty("montages");
+            int index = montages.arraySize;
+            montages.InsertArrayElementAtIndex(index);
+            montages.GetArrayElementAtIndex(index).objectReferenceValue = montage;
+            so.ApplyModifiedProperties();
+            EditorUtility.SetDirty(library);
+        }
+
+        private void SetCurrentLibraryPreviewModel(GameObject previewModel)
+        {
+            AnimMontageLibrarySO library = context?.MontageLibrary;
+            if (library == null)
+                return;
+
+            SerializedObject so = new(library);
+            SerializedProperty property = so.FindProperty("previewModel");
+            if (property == null || property.objectReferenceValue == previewModel)
+                return;
+
+            Undo.RecordObject(library, "Set Montage Library Preview Model");
+            property.objectReferenceValue = previewModel;
+            so.ApplyModifiedProperties();
+            EditorUtility.SetDirty(library);
         }
 
         private static string GetSelectedProjectDirectory()
@@ -406,6 +501,14 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void RequestPreviewRepaint() => viewportPanel?.RequestRepaint();
 
+        private void OnMontageChanged()
+        {
+            EndEditorNotifyPlayback();
+            previewController?.ResetRootMotionPreviewPose();
+            transportBar?.Refresh();
+            RequestPreviewRepaint();
+        }
+
         private void PollPlaybackShortcut()
         {
             if (context == null || context.Montage == null)
@@ -477,6 +580,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 if (context.Loop && length > 0f)
                 {
                     AdvanceEditorNotifyPlayback(length);
+                    EndEditorNotifyPlayback();
                     nextTime = 0f;
                     context.SetPlayhead(nextTime);
                     BeginEditorNotifyPlayback();
@@ -736,6 +840,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (statusLabel == null || context == null)
                 return;
 
+            SyncToolbarFields();
+
             AnimMontageSO montage = context.Montage;
             if (montage == null)
             {
@@ -750,6 +856,19 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             string playState = context.IsPlaying ? "Playing" : "Paused";
             statusLabel.text =
                 $"{playState} | Section: {section} | Clip: {clip} | Notifies: {montage.Notifies.Count} | States: {montage.NotifyStates.Count}";
+        }
+
+        private void SyncToolbarFields()
+        {
+            if (montageLibraryField != null && montageLibraryField.value != context.MontageLibrary)
+                montageLibraryField.SetValueWithoutNotify(context.MontageLibrary);
+
+            if (previewModelField != null && previewModelField.value != context.PreviewModel)
+            {
+                previewModelField.SetValueWithoutNotify(context.PreviewModel);
+                previewController?.SetPreviewModel(context.PreviewModel);
+                RequestPreviewRepaint();
+            }
         }
     }
 }

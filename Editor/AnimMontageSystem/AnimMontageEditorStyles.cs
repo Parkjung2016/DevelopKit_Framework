@@ -10,7 +10,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         public const string SplitRightClass = "am-split-right";
         public const string SplitterClass = "am-splitter";
         public const string PanelTitleClass = "am-panel-title";
+        public const string BrowserTabClass = "am-browser-tab";
+        public const string BrowserTabActiveClass = "am-browser-tab-active";
+        public const string BrowserActionBarClass = "am-browser-action-bar";
         public const string BrowserRowClass = "am-browser-row";
+        public const string BrowserRowLoadedClass = "am-browser-row-loaded";
         public const string BrowserRowSelectedClass = "am-browser-row-selected";
         public const string PreviewHostClass = "am-preview-host";
         public const string PanelHeaderClass = "am-panel-header";

@@ -204,7 +204,10 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             VisualEffect[] visualEffects = target.GetComponentsInChildren<VisualEffect>(true);
             bool hasLoopingEffects = HasLoopingEffects(particleSystems, visualEffects);
             bool shouldStopEffects = !stopLoopingEffectsOnly || hasLoopingEffects;
-            double forceDestroyTime = (shouldStopEffects ? stopTime : EditorApplication.timeSinceStartup) + 10.0;
+            double minimumDestroyTime = shouldStopEffects
+                ? stopTime
+                : EditorApplication.timeSinceStartup + EstimateNaturalEffectLifetime(particleSystems, visualEffects);
+            double forceDestroyTime = minimumDestroyTime + 10.0;
 
             void Tick()
             {
@@ -224,7 +227,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                     stopped = true;
                 }
 
-                SimulateEffects(particleSystems, visualEffects, 0.016f);
+                if (now < minimumDestroyTime)
+                    return;
+
                 if (now < forceDestroyTime && AreEffectsAlive(particleSystems, visualEffects))
                     return;
 
@@ -251,6 +256,58 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             }
 
             return visualEffects.Length > 0;
+        }
+
+        internal static float EstimateNaturalEffectLifetime(ParticleSystem[] particleSystems, VisualEffect[] visualEffects)
+        {
+            float lifetime = 0.25f;
+            for (int i = 0; i < particleSystems.Length; i++)
+            {
+                ParticleSystem particleSystem = particleSystems[i];
+                if (particleSystem == null)
+                    continue;
+
+                ParticleSystem.MainModule main = particleSystem.main;
+                if (main.loop)
+                    continue;
+
+                lifetime = Mathf.Max(
+                    lifetime,
+                    GetMaxCurveValue(main.startDelay) + main.duration + GetMaxCurveValue(main.startLifetime));
+            }
+
+            if (visualEffects.Length > 0)
+                lifetime = Mathf.Max(lifetime, 10f);
+
+            return lifetime;
+        }
+
+        private static float GetMaxCurveValue(ParticleSystem.MinMaxCurve curve)
+        {
+            return curve.mode switch
+            {
+                ParticleSystemCurveMode.Constant => curve.constant,
+                ParticleSystemCurveMode.TwoConstants => curve.constantMax,
+                ParticleSystemCurveMode.Curve => curve.curveMax != null
+                    ? GetCurveMaxValue(curve.curveMax, curve.curveMultiplier)
+                    : curve.constant,
+                ParticleSystemCurveMode.TwoCurves => curve.curveMax != null
+                    ? GetCurveMaxValue(curve.curveMax, curve.curveMultiplier)
+                    : curve.constantMax,
+                _ => curve.constantMax
+            };
+        }
+
+        private static float GetCurveMaxValue(AnimationCurve curve, float multiplier)
+        {
+            if (curve == null || curve.length == 0)
+                return 0f;
+
+            float max = 0f;
+            for (int i = 0; i < curve.length; i++)
+                max = Mathf.Max(max, curve.keys[i].value);
+
+            return max * multiplier;
         }
 
         internal static void StopEffects(ParticleSystem[] particleSystems, VisualEffect[] visualEffects, bool loopingOnly)

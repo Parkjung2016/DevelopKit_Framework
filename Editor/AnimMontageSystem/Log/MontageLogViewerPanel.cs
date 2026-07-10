@@ -17,6 +17,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private readonly ToolbarToggle infoToggle = new() { text = "Info", value = true };
         private readonly ToolbarToggle warningToggle = new() { text = "Warn", value = true };
         private readonly ToolbarToggle errorToggle = new() { text = "Error", value = true };
+        private bool rebuildQueued;
+        private bool queuedScrollToEnd;
 
         public MontageLogViewerPanel()
         {
@@ -63,7 +65,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             toolbar.style.borderBottomColor = new Color(1f, 1f, 1f, 0.06f);
 
             searchField.style.flexGrow = 1;
-            searchField.RegisterValueChangedCallback(_ => Rebuild());
+            searchField.RegisterValueChangedCallback(_ => RequestRebuild());
             toolbar.Add(searchField);
 
             AddToggle(toolbar, infoToggle);
@@ -76,7 +78,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         {
             toggle.style.flexShrink = 0;
             toggle.style.marginLeft = 4;
-            toggle.RegisterValueChangedCallback(_ => Rebuild());
+            toggle.RegisterValueChangedCallback(_ => RequestRebuild());
             toolbar.Add(toggle);
         }
 
@@ -86,13 +88,29 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (entries.Count > MaxEntries)
                 entries.RemoveRange(0, entries.Count - MaxEntries);
 
-            Rebuild(scrollToEnd: true);
+            RequestRebuild(scrollToEnd: true);
         }
 
         private void ClearEntries()
         {
             entries.Clear();
-            Rebuild();
+            RequestRebuild();
+        }
+
+        private void RequestRebuild(bool scrollToEnd = false)
+        {
+            queuedScrollToEnd |= scrollToEnd;
+            if (rebuildQueued)
+                return;
+
+            rebuildQueued = true;
+            schedule.Execute(() =>
+            {
+                rebuildQueued = false;
+                bool shouldScrollToEnd = queuedScrollToEnd;
+                queuedScrollToEnd = false;
+                Rebuild(shouldScrollToEnd);
+            });
         }
 
         private void Rebuild(bool scrollToEnd = false)

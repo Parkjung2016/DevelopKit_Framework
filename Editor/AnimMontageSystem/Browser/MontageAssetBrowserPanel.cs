@@ -11,13 +11,20 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
     internal sealed class MontageAssetBrowserPanel : VisualElement
     {
         private readonly MontageEditorContext context;
+        private readonly Action createMontage;
+        private readonly Action createLibrary;
+        private readonly Dictionary<MontageBrowserTab, Button> tabButtons = new();
         private readonly ScrollView scrollView = new(ScrollViewMode.Vertical);
         private readonly ToolbarSearchField searchField = new();
-        private MontageBrowserTab activeTab = MontageBrowserTab.Montages;
+        private readonly VisualElement actionBar = new();
+        private MontageBrowserTab activeTab = MontageBrowserTab.Libraries;
+        private Type selectedNotifyType;
 
-        public MontageAssetBrowserPanel(MontageEditorContext context)
+        public MontageAssetBrowserPanel(MontageEditorContext context, Action createMontage, Action createLibrary)
         {
             this.context = context;
+            this.createMontage = createMontage;
+            this.createLibrary = createLibrary;
             style.flexShrink = 0;
             style.flexGrow = 1;
             style.minWidth = 180;
@@ -32,6 +39,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             var tabs = new Toolbar();
             tabs.style.flexShrink = 0;
+            tabs.Add(CreateTabButton("Libraries", MontageBrowserTab.Libraries));
             tabs.Add(CreateTabButton("Montages", MontageBrowserTab.Montages));
             tabs.Add(CreateTabButton("Notifies", MontageBrowserTab.Notifies));
             tabs.Add(CreateTabButton("Clips", MontageBrowserTab.Clips));
@@ -41,13 +49,19 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             searchField.RegisterValueChangedCallback(_ => Rebuild());
             Add(searchField);
 
+            actionBar.AddToClassList(AnimMontageEditorStyles.BrowserActionBarClass);
+            Add(actionBar);
+
             scrollView.style.flexGrow = 1;
             scrollView.style.flexShrink = 1;
             scrollView.style.minHeight = 0;
             Add(scrollView);
 
             RegisterCallback<KeyDownEvent>(OnKeyDown);
+            RegisterCallback<DetachFromPanelEvent>(_ => EditorApplication.projectChanged -= Rebuild);
             context.Changed += Rebuild;
+            context.SelectionChanged += Rebuild;
+            EditorApplication.projectChanged += Rebuild;
             Rebuild();
         }
 
@@ -61,18 +75,25 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 text = label
             };
+            button.AddToClassList(AnimMontageEditorStyles.BrowserTabClass);
+            tabButtons[tab] = button;
             return button;
         }
 
         private void Rebuild()
         {
             scrollView.Clear();
+            RebuildActionBar();
+            RefreshTabButtons();
             string filter = searchField.value?.Trim() ?? string.Empty;
 
             switch (activeTab)
             {
+                case MontageBrowserTab.Libraries:
+                    PopulateAssets<AnimMontageLibrarySO>(filter);
+                    break;
                 case MontageBrowserTab.Montages:
-                    PopulateAssets<AnimMontageSO>(filter);
+                    PopulateMontages(filter);
                     break;
                 case MontageBrowserTab.Notifies:
                     PopulateNotifyTypes<AnimNotify>(filter, "Notify");
@@ -82,6 +103,43 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     PopulateClips(filter);
                     break;
             }
+        }
+
+        private void RebuildActionBar()
+        {
+            actionBar.Clear();
+            switch (activeTab)
+            {
+                case MontageBrowserTab.Libraries:
+                    actionBar.Add(CreateActionButton("New Library", createLibrary));
+                    break;
+                case MontageBrowserTab.Montages:
+                    Button button = CreateActionButton("New Montage", createMontage);
+                    button.SetEnabled(context.MontageLibrary != null);
+                    actionBar.Add(button);
+                    break;
+            }
+
+            actionBar.style.display = actionBar.childCount > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void RefreshTabButtons()
+        {
+            foreach (KeyValuePair<MontageBrowserTab, Button> pair in tabButtons)
+            {
+                pair.Value.EnableInClassList(
+                    AnimMontageEditorStyles.BrowserTabActiveClass,
+                    pair.Key == activeTab);
+            }
+        }
+
+        private static Button CreateActionButton(string text, Action onClick)
+        {
+            var button = new Button(() => onClick?.Invoke())
+            {
+                text = text
+            };
+            return button;
         }
 
         private void PopulateAssets<T>(string filter) where T : UnityEngine.Object
@@ -101,10 +159,43 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 scrollView.Add(CreateRow(asset.name, asset, () =>
                 {
                     Focus();
-                    if (asset is AnimMontageSO montage)
+                    selectedNotifyType = null;
+                    if (asset is AnimMontageLibrarySO library)
+                        context.SetMontageLibrary(library);
+                    else if (asset is AnimMontageSO montage)
                         context.SetMontage(montage);
                     else
                         context.SetSelected(asset);
+                }));
+            }
+        }
+
+        private void PopulateMontages(string filter)
+        {
+            if (context.MontageLibrary == null)
+            {
+                AddEmptyState("Select a Montage Library.");
+                return;
+            }
+
+            IReadOnlyList<AnimMontageSO> montages = context.MontageLibrary.Montages;
+            for (int i = 0; i < montages.Count; i++)
+            {
+                AnimMontageSO montage = montages[i];
+                if (montage == null)
+                    continue;
+
+                if (!string.IsNullOrEmpty(filter) &&
+                    montage.name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+
+                scrollView.Add(CreateRow(montage.name, montage, () =>
+                {
+                    Focus();
+                    selectedNotifyType = null;
+                    context.SetMontage(montage);
                 }));
             }
         }
@@ -120,7 +211,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     type.Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
                     continue;
 
-                scrollView.Add(CreateTypeRow($"{category}: {type.Name}", type));
+                scrollView.Add(CreateTypeRow($"{category}: {type.Name}", type, () =>
+                {
+                    Focus();
+                    selectedNotifyType = type;
+                    context.SetSelected(null);
+                }));
             }
         }
 
@@ -144,6 +240,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 scrollView.Add(CreateRow(clip.name, clip, () =>
                 {
                     Focus();
+                    selectedNotifyType = null;
                     context.SetSelected(clip);
                 }));
             }
@@ -153,13 +250,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         {
             var row = new VisualElement();
             row.AddToClassList(AnimMontageEditorStyles.BrowserRowClass);
+            if (IsLoadedAsset(asset))
+                row.AddToClassList(AnimMontageEditorStyles.BrowserRowLoadedClass);
+            if (IsSelectedAsset(asset))
+                row.AddToClassList(AnimMontageEditorStyles.BrowserRowSelectedClass);
             row.RegisterCallback<ClickEvent>(_ => onClick());
-            if (asset is AnimMontageSO montage)
+            if (asset is AnimMontageSO or AnimMontageLibrarySO)
             {
                 row.AddManipulator(new ContextualMenuManipulator(evt =>
                 {
-                    evt.menu.AppendAction("Rename", _ => RenameMontage(montage));
-                    evt.menu.AppendAction("Delete", _ => DeleteMontage(montage));
+                    evt.menu.AppendAction("Rename", _ => RenameAsset(asset));
+                    evt.menu.AppendAction("Delete", _ => DeleteAsset(asset));
                 }));
             }
 
@@ -176,104 +277,147 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return row;
         }
 
-        private VisualElement CreateTypeRow(string label, Type type)
+        private VisualElement CreateTypeRow(string label, Type type, Action onClick)
         {
             var row = new VisualElement();
             row.AddToClassList(AnimMontageEditorStyles.BrowserRowClass);
-            row.RegisterCallback<ClickEvent>(_ => Debug.Log(type.FullName));
+            if (selectedNotifyType == type)
+                row.AddToClassList(AnimMontageEditorStyles.BrowserRowSelectedClass);
+            row.RegisterCallback<ClickEvent>(_ => onClick());
 
             row.Add(new Label(label));
             return row;
         }
 
+        private bool IsSelectedAsset(UnityEngine.Object asset)
+        {
+            return asset != null && asset == context.SelectedObject;
+        }
+
+        private bool IsLoadedAsset(UnityEngine.Object asset)
+        {
+            return asset != null
+                   && (asset == context.Montage || asset == context.MontageLibrary);
+        }
+
+        private void AddEmptyState(string message)
+        {
+            var label = new Label(message);
+            label.AddToClassList(AnimMontageEditorStyles.EmptyStateClass);
+            scrollView.Add(label);
+        }
+
         private void OnKeyDown(KeyDownEvent evt)
         {
-            if (activeTab != MontageBrowserTab.Montages || context.Montage == null)
+            UnityEngine.Object target = GetKeyboardManagedAsset();
+            if (target == null)
                 return;
 
             if (evt.keyCode == KeyCode.F2)
             {
-                RenameMontage(context.Montage);
+                RenameAsset(target);
                 evt.StopPropagation();
                 return;
             }
 
             if (evt.keyCode == KeyCode.Delete)
             {
-                DeleteMontage(context.Montage);
+                DeleteAsset(target);
                 evt.StopPropagation();
             }
         }
 
-        private void RenameMontage(AnimMontageSO montage)
+        private UnityEngine.Object GetKeyboardManagedAsset()
         {
-            if (montage == null)
+            return activeTab switch
+            {
+                MontageBrowserTab.Libraries => context.MontageLibrary,
+                MontageBrowserTab.Montages => context.Montage,
+                _ => null
+            };
+        }
+
+        private void RenameAsset(UnityEngine.Object asset)
+        {
+            if (asset == null)
                 return;
 
-            RenameAssetPopup.Show(montage, newName =>
+            string title = asset is AnimMontageLibrarySO ? "Rename Montage Library" : "Rename Montage";
+            RenameAssetPopup.Show(asset, title, newName =>
             {
-                string path = AssetDatabase.GetAssetPath(montage);
+                string path = AssetDatabase.GetAssetPath(asset);
                 if (string.IsNullOrEmpty(path))
                     return;
 
                 string error = AssetDatabase.RenameAsset(path, newName);
                 if (!string.IsNullOrEmpty(error))
                 {
-                    EditorUtility.DisplayDialog("Rename Montage", error, "OK");
+                    EditorUtility.DisplayDialog(title, error, "OK");
                     return;
                 }
 
                 AssetDatabase.SaveAssets();
-                context.SetMontage(montage);
+                if (asset is AnimMontageLibrarySO library)
+                    context.SetMontageLibrary(library);
+                else if (asset is AnimMontageSO montage)
+                    context.SetMontage(montage);
                 Rebuild();
             });
         }
 
-        private void DeleteMontage(AnimMontageSO montage)
+        private void DeleteAsset(UnityEngine.Object asset)
         {
-            if (montage == null)
+            if (asset == null)
                 return;
 
-            string path = AssetDatabase.GetAssetPath(montage);
+            string path = AssetDatabase.GetAssetPath(asset);
             if (string.IsNullOrEmpty(path))
                 return;
 
+            string assetKind = asset is AnimMontageLibrarySO ? "Montage Library" : "Montage";
             if (!EditorUtility.DisplayDialog(
-                    "Delete Montage",
-                    $"Delete '{montage.name}'?\n\n{path}",
+                    $"Delete {assetKind}",
+                    $"Delete '{asset.name}'?\n\n{path}",
                     "Delete",
                     "Cancel"))
             {
                 return;
             }
 
-            bool deletingCurrent = context.Montage == montage;
+            bool deletingCurrentMontage = asset is AnimMontageSO montage && context.Montage == montage;
+            bool deletingCurrentLibrary = asset is AnimMontageLibrarySO library && context.MontageLibrary == library;
+            bool deletingMontageAsset = asset is AnimMontageSO;
             if (!AssetDatabase.DeleteAsset(path))
             {
-                EditorUtility.DisplayDialog("Delete Montage", "Failed to delete asset.", "OK");
+                EditorUtility.DisplayDialog($"Delete {assetKind}", "Failed to delete asset.", "OK");
                 return;
             }
 
+            if (deletingMontageAsset)
+                MontageLibraryReferenceCleaner.RemoveMissingMontageReferences();
+
             AssetDatabase.SaveAssets();
-            if (deletingCurrent)
+            if (deletingCurrentMontage)
                 context.SetMontage(null);
+            else if (deletingCurrentLibrary)
+                context.SetMontageLibrary(null);
             else
                 Rebuild();
         }
 
         private sealed class RenameAssetPopup : EditorWindow
         {
-            private AnimMontageSO target;
+            private UnityEngine.Object target;
             private string newName;
             private Action<string> onRename;
 
-            public static void Show(AnimMontageSO target, Action<string> onRename)
+            public static void Show(UnityEngine.Object target, string title, Action<string> onRename)
             {
                 if (target == null)
                     return;
 
                 var window = CreateInstance<RenameAssetPopup>();
-                window.titleContent = new GUIContent("Rename Montage");
+                window.titleContent = new GUIContent(title);
                 window.target = target;
                 window.newName = target.name;
                 window.onRename = onRename;
@@ -330,6 +474,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private enum MontageBrowserTab
         {
+            Libraries,
             Montages,
             Notifies,
             Clips

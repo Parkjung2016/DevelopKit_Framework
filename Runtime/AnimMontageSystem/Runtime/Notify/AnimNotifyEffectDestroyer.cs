@@ -8,6 +8,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private ParticleSystem[] particleSystems;
         private VisualEffect[] visualEffects;
         private float stopAtTime;
+        private float minimumDestroyAtTime;
         private float forceDestroyAtTime;
         private bool stopped;
         private bool stopLoopingEffectsOnly;
@@ -21,12 +22,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             shouldStopEffects = !stopLoopingEffectsOnly
                                 || AnimNotifyRuntimeUtility.HasLoopingEffects(particleSystems, visualEffects);
             stopAtTime = Time.time + Mathf.Max(0f, delay);
-            forceDestroyAtTime = (shouldStopEffects ? stopAtTime : Time.time) + 10f;
+            minimumDestroyAtTime = shouldStopEffects
+                ? stopAtTime
+                : Time.time + AnimNotifyRuntimeUtility.EstimateNaturalEffectLifetime(particleSystems, visualEffects);
+            forceDestroyAtTime = minimumDestroyAtTime + 10f;
             stopped = false;
             enabled = true;
-
-            if (!shouldStopEffects && !AnimNotifyRuntimeUtility.AreEffectsAlive(particleSystems, visualEffects))
-                CompleteDestroy();
         }
 
         private void Update()
@@ -38,6 +39,11 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
                 AnimNotifyRuntimeUtility.StopEffects(particleSystems, visualEffects, stopLoopingEffectsOnly);
                 stopped = true;
+            }
+
+            if (Time.time < minimumDestroyAtTime)
+            {
+                return;
             }
 
             if (Time.time < forceDestroyAtTime

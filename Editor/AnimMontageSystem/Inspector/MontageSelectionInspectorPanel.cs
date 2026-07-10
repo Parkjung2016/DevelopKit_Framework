@@ -70,6 +70,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (montage == null)
                 return false;
 
+            if (TryBuildMultiSelectionInspector())
+                return true;
+
             boundObject = new SerializedObject(montage);
             if (context.SelectedSegmentIndex >= 0)
                 return BuildArrayElementInspector(
@@ -86,7 +89,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (context.SelectedNotifyIndex >= 0)
                 return BuildArrayElementInspector(
-                    "Anim Notify",
+                    GetManagedReferenceTitle("Anim Notify", "notifies", context.SelectedNotifyIndex, "notify"),
                     "notifies",
                     context.SelectedNotifyIndex,
                     "notify",
@@ -95,7 +98,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (context.SelectedNotifyStateIndex >= 0)
                 return BuildArrayElementInspector(
-                    "Anim Notify State",
+                    GetManagedReferenceTitle("Anim Notify State", "notifyStates", context.SelectedNotifyStateIndex, "notifyState"),
                     "notifyStates",
                     context.SelectedNotifyStateIndex,
                     "notifyState",
@@ -115,6 +118,75 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     "customColor");
 
             return false;
+        }
+
+        private bool TryBuildMultiSelectionInspector()
+        {
+            int segmentCount = context.SelectedSegmentIndices.Count;
+            int notifyCount = context.SelectedNotifyIndices.Count;
+            int stateCount = context.SelectedNotifyStateIndices.Count;
+            int customCount = context.SelectedCustomElementIndices.Count;
+            int trackCount = context.SelectedTimelineTrackKeys.Count;
+            int totalCount = segmentCount + notifyCount + stateCount + customCount + trackCount;
+            if (totalCount <= 1)
+                return false;
+
+            host.Add(new Label("Multi Selection")
+            {
+                style =
+                {
+                    unityFontStyleAndWeight = FontStyle.Bold,
+                    marginBottom = 6f
+                }
+            });
+
+            host.Add(new Label($"{totalCount} timeline items selected.")
+            {
+                style =
+                {
+                    marginBottom = 8f,
+                    whiteSpace = WhiteSpace.Normal,
+                    color = new Color(0.78f, 0.82f, 0.9f, 0.9f)
+                }
+            });
+
+            AddSelectionCountLabel("Segments", segmentCount);
+            AddSelectionCountLabel("Notifies", notifyCount);
+            AddSelectionCountLabel("Notify States", stateCount);
+            AddSelectionCountLabel("Custom Elements", customCount);
+            AddSelectionCountLabel("Tracks", trackCount);
+            return true;
+        }
+
+        private void AddSelectionCountLabel(string label, int count)
+        {
+            if (count <= 0)
+                return;
+
+            host.Add(new Label($"{label}: {count}")
+            {
+                style =
+                {
+                    marginBottom = 2f,
+                    color = new Color(1f, 1f, 1f, 0.82f)
+                }
+            });
+        }
+
+        private string GetManagedReferenceTitle(string fallback, string arrayPropertyName, int index, string managedReferenceName)
+        {
+            SerializedProperty array = boundObject.FindProperty(arrayPropertyName);
+            if (array == null || index < 0 || index >= array.arraySize)
+                return fallback;
+
+            SerializedProperty property = array.GetArrayElementAtIndex(index).FindPropertyRelative(managedReferenceName);
+            object value = property?.managedReferenceValue;
+            return value switch
+            {
+                AnimNotify notify => $"{fallback}: {notify.DisplayName}",
+                AnimNotifyState state => $"{fallback}: {state.DisplayName}",
+                _ => fallback
+            };
         }
 
         private bool TryBuildMontageInspector()

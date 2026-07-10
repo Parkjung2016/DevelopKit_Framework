@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -533,6 +534,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private readonly List<SegmentClipboardData> copiedSegments = new();
         private readonly List<NotifyClipboardData> copiedNotifies = new();
         private readonly List<NotifyStateClipboardData> copiedNotifyStates = new();
+        private readonly Dictionary<AudioClip, float[]> audioWaveformCache = new();
         private readonly Label hoverTooltip;
 
         private float pixelsPerSecond = 120f;
@@ -1420,7 +1422,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             float playRate = segment.PlayRate;
             float maxStartTime = dragAnchorSegmentEnd - MinSegmentDuration;
-            startTime = Snap(Mathf.Clamp(startTime, 0f, maxStartTime));
+            startTime = SnapTimelineEdgeTime(
+                Mathf.Clamp(startTime, 0f, maxStartTime),
+                TrackKind.Segment,
+                segment.TrackId,
+                ignoreSegmentIndex: segmentIndex);
             float deltaClip = (startTime - dragAnchorValue) * playRate;
             float clipStart = Mathf.Clamp(dragAnchorClipStart + deltaClip, 0f, dragAnchorClipEnd - MinSegmentDuration * playRate);
             float duration = Mathf.Max(MinSegmentDuration, (dragAnchorClipEnd - clipStart) / playRate);
@@ -1450,9 +1456,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             float maxEndTime = segment.IsLoopingClip
                 ? float.PositiveInfinity
                 : segment.StartTime + (segment.Clip.length - dragAnchorClipStart) / playRate;
-            endTime = Snap(segment.IsLoopingClip
-                ? Mathf.Max(minEndTime, endTime)
-                : Mathf.Clamp(endTime, minEndTime, maxEndTime));
+            endTime = SnapTimelineEdgeTime(
+                segment.IsLoopingClip
+                    ? Mathf.Max(minEndTime, endTime)
+                    : Mathf.Clamp(endTime, minEndTime, maxEndTime),
+                TrackKind.Segment,
+                segment.TrackId,
+                ignoreSegmentIndex: segmentIndex);
             float clipEnd = dragAnchorClipStart + (endTime - segment.StartTime) * playRate;
             if (!segment.IsLoopingClip)
                 clipEnd = Mathf.Clamp(clipEnd, dragAnchorClipStart + MinSegmentDuration * playRate, segment.Clip.length);
@@ -1549,6 +1559,75 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
         }
 
+        private float SnapTimelineEdgeTime(
+            float time,
+            TrackKind kind,
+            string trackId,
+            int ignoreSegmentIndex = -1,
+            int ignoreNotifyStateIndex = -1)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return Snap(time);
+
+            trackId = SanitizeTrackId(trackId);
+            float tolerance = MagneticSnapPixels / Mathf.Max(1f, pixelsPerSecond);
+            float bestDistance = tolerance;
+            float snappedTime = time;
+            bool snapped = false;
+
+            TrySnapToGuide(0f);
+
+            if (kind == TrackKind.Segment)
+            {
+                for (int i = 0; i < montage.Segments.Count; i++)
+                {
+                    if (i == ignoreSegmentIndex)
+                        continue;
+
+                    MontageSegment segment = montage.Segments[i];
+                    if (segment == null || segment.TrackId != trackId)
+                        continue;
+
+                    TrySnapToGuide(segment.StartTime);
+                    TrySnapToGuide(segment.EndTime);
+                }
+            }
+            else if (kind == TrackKind.NotifyState)
+            {
+                for (int i = 0; i < montage.NotifyStates.Count; i++)
+                {
+                    if (i == ignoreNotifyStateIndex)
+                        continue;
+
+                    AnimNotifyStatePlacement placement = montage.NotifyStates[i];
+                    if (placement == null || placement.TrackId != trackId)
+                        continue;
+
+                    TrySnapToGuide(placement.StartTime);
+                    TrySnapToGuide(placement.EndTime);
+                }
+            }
+
+            if (!snapped)
+                return Snap(time);
+
+            hasSnapGuide = true;
+            snapGuideTime = snappedTime;
+            return Snap(Mathf.Max(0f, snappedTime));
+
+            void TrySnapToGuide(float guideTime)
+            {
+                float distance = Mathf.Abs(time - guideTime);
+                if (distance > bestDistance)
+                    return;
+
+                bestDistance = distance;
+                snappedTime = guideTime;
+                snapped = true;
+            }
+        }
+
         private void ApplyNotifyTime(int notifyIndex, float time)
         {
             Undo.RecordObject(context.Montage, "Move Anim Notify");
@@ -1578,11 +1657,33 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void ApplyNotifyStateRange(int notifyStateIndex, float startTime, float endTime)
         {
-            startTime = Snap(Mathf.Max(0f, startTime));
-            endTime = Snap(Mathf.Max(startTime + MinSegmentDuration, endTime));
+            AnimNotifyStatePlacement placement = context.Montage.NotifyStates[notifyStateIndex];
+            string trackId = placement != null ? placement.TrackId : "Default";
+            if (dragMode == DragMode.NotifyStateResizeStart)
+            {
+                startTime = SnapTimelineEdgeTime(
+                    Mathf.Max(0f, startTime),
+                    TrackKind.NotifyState,
+                    trackId,
+                    ignoreNotifyStateIndex: notifyStateIndex);
+                endTime = Snap(Mathf.Max(startTime + MinSegmentDuration, endTime));
+            }
+            else if (dragMode == DragMode.NotifyStateResizeEnd)
+            {
+                startTime = Snap(Mathf.Max(0f, startTime));
+                endTime = SnapTimelineEdgeTime(
+                    Mathf.Max(startTime + MinSegmentDuration, endTime),
+                    TrackKind.NotifyState,
+                    trackId,
+                    ignoreNotifyStateIndex: notifyStateIndex);
+            }
+            else
+            {
+                startTime = Snap(Mathf.Max(0f, startTime));
+                endTime = Snap(Mathf.Max(startTime + MinSegmentDuration, endTime));
+            }
 
             Undo.RecordObject(context.Montage, "Adjust Notify State");
-            AnimNotifyStatePlacement placement = context.Montage.NotifyStates[notifyStateIndex];
             placement.StartTime = startTime;
             placement.EndTime = endTime;
             context.MarkDirty();
@@ -2361,7 +2462,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
                 string key = GetTrackKey(source.Kind, trackId);
                 if (order != null)
-                    EnsureTrackKeyInOrder(order, key);
+                    InsertTrackKeyAfter(order, GetTrackKey(source.Kind, source.TrackId), key);
 
                 newTrackKeys.Add(key);
             }
@@ -2651,6 +2752,18 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             order.GetArrayElementAtIndex(index).stringValue = key;
         }
 
+        private static void InsertTrackKeyAfter(SerializedProperty order, string sourceKey, string key)
+        {
+            int existingIndex = FindTrackKeyIndex(order, key);
+            if (existingIndex >= 0)
+                order.DeleteArrayElementAtIndex(existingIndex);
+
+            int sourceIndex = FindTrackKeyIndex(order, sourceKey);
+            int insertIndex = sourceIndex >= 0 ? sourceIndex + 1 : order.arraySize;
+            order.InsertArrayElementAtIndex(Mathf.Clamp(insertIndex, 0, order.arraySize));
+            order.GetArrayElementAtIndex(Mathf.Clamp(insertIndex, 0, order.arraySize - 1)).stringValue = key;
+        }
+
         private static int FindTrackKeyIndex(SerializedProperty order, string key)
         {
             for (int i = 0; i < order.arraySize; i++)
@@ -2894,6 +3007,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 StrokeRoundedRect(painter, clippedBody, 3f);
 
                 DrawSegmentAutoBlendOverlay(painter, clippedBody, montage, segment, segmentIndex, contentRect);
+                DrawSegmentLoopBadge(painter, clippedBody, segment.IsLoopingClip);
 
                 if (clippedBody.width > 28f)
                 {
@@ -2914,6 +3028,43 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return y + TrackHeight + TrackGap;
         }
 
+        private static void DrawSegmentLoopBadge(Painter2D painter, Rect segmentRect, bool isLooping)
+        {
+            if (segmentRect.width < 42f)
+                return;
+
+            float width = isLooping ? 20f : 18f;
+            Rect badge = new(
+                Mathf.Max(segmentRect.xMin + 4f, segmentRect.xMax - width - 4f),
+                segmentRect.yMin + 4f,
+                width,
+                14f);
+
+            painter.fillColor = isLooping
+                ? new Color(0.08f, 0.46f, 0.24f, 0.9f)
+                : new Color(0.08f, 0.08f, 0.09f, 0.72f);
+            FillRoundedRect(painter, badge, 3f);
+            painter.strokeColor = isLooping
+                ? new Color(0.82f, 1f, 0.86f, 1f)
+                : new Color(1f, 1f, 1f, 0.78f);
+            painter.lineWidth = 1.2f;
+
+            if (isLooping)
+            {
+                float cy = badge.center.y;
+                painter.BeginPath();
+                painter.Arc(new Vector2(badge.center.x - 1f, cy), 4f, 35f, 315f);
+                painter.Stroke();
+                DrawTriangle(painter, badge.center.x + 5f, cy - 2.5f, 3f, painter.strokeColor);
+                return;
+            }
+
+            painter.BeginPath();
+            painter.MoveTo(new Vector2(badge.xMin + 5f, badge.center.y));
+            painter.LineTo(new Vector2(badge.xMax - 5f, badge.center.y));
+            painter.Stroke();
+        }
+
         private float DrawNotifyTrack(Painter2D painter, Rect rect, float y, AnimMontageSO montage, string trackId)
         {
             DrawTrackRow(painter, rect, y, new Color(0.18f, 0.62f, 0.72f, 0.22f), TrackKind.Notify, trackId);
@@ -2929,13 +3080,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     ? placement.CustomColor
                     : placement.Notify != null ? placement.Notify.EditorColor : new Color(0.4f, 0.8f, 1f);
                 float x = TimeToX(placement.Time);
-                if (x < contentRect.xMin - 8f || x > contentRect.xMax + 8f)
+                AudioClip audioClip = GetAudioClipFromNotify(placement.Notify);
+                float visibleEndX = audioClip != null ? TimeToX(placement.Time + audioClip.length) : x;
+                if (visibleEndX < contentRect.xMin - 8f || x > contentRect.xMax + 8f)
                     continue;
 
-                DrawDiamond(painter, x, y + TrackHeight * 0.5f, 7f, color);
+                DrawNotifyAudioWaveform(painter, placement, audioClip, y, contentRect, color);
+                if (x >= contentRect.xMin - 8f && x <= contentRect.xMax + 8f)
+                    DrawDiamond(painter, x, y + TrackHeight * 0.5f, 7f, color);
                 var hitRect = new Rect(x - 9f, y + TrackHeight * 0.5f - 9f, 18f, 18f);
                 notifyLayouts.Add(new NotifyLayout(i, hitRect));
-                if (context.IsNotifySelected(i))
+                if (context.IsNotifySelected(i) && x >= contentRect.xMin - 8f && x <= contentRect.xMax + 8f)
                 {
                     painter.strokeColor = new Color(1f, 1f, 1f, 0.78f);
                     painter.lineWidth = 1.5f;
@@ -2944,6 +3099,100 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
 
             return y + TrackHeight + TrackGap;
+        }
+
+        private void DrawNotifyAudioWaveform(
+            Painter2D painter,
+            AnimNotifyPlacement placement,
+            AudioClip clip,
+            float y,
+            Rect contentRect,
+            Color color)
+        {
+            if (clip == null || clip.length <= 0f)
+                return;
+
+            float x0 = TimeToX(placement.Time);
+            float x1 = TimeToX(placement.Time + clip.length);
+            var body = new Rect(x0, y + 5f, Mathf.Max(8f, x1 - x0), TrackHeight - 10f);
+            if (!TryClipRect(body, contentRect, out Rect clippedBody))
+                return;
+
+            painter.fillColor = new Color(color.r, color.g, color.b, 0.16f);
+            FillRoundedRect(painter, clippedBody, 3f);
+            painter.strokeColor = new Color(color.r, color.g, color.b, 0.5f);
+            painter.lineWidth = 1f;
+            StrokeRoundedRect(painter, clippedBody, 3f);
+
+            float[] peaks = GetAudioWaveformPeaks(clip);
+            if (peaks == null || peaks.Length == 0 || clippedBody.width < 6f)
+                return;
+
+            painter.strokeColor = new Color(0.72f, 0.9f, 1f, 0.82f);
+            painter.lineWidth = 1f;
+            float centerY = clippedBody.center.y;
+            float amplitude = clippedBody.height * 0.42f;
+            int columns = Mathf.Clamp(Mathf.FloorToInt(clippedBody.width), 4, peaks.Length);
+            for (int i = 0; i < columns; i++)
+            {
+                int peakIndex = Mathf.Clamp(Mathf.RoundToInt(i / Mathf.Max(1f, columns - 1f) * (peaks.Length - 1)), 0, peaks.Length - 1);
+                float x = Mathf.Lerp(clippedBody.xMin + 2f, clippedBody.xMax - 2f, i / Mathf.Max(1f, columns - 1f));
+                float fallback = 0.16f + 0.1f * Mathf.Sin(i * 0.55f);
+                float h = Mathf.Max(1f, Mathf.Max(peaks[peakIndex], fallback) * amplitude);
+                painter.BeginPath();
+                painter.MoveTo(new Vector2(x, centerY - h));
+                painter.LineTo(new Vector2(x, centerY + h));
+                painter.Stroke();
+            }
+        }
+
+        private static AudioClip GetAudioClipFromNotify(AnimNotify notify)
+        {
+            if (notify == null)
+                return null;
+
+            FieldInfo field = notify.GetType().GetField("clip", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            return field != null && field.FieldType == typeof(AudioClip)
+                ? field.GetValue(notify) as AudioClip
+                : null;
+        }
+
+        private float[] GetAudioWaveformPeaks(AudioClip clip)
+        {
+            if (audioWaveformCache.TryGetValue(clip, out float[] peaks))
+                return peaks;
+
+            const int PeakCount = 96;
+            peaks = new float[PeakCount];
+            audioWaveformCache[clip] = peaks;
+            if (clip == null || clip.samples <= 0 || clip.channels <= 0)
+                return peaks;
+
+            int sampleCount = Mathf.Min(clip.samples * clip.channels, 44100 * clip.channels * 20);
+            float[] samples = new float[sampleCount];
+            try
+            {
+                if (!clip.GetData(samples, 0))
+                    return peaks;
+            }
+            catch
+            {
+                return peaks;
+            }
+
+            int samplesPerPeak = Mathf.Max(1, sampleCount / PeakCount);
+            for (int i = 0; i < PeakCount; i++)
+            {
+                int start = i * samplesPerPeak;
+                int end = Mathf.Min(sampleCount, start + samplesPerPeak);
+                float max = 0f;
+                for (int j = start; j < end; j++)
+                    max = Mathf.Max(max, Mathf.Abs(samples[j]));
+
+                peaks[i] = Mathf.Clamp01(max);
+            }
+
+            return peaks;
         }
 
         private float DrawNotifyStateTrack(Painter2D painter, Rect rect, float y, AnimMontageSO montage, string trackId)
@@ -2995,6 +3244,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     FillRoundedRect(painter, inner, 3f);
                 }
 
+                DrawNotifyStateAudioWaveform(painter, placement, body, selected);
+
                 float gripWidth = Mathf.Min(5f, Mathf.Max(2f, body.width * 0.25f));
                 if (body.width >= 8f)
                 {
@@ -3024,6 +3275,63 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
 
             return y + TrackHeight + TrackGap;
+        }
+
+        private void DrawNotifyStateAudioWaveform(
+            Painter2D painter,
+            AnimNotifyStatePlacement placement,
+            Rect body,
+            bool selected)
+        {
+            AudioClip clip = GetAudioClipFromNotifyState(placement.NotifyState);
+            if (clip == null || clip.length <= 0f || body.width < 8f)
+                return;
+
+            float[] peaks = GetAudioWaveformPeaks(clip);
+            if (peaks == null || peaks.Length == 0)
+                return;
+
+            Rect waveRect = new(
+                body.xMin + 6f,
+                body.yMin + 6f,
+                Mathf.Max(0f, body.width - 12f),
+                Mathf.Max(0f, body.height - 12f));
+            if (waveRect.width <= 2f || waveRect.height <= 2f)
+                return;
+
+            painter.strokeColor = selected
+                ? new Color(1f, 0.96f, 0.72f, 0.95f)
+                : new Color(1f, 0.93f, 0.62f, 0.76f);
+            painter.lineWidth = 1f;
+
+            float centerY = waveRect.center.y;
+            float amplitude = waveRect.height * 0.46f;
+            int columns = Mathf.Clamp(Mathf.FloorToInt(waveRect.width), 4, 240);
+            for (int i = 0; i < columns; i++)
+            {
+                float normalized = i / Mathf.Max(1f, columns - 1f);
+                float timeInState = normalized * Mathf.Max(0.0001f, placement.Duration);
+                float clipPhase = Mathf.Repeat(timeInState, clip.length) / clip.length;
+                int peakIndex = Mathf.Clamp(Mathf.RoundToInt(clipPhase * (peaks.Length - 1)), 0, peaks.Length - 1);
+                float x = Mathf.Lerp(waveRect.xMin, waveRect.xMax, normalized);
+                float fallback = 0.16f + 0.1f * Mathf.Sin(i * 0.55f);
+                float h = Mathf.Max(1f, Mathf.Max(peaks[peakIndex], fallback) * amplitude);
+                painter.BeginPath();
+                painter.MoveTo(new Vector2(x, centerY - h));
+                painter.LineTo(new Vector2(x, centerY + h));
+                painter.Stroke();
+            }
+        }
+
+        private static AudioClip GetAudioClipFromNotifyState(AnimNotifyState notifyState)
+        {
+            if (notifyState == null)
+                return null;
+
+            FieldInfo field = notifyState.GetType().GetField("clip", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            return field != null && field.FieldType == typeof(AudioClip)
+                ? field.GetValue(notifyState) as AudioClip
+                : null;
         }
 
         private float DrawCustomTrack(Painter2D painter, Rect rect, float y, AnimMontageSO montage, string trackId)
@@ -3291,6 +3599,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             painter.Fill();
         }
 
+        private static void DrawTriangle(Painter2D painter, float cx, float cy, float radius, Color color)
+        {
+            painter.fillColor = color;
+            painter.BeginPath();
+            painter.MoveTo(new Vector2(cx + radius, cy));
+            painter.LineTo(new Vector2(cx - radius, cy - radius));
+            painter.LineTo(new Vector2(cx - radius, cy + radius));
+            painter.ClosePath();
+            painter.Fill();
+        }
+
         private static void StrokeDiamond(Painter2D painter, float cx, float cy, float radius)
         {
             painter.BeginPath();
@@ -3305,7 +3624,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private bool TryHitPlayhead(Vector2 local, out float distance)
         {
             distance = Mathf.Abs(local.x - TimeToX(context.PlayheadTime));
-            return distance <= 6f;
+            return local.y <= RulerHeight && distance <= 6f;
         }
 
         private bool TryHitSegment(Vector2 local, out int index, out DragMode mode)

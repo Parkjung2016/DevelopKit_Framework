@@ -160,6 +160,33 @@
     -unity-font-style: bold;
 }
 
+.am-browser-tab {
+    border-bottom-width: 2px;
+    border-bottom-color: rgba(0, 0, 0, 0);
+}
+
+.am-browser-tab-active {
+    background-color: rgba(80, 140, 255, 0.22);
+    border-bottom-color: rgba(135, 190, 255, 0.95);
+    color: rgba(255, 255, 255, 0.95);
+    -unity-font-style: bold;
+}
+
+.am-browser-action-bar {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 5px 6px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.am-browser-action-bar Button {
+    flex-grow: 1;
+    min-height: 22px;
+}
+
 .am-browser-row {
     flex-direction: row;
     align-items: center;
@@ -172,8 +199,25 @@
     background-color: rgba(255, 255, 255, 0.05);
 }
 
+.am-browser-row-loaded {
+    background-color: rgba(90, 200, 150, 0.13);
+    border-right-width: 3px;
+    border-right-color: rgba(90, 200, 150, 0.75);
+}
+
+.am-browser-row-loaded:hover {
+    background-color: rgba(90, 200, 150, 0.2);
+}
+
 .am-browser-row-selected {
-    background-color: rgba(80, 140, 255, 0.25);
+    background-color: rgba(80, 140, 255, 0.34);
+    border-left-width: 3px;
+    border-left-color: rgba(135, 190, 255, 0.95);
+    padding-left: 7px;
+}
+
+.am-browser-row-selected:hover {
+    background-color: rgba(80, 140, 255, 0.45);
 }
 
 .am-preview-host {

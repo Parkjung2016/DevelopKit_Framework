@@ -52,6 +52,22 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             dispatcher.Dispatch(playback, gameObject, animator, this);
         }
 
+        private void OnAnimatorMove()
+        {
+            if (animator == null
+                || playback.Montage == null
+                || !playback.Montage.ApplyRootMotion
+                || !playback.IsPlaying
+                || playback.IsPaused)
+            {
+                return;
+            }
+
+            Transform animatorTransform = animator.transform;
+            animatorTransform.position += animator.deltaPosition;
+            animatorTransform.rotation *= animator.deltaRotation;
+        }
+
         private void OnDestroy() => DestroyGraph();
 
         public void Play(AnimMontageSO montage, float startTime = 0f)

@@ -8,6 +8,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 {
     internal sealed class MontageEditorContext
     {
+        public AnimMontageLibrarySO MontageLibrary { get; private set; }
         public AnimMontageSO Montage { get; private set; }
         public float PlayheadTime { get; private set; }
         public float PreviousPlayheadTime { get; private set; }
@@ -34,9 +35,43 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private readonly HashSet<string> selectedTimelineTrackKeys = new();
 
         public event Action Changed;
+        public event Action MontageChanged;
         public event Action SelectionChanged;
         public event Action PlayheadChanged;
         public event Action PlaybackStateChanged;
+
+        public void SetMontageLibrary(AnimMontageLibrarySO library)
+        {
+            if (MontageLibrary == library)
+            {
+                SelectedObject = library != null ? library : Montage;
+                RaiseSelectionChanged();
+                return;
+            }
+
+            MontageLibrary = library;
+            SelectedObject = library != null ? library : Montage;
+            if (library != null)
+            {
+                PreviewModel = library.PreviewModel;
+                if (Montage != null && !library.Contains(Montage))
+                {
+                    SetMontage(null);
+                    SelectedObject = library;
+                    RaiseSelectionChanged();
+                }
+                else
+                {
+                    RaiseChanged();
+                    RaiseSelectionChanged();
+                }
+            }
+            else
+            {
+                RaiseChanged();
+                RaiseSelectionChanged();
+            }
+        }
 
         public void SetMontage(AnimMontageSO montage)
         {
@@ -46,6 +81,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             SetPlaying(false);
             ClearTimelineSelection();
             SelectedObject = montage;
+            RaiseMontageChanged();
             RaiseChanged();
             RaiseSelectionChanged();
             RaisePlayheadChanged();
@@ -361,6 +397,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
 
         private void RaiseChanged() => Changed?.Invoke();
+        private void RaiseMontageChanged() => MontageChanged?.Invoke();
         private void RaiseSelectionChanged() => SelectionChanged?.Invoke();
         private void RaisePlayheadChanged() => PlayheadChanged?.Invoke();
     }

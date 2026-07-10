@@ -174,6 +174,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 && localRect.Contains(evt.mousePosition))
             {
                 Sample(boundContext);
+                ApplyRootMotionPreviewTransform(boundContext);
                 StabilizePreviewTransform();
                 SimulatePreviewEffects();
                 CacheBounds();
@@ -184,6 +185,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (evt.type == EventType.Repaint)
             {
                 Sample(boundContext);
+                ApplyRootMotionPreviewTransform(boundContext);
                 StabilizePreviewTransform();
                 SimulatePreviewEffects();
                 CacheBounds();
@@ -257,6 +259,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return false;
 
             Sample(boundContext);
+            ApplyRootMotionPreviewTransform(boundContext);
             StabilizePreviewTransform();
             CacheBounds();
             viewportCamera.FrameBounds(renderBounds);
@@ -515,6 +518,32 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private bool IsRootMotionPreviewEnabled() =>
             (boundContext?.Montage?.ApplyRootMotion ?? false);
+
+        private void ApplyRootMotionPreviewTransform(MontageEditorContext context)
+        {
+            if (context?.Montage == null || previewInstance == null || !hasInitialPreviewTransform)
+                return;
+
+            if (!MontageRootMotionPreviewUtility.TryEvaluate(
+                    context.Montage,
+                    context.PlayheadTime,
+                    out Vector3 rootPosition,
+                    out Quaternion rootRotation))
+            {
+                return;
+            }
+
+            if (previewMotionRoot != null && previewMotionRoot != previewInstance.transform)
+            {
+                previewMotionRoot.localPosition = initialMotionRootLocalPosition + rootPosition;
+                previewMotionRoot.localRotation = initialMotionRootLocalRotation * rootRotation;
+                return;
+            }
+
+            previewInstance.transform.SetPositionAndRotation(
+                initialPreviewPosition + rootPosition,
+                initialPreviewRotation * rootRotation);
+        }
 
         private void StabilizePreviewTransform()
         {
