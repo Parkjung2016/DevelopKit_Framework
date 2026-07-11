@@ -118,7 +118,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (CurveCache.TryGetValue(clip, out RootMotionCurves curves))
                 return curves;
 
-            curves = new RootMotionCurves();
+            curves = new RootMotionCurves { ImportSettings = GetRootMotionImportSettings(clip) };
             EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings(clip);
             for (int i = 0; i < bindings.Length; i++)
             {
@@ -155,7 +155,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             rotation = Quaternion.identity;
 
             if (segment.IsLoopingClip && toClipTime < fromClipTime)
-                toClipTime += Mathf.Max(0.0001f, segment.Clip.length - segment.ClipStartTime);
+                toClipTime += Mathf.Max(0.0001f, segment.LoopEndTime - segment.ClipStartTime);
 
             if (toClipTime <= fromClipTime)
                 return;
@@ -163,11 +163,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (!segment.IsLoopingClip)
             {
                 EvaluateDelta(curves, fromClipTime, Mathf.Min(toClipTime, segment.ClipEndTime), out position, out rotation);
+                ApplyImportSettings(curves.ImportSettings, ref position, ref rotation);
                 return;
             }
 
             float loopStart = segment.ClipStartTime;
-            float loopEnd = Mathf.Max(loopStart + 0.0001f, segment.Clip.length);
+            float loopEnd = Mathf.Max(loopStart + 0.0001f, segment.LoopEndTime);
             float cursor = fromClipTime;
             while (cursor < toClipTime)
             {
@@ -179,6 +180,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     : NormalizeLoopTime(stepEndRaw, loopStart, loopEnd);
 
                 EvaluateDelta(curves, normalizedCursor, normalizedStepEnd, out Vector3 stepPosition, out Quaternion stepRotation);
+                ApplyImportSettings(curves.ImportSettings, ref stepPosition, ref stepRotation);
                 position += rotation * stepPosition;
                 rotation = rotation * stepRotation;
                 cursor = stepEndRaw;
@@ -191,6 +193,69 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return loopStart + Mathf.Repeat(time - loopStart, length);
         }
 
+        private static RootMotionImportSettings GetRootMotionImportSettings(AnimationClip clip)
+        {
+            string path = AssetDatabase.GetAssetPath(clip);
+            if (string.IsNullOrEmpty(path))
+                return RootMotionImportSettings.Default;
+
+            if (!(AssetImporter.GetAtPath(path) is ModelImporter importer))
+                return RootMotionImportSettings.Default;
+
+            ModelImporterClipAnimation clipAnimation = FindClipAnimation(importer, clip.name);
+            if (clipAnimation == null)
+                return RootMotionImportSettings.Default;
+
+            return new RootMotionImportSettings(
+                clipAnimation.lockRootRotation,
+                clipAnimation.keepOriginalOrientation,
+                clipAnimation.rotationOffset,
+                clipAnimation.lockRootHeightY,
+                clipAnimation.keepOriginalPositionY,
+                clipAnimation.heightFromFeet,
+                clipAnimation.lockRootPositionXZ,
+                clipAnimation.keepOriginalPositionXZ);
+        }
+
+        private static ModelImporterClipAnimation FindClipAnimation(ModelImporter importer, string clipName)
+        {
+            ModelImporterClipAnimation[] clips = importer.clipAnimations;
+            if (clips == null || clips.Length == 0)
+                clips = importer.defaultClipAnimations;
+
+            if (clips == null)
+                return null;
+
+            for (int i = 0; i < clips.Length; i++)
+            {
+                ModelImporterClipAnimation clip = clips[i];
+                if (clip != null && clip.name == clipName)
+                    return clip;
+            }
+
+            return null;
+        }
+
+        private static void ApplyImportSettings(RootMotionImportSettings settings, ref Vector3 position, ref Quaternion rotation)
+        {
+            if (settings.LockRootRotation)
+                rotation = Quaternion.identity;
+            else if (!Mathf.Approximately(settings.RotationOffset, 0f))
+            {
+                Quaternion offset = Quaternion.Euler(0f, settings.RotationOffset, 0f);
+                position = offset * position;
+                rotation = offset * rotation * Quaternion.Inverse(offset);
+            }
+
+            if (settings.LockRootHeightY)
+                position.y = 0f;
+
+            if (settings.LockRootPositionXZ)
+            {
+                position.x = 0f;
+                position.z = 0f;
+            }
+        }
         private static void EvaluateDelta(RootMotionCurves curves, float from, float to, out Vector3 position, out Quaternion rotation)
         {
             Vector3 startPosition = curves.EvaluatePosition(from);
@@ -201,6 +266,40 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             rotation = Quaternion.Inverse(startRotation) * endRotation;
         }
 
+
+        private readonly struct RootMotionImportSettings
+        {
+            public static readonly RootMotionImportSettings Default = new(false, true, 0f, false, true, false, false, true);
+
+            public RootMotionImportSettings(
+                bool lockRootRotation,
+                bool keepOriginalOrientation,
+                float rotationOffset,
+                bool lockRootHeightY,
+                bool keepOriginalPositionY,
+                bool heightFromFeet,
+                bool lockRootPositionXZ,
+                bool keepOriginalPositionXZ)
+            {
+                LockRootRotation = lockRootRotation;
+                KeepOriginalOrientation = keepOriginalOrientation;
+                RotationOffset = rotationOffset;
+                LockRootHeightY = lockRootHeightY;
+                KeepOriginalPositionY = keepOriginalPositionY;
+                HeightFromFeet = heightFromFeet;
+                LockRootPositionXZ = lockRootPositionXZ;
+                KeepOriginalPositionXZ = keepOriginalPositionXZ;
+            }
+
+            public bool LockRootRotation { get; }
+            public bool KeepOriginalOrientation { get; }
+            public float RotationOffset { get; }
+            public bool LockRootHeightY { get; }
+            public bool KeepOriginalPositionY { get; }
+            public bool HeightFromFeet { get; }
+            public bool LockRootPositionXZ { get; }
+            public bool KeepOriginalPositionXZ { get; }
+        }
         private sealed class RootMotionCurves
         {
             public static readonly RootMotionCurves Empty = new();
@@ -212,6 +311,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             public AnimationCurve RotationY;
             public AnimationCurve RotationZ;
             public AnimationCurve RotationW;
+            public RootMotionImportSettings ImportSettings;
 
             public bool HasAnyCurve =>
                 PositionX != null || PositionY != null || PositionZ != null ||

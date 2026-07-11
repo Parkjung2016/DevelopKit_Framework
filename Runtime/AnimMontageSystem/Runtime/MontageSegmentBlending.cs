@@ -5,17 +5,24 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
     public readonly struct MontageSegmentSample
     {
-        public MontageSegmentSample(MontageSegment segment, int segmentIndex, float clipTime, float weight)
+        public MontageSegmentSample(MontageSegment segment, int segmentIndex, float clipTime, float playableClipTime, float weight)
         {
             Segment = segment;
             SegmentIndex = segmentIndex;
             ClipTime = clipTime;
+            PlayableClipTime = playableClipTime;
             Weight = weight;
+        }
+
+        public MontageSegmentSample(MontageSegment segment, int segmentIndex, float clipTime, float weight)
+            : this(segment, segmentIndex, clipTime, clipTime, weight)
+        {
         }
 
         public MontageSegment Segment { get; }
         public int SegmentIndex { get; }
         public float ClipTime { get; }
+        public float PlayableClipTime { get; }
         public float Weight { get; }
     }
 
@@ -70,10 +77,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 if (weight <= 0.0001f)
                     continue;
 
+                float playableClipTime = ComputePlayableClipTime(montageTime, segment, i, segments);
                 results.Add(new MontageSegmentSample(
                     segment,
                     i,
-                    ComputeClipTime(montageTime, segment, i, segments),
+                    segment.NormalizeClipTime(playableClipTime),
+                    playableClipTime,
                     weight));
                 totalWeight += weight;
             }
@@ -94,6 +103,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                     sample.Segment,
                     sample.SegmentIndex,
                     sample.ClipTime,
+                    sample.PlayableClipTime,
                     sample.Weight / totalWeight);
             }
         }
@@ -153,7 +163,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             return Mathf.Clamp01(weight);
         }
 
-        private static float ComputeClipTime(
+        private static float ComputePlayableClipTime(
             float montageTime,
             MontageSegment segment,
             int segmentIndex,
@@ -168,7 +178,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             bool overlapsPrevious = previous != null && previous.EndTime > start;
             float clipClockStart = crossfadeIn > 0f && !overlapsPrevious ? start - crossfadeIn : start;
             float local = segment.ClipStartTime + (montageTime - clipClockStart) * segment.PlayRate;
-            return segment.NormalizeClipTime(local);
+            return segment.IsLoopingClip ? local : segment.NormalizeClipTime(local);
         }
 
         private static MontageSegment FindPreviousOnTrack(int segmentIndex, IReadOnlyList<MontageSegment> segments)

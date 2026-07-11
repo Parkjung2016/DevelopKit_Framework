@@ -7,6 +7,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     [CreateAssetMenu(fileName = "Montage_", menuName = "PJDev/Animation/Montage")]
     public sealed class AnimMontageSO : ScriptableObject
     {
+        [Min(0.01f)]
         [SerializeField] private float rateScale = 1f;
         [SerializeField] private bool applyRootMotion;
         [SerializeField] private MontageSegment[] segments = Array.Empty<MontageSegment>();
@@ -20,7 +21,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         [SerializeField] private string[] notifyStateTracks = { "Default" };
         [SerializeField] private string[] timelineTrackOrder = Array.Empty<string>();
 
-        public float RateScale => rateScale <= 0f ? 1f : rateScale;
+        public float RateScale => Mathf.Max(0.01f, rateScale);
         public bool ApplyRootMotion => applyRootMotion;
         public IReadOnlyList<MontageSegment> Segments => segments ?? Array.Empty<MontageSegment>();
         public IReadOnlyList<AnimNotifyPlacement> Notifies => notifies ?? Array.Empty<AnimNotifyPlacement>();

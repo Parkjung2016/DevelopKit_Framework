@@ -60,6 +60,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (MontageSceneViewNavigation.IsToolbarRect(viewportRect, Event.current.mousePosition)
                 && Event.current.type is EventType.MouseDown or EventType.MouseUp or EventType.MouseDrag or EventType.ScrollWheel or EventType.KeyDown or EventType.KeyUp)
             {
+                if (Event.current.type == EventType.MouseDown)
+                    CancelInteraction();
+
                 return false;
             }
 

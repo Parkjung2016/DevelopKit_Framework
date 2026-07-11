@@ -1,5 +1,6 @@
-﻿using UnityEditor;
 using System.Collections.Generic;
+using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.VFX;
@@ -26,6 +27,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private MontageEditorContext boundContext;
         private readonly MontageViewportCamera viewportCamera = new();
         private readonly MontageSceneViewBridge sceneViewBridge = new();
+        private readonly MontageAnimatorRootMotionPreviewSampler rootMotionSampler = new();
         private Bounds renderBounds;
         private bool hasBounds;
         private Transform previewMotionRoot;
@@ -395,6 +397,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             MontageViewportInput.Shutdown();
             MontageSceneViewNavigation.Shutdown();
             sceneViewBridge.Dispose();
+            rootMotionSampler.Dispose();
             MontagePreviewSampling.Dispose();
             ClearInstance();
             ClearGrid();
@@ -862,27 +865,58 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (context?.Montage == null || previewInstance == null || !hasInitialPreviewTransform)
                 return;
 
-            if (!MontageRootMotionPreviewUtility.TryEvaluate(
+            bool evaluated = rootMotionSampler.TryEvaluate(
+                previewInstance,
+                context.Montage,
+                context.PlayheadTime,
+                initialPreviewPosition,
+                initialPreviewRotation,
+                out Vector3 rootPosition,
+                out Quaternion rootRotation);
+
+            if (!evaluated)
+            {
+                evaluated = MontageRootMotionPreviewUtility.TryEvaluate(
                     context.Montage,
                     context.PlayheadTime,
-                    out Vector3 rootPosition,
-                    out Quaternion rootRotation))
-            {
-                return;
+                    out rootPosition,
+                    out rootRotation);
             }
+
+            if (!evaluated)
+                return;
+
+            MontagePreviewSampling.TrySample(previewInstance, context);
 
             if (previewMotionRoot != null && previewMotionRoot != previewInstance.transform)
             {
-                previewMotionRoot.localPosition = initialMotionRootLocalPosition + rootPosition;
-                previewMotionRoot.localRotation = initialMotionRootLocalRotation * rootRotation;
-                return;
+                previewMotionRoot.localPosition = initialMotionRootLocalPosition;
+                previewMotionRoot.localRotation = initialMotionRootLocalRotation;
+                previewMotionRoot.localScale = initialMotionRootLocalScale;
             }
 
             previewInstance.transform.SetPositionAndRotation(
-                initialPreviewPosition + rootPosition,
+                initialPreviewPosition + initialPreviewRotation * rootPosition,
                 initialPreviewRotation * rootRotation);
         }
 
+        private void ApplyTimelineElementPreviewTransform(MontageEditorContext context)
+        {
+            if (context?.Montage == null || previewInstance == null)
+                return;
+
+            MontageTimelineElementEvaluation evaluation = MontageTimelineElementEvaluator.Evaluate(context.Montage, context.PlayheadTime);
+            if (evaluation.PositionOffset.sqrMagnitude <= 0.0000001f
+                && Quaternion.Angle(Quaternion.identity, evaluation.RotationOffset) <= 0.0001f
+                && evaluation.ScaleOffset.sqrMagnitude <= 0.0000001f)
+            {
+                return;
+            }
+
+            previewInstance.transform.position += previewInstance.transform.rotation * evaluation.PositionOffset;
+            previewInstance.transform.rotation *= evaluation.RotationOffset;
+            previewInstance.transform.localScale += evaluation.ScaleOffset;
+        }
         private void StabilizePreviewTransform()
         {
             if (IsRootMotionPreviewEnabled())

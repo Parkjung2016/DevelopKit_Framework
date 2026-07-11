@@ -9,6 +9,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
     {
         private SerializedProperty animatorProperty;
         private SerializedProperty rootMotionModeProperty;
+        private SerializedProperty rootMotionPositionSpaceProperty;
         private SerializedProperty rootMotionRigidbodyProperty;
         private SerializedProperty rootMotionCharacterControllerProperty;
         private SerializedProperty customRootMotionControllerProperty;
@@ -17,6 +18,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         {
             animatorProperty = serializedObject.FindProperty("animator");
             rootMotionModeProperty = serializedObject.FindProperty("rootMotionMode");
+            rootMotionPositionSpaceProperty = serializedObject.FindProperty("rootMotionPositionSpace");
             rootMotionRigidbodyProperty = serializedObject.FindProperty("rootMotionRigidbody");
             rootMotionCharacterControllerProperty = serializedObject.FindProperty("rootMotionCharacterController");
             customRootMotionControllerProperty = serializedObject.FindProperty("customRootMotionController");
@@ -40,6 +42,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         {
             EditorGUILayout.LabelField("Root Motion", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(rootMotionModeProperty, new GUIContent("Mode"));
+            EditorGUILayout.PropertyField(rootMotionPositionSpaceProperty, new GUIContent("Position Space"));
 
             MontageRootMotionMode mode = (MontageRootMotionMode)rootMotionModeProperty.enumValueIndex;
             using (new EditorGUI.IndentLevelScope())

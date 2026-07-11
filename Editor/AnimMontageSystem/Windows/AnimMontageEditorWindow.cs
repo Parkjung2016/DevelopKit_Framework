@@ -173,22 +173,14 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             timelinePanel.style.flexDirection = FlexDirection.Column;
             timelinePanel.focusable = true;
 
+            RegisterPreviewFocusRelease(timelinePanel);
+            RegisterPreviewFocusRelease(timelineView);
+
             transportBar = new MontageTransportBar(context, TogglePlayPause, StopPlayback);
             RegisterPlaybackShortcutHandler(transportBar);
-            transportBar.RegisterCallback<PointerDownEvent>(_ =>
-            {
-                MontageViewportInput.CancelInteraction();
-                root.Focus();
-                transportBar.Focus();
-            });
+            RegisterPreviewFocusRelease(transportBar);
             timelinePanel.Add(transportBar);
             timelinePanel.Add(timelineView);
-            timelineView.RegisterCallback<PointerDownEvent>(_ =>
-            {
-                MontageViewportInput.CancelInteraction();
-                root.Focus();
-                timelineView.Focus();
-            });
             RegisterPlaybackShortcutHandler(timelinePanel);
             RegisterPlaybackShortcutHandler(timelineView);
 
@@ -207,6 +199,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             inspectorLogSplit.Add(logViewerPanel);
         }
 
+        private static void RegisterPreviewFocusRelease(VisualElement element)
+        {
+            element.RegisterCallback<PointerEnterEvent>(_ => MontageViewportInput.CancelInteraction(), TrickleDown.TrickleDown);
+            element.RegisterCallback<PointerMoveEvent>(_ => MontageViewportInput.CancelInteraction(), TrickleDown.TrickleDown);
+            element.RegisterCallback<FocusInEvent>(_ => MontageViewportInput.CancelInteraction(), TrickleDown.TrickleDown);
+        }
         private void BuildToolbar(VisualElement root)
         {
             var toolbar = new Toolbar();
@@ -573,7 +571,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             lastEditorTime = now;
 
             float length = context.Montage.Length;
-            float nextTime = context.PlayheadTime + delta * context.PlaybackSpeed;
+            float nextTime = context.PlayheadTime + delta * context.EffectivePlaybackSpeed;
 
             if (nextTime >= length)
             {

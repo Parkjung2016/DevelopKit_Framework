@@ -33,6 +33,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Add(scrollView);
 
             context.SelectionChanged += Rebuild;
+            RegisterCallback<PointerEnterEvent>(_ => MontageViewportInput.CancelInteraction(), TrickleDown.TrickleDown);
+            RegisterCallback<PointerMoveEvent>(_ => MontageViewportInput.CancelInteraction(), TrickleDown.TrickleDown);
+            RegisterCallback<FocusInEvent>(_ => MontageViewportInput.CancelInteraction(), TrickleDown.TrickleDown);
             host.RegisterCallback<SerializedPropertyChangeEvent>(_ => context.NotifyExternalChange());
             Rebuild();
         }

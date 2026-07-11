@@ -39,6 +39,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             NotifyStateMove,
             NotifyStateResizeStart,
             NotifyStateResizeEnd,
+            CustomElementMove,
+            CustomElementResizeStart,
+            CustomElementResizeEnd,
             BoxSelect
         }
 
@@ -530,6 +533,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private readonly Dictionary<int, float> dragSegmentStartTimes = new();
         private readonly Dictionary<int, float> dragNotifyTimes = new();
         private readonly Dictionary<int, Vector2> dragNotifyStateRanges = new();
+        private readonly Dictionary<int, Vector2> dragCustomElementRanges = new();
         private readonly List<TrackIdentity> copiedTracks = new();
         private readonly List<SegmentClipboardData> copiedSegments = new();
         private readonly List<NotifyClipboardData> copiedNotifies = new();
@@ -546,6 +550,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private int dragSegmentIndex = -1;
         private int dragNotifyIndex = -1;
         private int dragNotifyStateIndex = -1;
+        private int dragCustomElementIndex = -1;
         private TrackKind dragTrackKind;
         private string dragTrackId = "Default";
         private float dragAnchorTime;
@@ -820,13 +825,24 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return;
             }
 
-            if (TryHitCustomElement(local, out int customElementIndex))
+            if (TryHitCustomElement(local, out int customElementIndex, out DragMode customDrag))
             {
                 bool additive = evt.shiftKey;
                 bool toggle = evt.ctrlKey || evt.commandKey;
                 if (additive || toggle || !context.IsCustomElementSelected(customElementIndex))
                     context.SetSelectedCustomElement(customElementIndex, additive, toggle);
+                if (toggle && !context.IsCustomElementSelected(customElementIndex))
+                {
+                    evt.StopPropagation();
+                    return;
+                }
 
+                dragCustomElementIndex = customElementIndex;
+                BeginDrag(customDrag, evt.pointerId);
+                dragAnchorTime = XToTime(local.x);
+                CustomMontageElementPlacement element = context.Montage.CustomElements[customElementIndex];
+                dragAnchorValue = customDrag == DragMode.CustomElementResizeEnd ? element.EndTime : element.StartTime;
+                CaptureDragSelectionAnchors();
                 evt.StopPropagation();
                 return;
             }
@@ -921,6 +937,23 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                         context.Montage.NotifyStates[dragNotifyStateIndex].StartTime,
                         time);
                     break;
+                case DragMode.CustomElementMove when dragCustomElementIndex >= 0:
+                    ApplySelectedTimelineMove(time - dragAnchorTime, evt.localPosition, TrackKind.Custom);
+                    break;
+
+                case DragMode.CustomElementResizeStart when dragCustomElementIndex >= 0:
+                    ApplyCustomElementRange(
+                        dragCustomElementIndex,
+                        time,
+                        context.Montage.CustomElements[dragCustomElementIndex].EndTime);
+                    break;
+
+                case DragMode.CustomElementResizeEnd when dragCustomElementIndex >= 0:
+                    ApplyCustomElementRange(
+                        dragCustomElementIndex,
+                        context.Montage.CustomElements[dragCustomElementIndex].StartTime,
+                        time);
+                    break;
             }
 
             evt.StopPropagation();
@@ -993,6 +1026,14 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 AnimNotifyStatePlacement state = montage.NotifyStates[index];
                 dragNotifyStateRanges[index] = new Vector2(state.StartTime, state.EndTime);
             }
+            foreach (int index in context.SelectedCustomElementIndices)
+            {
+                if (index < 0 || index >= montage.CustomElements.Count || montage.CustomElements[index] == null)
+                    continue;
+
+                CustomMontageElementPlacement element = montage.CustomElements[index];
+                dragCustomElementRanges[index] = new Vector2(element.StartTime, element.EndTime);
+            }
         }
 
         private void ShowContextMenu(Vector2 local)
@@ -1064,6 +1105,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             else if (hasRow && row.Kind == TrackKind.Custom)
             {
                 string trackId = row.TrackId;
+                menu.AddItem(new GUIContent("Create/Transform Offset"), false, () => AddCustomElementAtTime(time, new TransformOffsetMontageElement(), trackId));
+                menu.AddItem(new GUIContent("Create/Animation Hold"), false, () => AddCustomElementAtTime(time, new AnimationHoldMontageElement(), trackId));
+                menu.AddItem(new GUIContent("Create/Playback Speed"), false, () => AddCustomElementAtTime(time, new PlaybackSpeedMontageElement(), trackId));
+                menu.AddItem(new GUIContent("Create/Camera Shake Marker"), false, () => AddCustomElementAtTime(time, new CameraShakeMarkerMontageElement(), trackId));
+                menu.AddSeparator("Create/");
                 menu.AddItem(new GUIContent("Create/Custom Element..."), false, () => OpenCreatePicker(PendingCreateKind.CustomElement, time, trackId));
             }
             else
@@ -1318,7 +1364,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             deltaTime = ClampSelectedTimelineMoveDelta(deltaTime, montage);
 
             string targetTrackId = null;
-            bool allowTrackTransfer = dragSegmentStartTimes.Count + dragNotifyTimes.Count + dragNotifyStateRanges.Count <= 1;
+            bool allowTrackTransfer = dragSegmentStartTimes.Count + dragNotifyTimes.Count + dragNotifyStateRanges.Count + dragCustomElementRanges.Count <= 1;
             if (allowTrackTransfer && TryGetTrackRow(local, activeKind, out TrackRowLayout targetRow))
                 targetTrackId = targetRow.TrackId;
 
@@ -1366,6 +1412,21 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 if (activeKind == TrackKind.NotifyState && targetTrackId != null)
                     state.FindPropertyRelative("trackId").stringValue = targetTrackId;
             }
+            SerializedProperty customElements = so.FindProperty("customElements");
+            foreach (KeyValuePair<int, Vector2> entry in dragCustomElementRanges)
+            {
+                if (customElements == null || entry.Key < 0 || entry.Key >= customElements.arraySize)
+                    continue;
+
+                float duration = Mathf.Max(MinSegmentDuration, entry.Value.y - entry.Value.x);
+                float startTime = Snap(Mathf.Max(0f, entry.Value.x + deltaTime));
+                float endTime = Snap(startTime + duration);
+                SerializedProperty element = customElements.GetArrayElementAtIndex(entry.Key);
+                element.FindPropertyRelative("startTime").floatValue = startTime;
+                element.FindPropertyRelative("endTime").floatValue = endTime;
+                if (activeKind == TrackKind.Custom && targetTrackId != null)
+                    element.FindPropertyRelative("trackId").stringValue = targetTrackId;
+            }
 
             so.ApplyModifiedProperties();
             context.MarkDirty();
@@ -1399,6 +1460,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
 
             foreach (KeyValuePair<int, Vector2> entry in dragNotifyStateRanges)
+            {
+                minTime = Mathf.Min(minTime, entry.Value.x);
+                maxTime = Mathf.Max(maxTime, entry.Value.y);
+            }
+            foreach (KeyValuePair<int, Vector2> entry in dragCustomElementRanges)
             {
                 minTime = Mathf.Min(minTime, entry.Value.x);
                 maxTime = Mathf.Max(maxTime, entry.Value.y);
@@ -1564,7 +1630,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             TrackKind kind,
             string trackId,
             int ignoreSegmentIndex = -1,
-            int ignoreNotifyStateIndex = -1)
+            int ignoreNotifyStateIndex = -1,
+            int ignoreCustomElementIndex = -1)
         {
             AnimMontageSO montage = context.Montage;
             if (montage == null)
@@ -1601,6 +1668,20 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                         continue;
 
                     AnimNotifyStatePlacement placement = montage.NotifyStates[i];
+                    if (placement == null || placement.TrackId != trackId)
+                        continue;
+
+                    TrySnapToGuide(placement.StartTime);
+                    TrySnapToGuide(placement.EndTime);
+                }
+            }            else if (kind == TrackKind.Custom)
+            {
+                for (int i = 0; i < montage.CustomElements.Count; i++)
+                {
+                    if (i == ignoreCustomElementIndex)
+                        continue;
+
+                    CustomMontageElementPlacement placement = montage.CustomElements[i];
                     if (placement == null || placement.TrackId != trackId)
                         continue;
 
@@ -1689,6 +1770,47 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             context.MarkDirty();
         }
 
+        private void ApplyCustomElementRange(int customElementIndex, float startTime, float endTime)
+        {
+            if (context.Montage == null
+                || customElementIndex < 0
+                || customElementIndex >= context.Montage.CustomElements.Count)
+                return;
+
+            CustomMontageElementPlacement placement = context.Montage.CustomElements[customElementIndex];
+            if (placement == null)
+                return;
+
+            string trackId = placement.TrackId;
+            if (dragMode == DragMode.CustomElementResizeStart)
+            {
+                startTime = SnapTimelineEdgeTime(
+                    Mathf.Max(0f, startTime),
+                    TrackKind.Custom,
+                    trackId,
+                    ignoreCustomElementIndex: customElementIndex);
+                endTime = Snap(Mathf.Max(startTime + MinSegmentDuration, endTime));
+            }
+            else if (dragMode == DragMode.CustomElementResizeEnd)
+            {
+                startTime = Snap(Mathf.Max(0f, startTime));
+                endTime = SnapTimelineEdgeTime(
+                    Mathf.Max(startTime + MinSegmentDuration, endTime),
+                    TrackKind.Custom,
+                    trackId,
+                    ignoreCustomElementIndex: customElementIndex);
+            }
+            else
+            {
+                startTime = Snap(Mathf.Max(0f, startTime));
+                endTime = Snap(Mathf.Max(startTime + MinSegmentDuration, endTime));
+            }
+
+            Undo.RecordObject(context.Montage, "Adjust Custom Montage Element");
+            placement.StartTime = startTime;
+            placement.EndTime = endTime;
+            context.MarkDirty();
+        }
         private void ApplyNotifyStateTrack(int notifyStateIndex, Vector2 local)
         {
             if (context.Montage == null
@@ -3713,9 +3835,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return false;
         }
 
-        private bool TryHitCustomElement(Vector2 local, out int index)
+        private bool TryHitCustomElement(Vector2 local, out int index) =>
+            TryHitCustomElement(local, out index, out _);
+
+        private bool TryHitCustomElement(Vector2 local, out int index, out DragMode mode)
         {
             index = -1;
+            mode = DragMode.None;
             for (int i = customElementLayouts.Count - 1; i >= 0; i--)
             {
                 CustomElementLayout layout = customElementLayouts[i];
@@ -3723,6 +3849,19 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     continue;
 
                 index = layout.Index;
+                if (Mathf.Abs(local.x - layout.Body.xMin) <= EdgeHandleWidth)
+                {
+                    mode = DragMode.CustomElementResizeStart;
+                    return true;
+                }
+
+                if (Mathf.Abs(local.x - layout.Body.xMax) <= EdgeHandleWidth)
+                {
+                    mode = DragMode.CustomElementResizeEnd;
+                    return true;
+                }
+
+                mode = DragMode.CustomElementMove;
                 return true;
             }
 
@@ -3760,7 +3899,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     hasHoverTrack = true;
                     hoverTrackKind = row.Kind;
                     hoverTrackId = row.TrackId;
-                    UpdateHoverTooltip(local, new HoverTooltipInfo(GetTrackTypeName(row.Kind)));
+                    UpdateHoverTooltip(local, new HoverTooltipInfo(GetTrackDisplayName(row.Kind, row.TrackId)));
                     if (changed)
                         MarkDirtyRepaint();
 
@@ -3877,6 +4016,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 hoverTooltip.style.display = DisplayStyle.None;
         }
 
+        private string GetTrackDisplayName(TrackKind kind, string trackId)
+        {
+            if (kind == TrackKind.Custom && context?.Montage != null)
+            {
+                CustomMontageTrack track = FindCustomTrack(context.Montage, trackId);
+                if (track?.TrackType != null)
+                    return track.TrackType.DisplayName;
+            }
+
+            return GetTrackTypeName(kind);
+        }
         private static string GetTrackTypeName(TrackKind kind) =>
             kind switch
             {

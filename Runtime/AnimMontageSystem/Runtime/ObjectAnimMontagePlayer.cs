@@ -14,6 +14,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         Custom
     }
 
+    public enum MontageRootMotionPositionSpace
+    {
+        Local,
+        World
+    }
+
     public interface IMontageRootMotionController
     {
         void ApplyMontageRootMotion(ObjectAnimMontagePlayer player, Animator animator, Vector3 deltaPosition, Quaternion deltaRotation);
@@ -29,6 +35,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     {
         [SerializeField] private Animator animator;
         [SerializeField] private MontageRootMotionMode rootMotionMode = MontageRootMotionMode.Transform;
+        [SerializeField] private MontageRootMotionPositionSpace rootMotionPositionSpace = MontageRootMotionPositionSpace.Local;
         [SerializeField] private Rigidbody rootMotionRigidbody;
         [SerializeField] private CharacterController rootMotionCharacterController;
         [SerializeField] private MontageRootMotionController customRootMotionController;
@@ -43,11 +50,15 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private bool cachedAnimatorRootMotion;
         private bool hasCachedAnimatorRootMotion;
         private IMontageRootMotionController runtimeRootMotionController;
+        private bool rootMotionActiveThisFrame;
+        private bool suppressNextRootMotion;
+        private MontageTimelineElementEvaluation previousTimelineElementEvaluation = MontageTimelineElementEvaluation.Default;
         public AnimMontageSO CurrentMontage => playback.Montage;
         public float CurrentTime => playback.CurrentTime;
         public bool IsPlaying => playback.IsPlaying;
         public bool IsPaused => playback.IsPaused;
         public MontageRootMotionMode RootMotionMode => rootMotionMode;
+        public MontageRootMotionPositionSpace RootMotionPositionSpace => rootMotionPositionSpace;
         public Rigidbody RootMotionRigidbody => rootMotionRigidbody;
         public CharacterController RootMotionCharacterController => rootMotionCharacterController;
         public IMontageRootMotionController CustomRootMotionController => runtimeRootMotionController ?? customRootMotionController;
@@ -65,11 +76,19 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         private void Update()
         {
+            rootMotionActiveThisFrame = false;
             if (!playback.IsPlaying || playback.IsPaused)
                 return;
 
-            playback.Advance(Time.deltaTime);
+            float deltaTime = Time.deltaTime;
+            MontageTimelineElementEvaluation timelineEvaluation = MontageTimelineElementEvaluator.Evaluate(playback.Montage, playback.CurrentTime);
+            float timelineSpeed = timelineEvaluation.HoldAnimation ? 0f : timelineEvaluation.SpeedMultiplier;
+            float evaluatedDeltaTime = deltaTime * timelineSpeed;
+            rootMotionActiveThisFrame = playback.Montage != null && playback.Montage.ApplyRootMotion;
+            playback.Advance(evaluatedDeltaTime);
             UpdateAnimationSample();
+            EvaluateGraph(evaluatedDeltaTime);
+            ApplyTimelineElementTransform(timelineEvaluation);
             dispatcher.Dispatch(playback, gameObject, animator, this);
         }
 
@@ -78,9 +97,15 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (animator == null
                 || playback.Montage == null
                 || !playback.Montage.ApplyRootMotion
-                || !playback.IsPlaying
+                || (!playback.IsPlaying && !rootMotionActiveThisFrame)
                 || playback.IsPaused)
             {
+                return;
+            }
+
+            if (suppressNextRootMotion)
+            {
+                suppressNextRootMotion = false;
                 return;
             }
 
@@ -104,8 +129,10 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             EnsureGraph();
             ApplyAnimatorRootMotion(montage.ApplyRootMotion);
             playback.Begin(montage, Mathf.Clamp(startTime, 0f, montage.Length));
+            suppressNextRootMotion = montage.ApplyRootMotion;
             dispatcher.Reset();
             UpdateAnimationSample(force: true);
+            EvaluateGraph(0f);
             dispatcher.Dispatch(playback, gameObject, animator, this);
         }
 
@@ -128,7 +155,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public void SetTime(float montageTime)
         {
             playback.SetTime(montageTime);
+            suppressNextRootMotion = playback.Montage != null && playback.Montage.ApplyRootMotion;
             UpdateAnimationSample(force: true);
+            EvaluateGraph(0f);
             dispatcher.ScrubTo(playback, gameObject, animator);
         }
 
@@ -140,11 +169,18 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 return;
 
             graph = PlayableGraph.Create($"{name}.AnimMontage");
-            graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
+            graph.SetTimeUpdateMode(DirectorUpdateMode.Manual);
             output = AnimationPlayableOutput.Create(graph, "Animation", animator);
             graph.Play();
         }
 
+        private void EvaluateGraph(float deltaTime)
+        {
+            if (!graph.IsValid())
+                return;
+
+            graph.Evaluate(playback.Montage != null && playback.Montage.ApplyRootMotion ? deltaTime : 0f);
+        }
         private void DestroyGraph()
         {
             if (!graph.IsValid())
@@ -167,6 +203,23 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 rootMotionCharacterController = GetComponentInParent<CharacterController>();
         }
 
+        private void ApplyTimelineElementTransform(MontageTimelineElementEvaluation evaluation)
+        {
+            Vector3 positionDelta = evaluation.PositionOffset - previousTimelineElementEvaluation.PositionOffset;
+            Quaternion rotationDelta = Quaternion.Inverse(previousTimelineElementEvaluation.RotationOffset) * evaluation.RotationOffset;
+            Vector3 scaleDelta = evaluation.ScaleOffset - previousTimelineElementEvaluation.ScaleOffset;
+
+            if (positionDelta.sqrMagnitude > 0.0000001f)
+                transform.position += transform.rotation * positionDelta;
+
+            if (Quaternion.Angle(Quaternion.identity, rotationDelta) > 0.0001f)
+                transform.rotation *= rotationDelta;
+
+            if (scaleDelta.sqrMagnitude > 0.0000001f)
+                transform.localScale += scaleDelta;
+
+            previousTimelineElementEvaluation = evaluation;
+        }
         private void ApplyRootMotionDelta(Vector3 deltaPosition, Quaternion deltaRotation)
         {
             switch (rootMotionMode)
@@ -186,11 +239,15 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             }
         }
 
+
+        private Vector3 ConvertRootMotionPosition(Vector3 deltaPosition, Quaternion targetRotation) =>
+            rootMotionPositionSpace == MontageRootMotionPositionSpace.Local
+                ? targetRotation * deltaPosition
+                : deltaPosition;
         private void ApplyTransformRootMotion(Vector3 deltaPosition, Quaternion deltaRotation)
         {
-            Transform animatorTransform = animator.transform;
-            animatorTransform.position += deltaPosition;
-            animatorTransform.rotation *= deltaRotation;
+            transform.position += ConvertRootMotionPosition(deltaPosition, transform.rotation);
+            transform.rotation *= deltaRotation;
         }
 
         private void ApplyRigidbodyRootMotion(Vector3 deltaPosition, Quaternion deltaRotation)
@@ -204,7 +261,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 return;
             }
 
-            rootMotionRigidbody.MovePosition(rootMotionRigidbody.position + deltaPosition);
+            rootMotionRigidbody.MovePosition(rootMotionRigidbody.position + ConvertRootMotionPosition(deltaPosition, rootMotionRigidbody.rotation));
             rootMotionRigidbody.MoveRotation(rootMotionRigidbody.rotation * deltaRotation);
         }
 
@@ -219,7 +276,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 return;
             }
 
-            rootMotionCharacterController.Move(deltaPosition);
+            rootMotionCharacterController.Move(ConvertRootMotionPosition(deltaPosition, rootMotionCharacterController.transform.rotation));
             rootMotionCharacterController.transform.rotation *= deltaRotation;
         }
 
@@ -272,6 +329,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             {
                 MontageSegmentSample sample = samples[i];
                 AnimationClipPlayable playable = clipPlayables[i];
+                bool resetPlayableTime = force;
                 if (!playable.IsValid() || playable.GetAnimationClip() != sample.Segment.Clip)
                 {
                     if (playable.IsValid())
@@ -280,18 +338,24 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                     playable = AnimationClipPlayable.Create(graph, sample.Segment.Clip);
                     playable.SetApplyFootIK(true);
                     playable.SetApplyPlayableIK(true);
-                    playable.SetSpeed(0f);
+                    playable.SetDuration(sample.Segment.IsLoopingClip ? Mathf.Max(sample.Segment.ClipEndTime, sample.Segment.Clip.length) : sample.Segment.Clip.length);
                     clipPlayables[i] = playable;
                     graph.Connect(playable, 0, mixer, i);
+                    resetPlayableTime = true;
                 }
 
-                playable.SetTime(sample.ClipTime);
+                bool applyRootMotion = playback.Montage.ApplyRootMotion;
+                if (!applyRootMotion || resetPlayableTime)
+                    playable.SetTime(applyRootMotion ? sample.PlayableClipTime : sample.ClipTime);
+
+                playable.SetSpeed(applyRootMotion ? sample.Segment.PlayRate * playback.Montage.RateScale : 0f);
                 mixer.SetInputWeight(i, sample.Weight);
             }
 
             for (int i = samples.Count; i < mixerInputCount; i++)
                 mixer.SetInputWeight(i, 0f);
         }
+
 
         private void EnsureMixer(int inputCount, bool force)
         {

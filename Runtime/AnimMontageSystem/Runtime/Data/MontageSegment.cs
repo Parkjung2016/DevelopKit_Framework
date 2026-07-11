@@ -50,6 +50,18 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public Color CustomColor => customColor;
         public bool HasCustomColor => customColor.a > 0f;
 
+        public float LoopEndTime
+        {
+            get
+            {
+                if (Clip == null)
+                    return 0f;
+
+                float end = clipEndTime <= 0f ? Clip.length : clipEndTime;
+                return Mathf.Clamp(end, ClipStartTime, Clip.length);
+            }
+        }
+
         public float TrimmedClipDuration => Mathf.Max(0f, ClipEndTime - ClipStartTime);
         public float Duration => Clip != null ? TrimmedClipDuration / PlayRate : 0f;
         public float EndTime => StartTime + Duration;
@@ -59,8 +71,16 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         public float ToClipTime(float montageTime)
         {
+            return NormalizeClipTime(ToPlayableClipTime(montageTime));
+        }
+
+        public float ToPlayableClipTime(float montageTime)
+        {
+            if (Clip == null)
+                return 0f;
+
             float local = ClipStartTime + (montageTime - StartTime) * PlayRate;
-            return NormalizeClipTime(local);
+            return IsLoopingClip ? local : Mathf.Clamp(local, ClipStartTime, ClipEndTime);
         }
 
         public float NormalizeClipTime(float clipTime)
@@ -72,7 +92,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 return Mathf.Clamp(clipTime, ClipStartTime, ClipEndTime);
 
             float loopStart = ClipStartTime;
-            float loopLength = Mathf.Max(0.0001f, Clip.length - loopStart);
+            float loopEnd = Mathf.Max(loopStart + 0.0001f, LoopEndTime);
+            float loopLength = Mathf.Max(0.0001f, loopEnd - loopStart);
             return loopStart + Mathf.Repeat(clipTime - loopStart, loopLength);
         }
     }

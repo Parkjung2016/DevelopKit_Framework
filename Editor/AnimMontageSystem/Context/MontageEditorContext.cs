@@ -14,6 +14,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         public float PreviousPlayheadTime { get; private set; }
         public bool IsPlaying { get; private set; }
         public float PlaybackSpeed { get; set; } = 1f;
+        public float EffectivePlaybackSpeed => Mathf.Max(0.01f, PlaybackSpeed) * (Montage != null ? Montage.RateScale : 1f);
         public bool Loop { get; set; }
         public GameObject PreviewModel { get; private set; }
         public UnityEngine.Object SelectedObject { get; private set; }

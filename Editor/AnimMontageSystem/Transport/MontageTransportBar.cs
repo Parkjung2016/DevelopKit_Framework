@@ -1,4 +1,5 @@
 using System;
+using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -17,6 +18,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private readonly ToolbarButton stopButton;
         private readonly Toggle loopToggle;
         private readonly FloatField speedField;
+        private readonly FloatField rateScaleField;
+        private readonly Toggle applyRootMotionToggle;
         private readonly Label timeLabel;
 
         public MontageTransportBar(MontageEditorContext context, Action onPlayPause, Action onStop)
@@ -59,10 +62,27 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             speedField = new FloatField { value = context.PlaybackSpeed, label = "Speed" };
             speedField.AddToClassList(AnimMontageEditorStyles.TransportSpeedFieldClass);
-            speedField.tooltip = "Playback speed multiplier";
+            speedField.tooltip = GetSpeedTooltip();
             speedField.RegisterValueChangedCallback(evt =>
-                context.PlaybackSpeed = Mathf.Max(0.01f, evt.newValue));
+            {
+                context.PlaybackSpeed = Mathf.Max(0.01f, evt.newValue);
+                RefreshPlaybackState();
+            });
             optionsGroup.Add(speedField);
+
+            rateScaleField = new FloatField { label = "Rate" };
+            rateScaleField.AddToClassList(AnimMontageEditorStyles.TransportSpeedFieldClass);
+            rateScaleField.tooltip = "Montage RateScale. Combined playback is Speed x Rate.";
+            rateScaleField.RegisterValueChangedCallback(evt =>
+                SetMontageFloat("rateScale", Mathf.Max(0.01f, evt.newValue), "Set Montage RateScale"));
+            optionsGroup.Add(rateScaleField);
+
+            applyRootMotionToggle = new Toggle("Root");
+            applyRootMotionToggle.AddToClassList(AnimMontageEditorStyles.TransportToggleClass);
+            applyRootMotionToggle.tooltip = "Apply Root Motion for this montage";
+            applyRootMotionToggle.RegisterValueChangedCallback(evt =>
+                SetMontageBool("applyRootMotion", evt.newValue, "Set Montage Root Motion"));
+            optionsGroup.Add(applyRootMotionToggle);
             Add(optionsGroup);
 
             var spacer = new VisualElement();
@@ -75,10 +95,14 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             context.PlaybackStateChanged += RefreshPlaybackState;
             context.PlayheadChanged += RefreshTime;
+            context.MontageChanged += Refresh;
+            context.Changed += RefreshPlaybackState;
             RegisterCallback<DetachFromPanelEvent>(_ =>
             {
                 context.PlaybackStateChanged -= RefreshPlaybackState;
                 context.PlayheadChanged -= RefreshTime;
+                context.MontageChanged -= Refresh;
+                context.Changed -= RefreshPlaybackState;
             });
 
             Refresh();
@@ -92,17 +116,73 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void RefreshPlaybackState()
         {
+            AnimMontageSO montage = context.Montage;
             ApplyIcon(playPauseButton, playPauseIcon, context.IsPlaying ? PauseContent : PlayContent);
-            playPauseButton.SetEnabled(context.Montage != null);
-            stopButton.SetEnabled(context.Montage != null);
+            playPauseButton.SetEnabled(montage != null);
+            stopButton.SetEnabled(montage != null);
             loopToggle.SetValueWithoutNotify(context.Loop);
             speedField.SetValueWithoutNotify(context.PlaybackSpeed);
+            speedField.tooltip = GetSpeedTooltip();
+            rateScaleField.SetEnabled(montage != null);
+            applyRootMotionToggle.SetEnabled(montage != null);
+            rateScaleField.SetValueWithoutNotify(montage != null ? montage.RateScale : 1f);
+            applyRootMotionToggle.SetValueWithoutNotify(montage != null && montage.ApplyRootMotion);
         }
 
         private void RefreshTime()
         {
             float length = context.Montage != null ? context.Montage.Length : 0f;
             timeLabel.text = $"{context.PlayheadTime:0.00} / {length:0.00}";
+        }
+
+        private string GetSpeedTooltip()
+        {
+            float rateScale = context.Montage != null ? context.Montage.RateScale : 1f;
+            return $"Timeline Speed x Montage RateScale = {context.PlaybackSpeed:0.###} x {rateScale:0.###} = {context.EffectivePlaybackSpeed:0.###}";
+        }
+
+        private void SetMontageFloat(string propertyName, float value, string undoName)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return;
+
+            Undo.RecordObject(montage, undoName);
+            SerializedObject so = new(montage);
+            SerializedProperty property = so.FindProperty(propertyName);
+            if (property == null)
+                return;
+
+            if (Mathf.Approximately(property.floatValue, value))
+                return;
+
+            property.floatValue = value;
+            so.ApplyModifiedProperties();
+            EditorUtility.SetDirty(montage);
+            context.NotifyExternalChange();
+            RefreshPlaybackState();
+        }
+
+        private void SetMontageBool(string propertyName, bool value, string undoName)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null)
+                return;
+
+            Undo.RecordObject(montage, undoName);
+            SerializedObject so = new(montage);
+            SerializedProperty property = so.FindProperty(propertyName);
+            if (property == null)
+                return;
+
+            if (property.boolValue == value)
+                return;
+
+            property.boolValue = value;
+            so.ApplyModifiedProperties();
+            EditorUtility.SetDirty(montage);
+            context.NotifyExternalChange();
+            RefreshPlaybackState();
         }
 
         private static GUIContent ResolveIcon(string primary, string fallback, string text)
