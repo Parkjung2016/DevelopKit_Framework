@@ -6,13 +6,32 @@ using UnityEngine.Playables;
 
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
+    public enum MontageRootMotionMode
+    {
+        Transform,
+        Rigidbody,
+        CharacterController,
+        Custom
+    }
+
+    public interface IMontageRootMotionController
+    {
+        void ApplyMontageRootMotion(ObjectAnimMontagePlayer player, Animator animator, Vector3 deltaPosition, Quaternion deltaRotation);
+    }
+
+    public abstract class MontageRootMotionController : MonoBehaviour, IMontageRootMotionController
+    {
+        public abstract void ApplyMontageRootMotion(ObjectAnimMontagePlayer player, Animator animator, Vector3 deltaPosition, Quaternion deltaRotation);
+    }
+
     [AddComponentMenu("PJDev/Framework/Object Anim Montage Player")]
     public sealed class ObjectAnimMontagePlayer : MonoBehaviour, IAnimNotifyHandler
     {
         [SerializeField] private Animator animator;
-        [SerializeField] private bool playOnAwake;
-        [SerializeField] private AnimMontageSO defaultMontage;
-
+        [SerializeField] private MontageRootMotionMode rootMotionMode = MontageRootMotionMode.Transform;
+        [SerializeField] private Rigidbody rootMotionRigidbody;
+        [SerializeField] private CharacterController rootMotionCharacterController;
+        [SerializeField] private MontageRootMotionController customRootMotionController;
         private readonly MontagePlaybackState playback = new();
         private readonly MontageNotifyDispatcher dispatcher = new();
         private readonly List<MontageSegmentSample> samples = new();
@@ -23,12 +42,15 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private int mixerInputCount;
         private bool cachedAnimatorRootMotion;
         private bool hasCachedAnimatorRootMotion;
-
+        private IMontageRootMotionController runtimeRootMotionController;
         public AnimMontageSO CurrentMontage => playback.Montage;
         public float CurrentTime => playback.CurrentTime;
         public bool IsPlaying => playback.IsPlaying;
         public bool IsPaused => playback.IsPaused;
-
+        public MontageRootMotionMode RootMotionMode => rootMotionMode;
+        public Rigidbody RootMotionRigidbody => rootMotionRigidbody;
+        public CharacterController RootMotionCharacterController => rootMotionCharacterController;
+        public IMontageRootMotionController CustomRootMotionController => runtimeRootMotionController ?? customRootMotionController;
         public event Action<AnimNotify, AnimNotifyContext> NotifyFired;
 
         private void Awake()
@@ -36,10 +58,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (animator == null)
                 animator = GetComponentInChildren<Animator>();
 
+            CacheRootMotionComponents();
             dispatcher.NotifyFired += (notify, ctx) => NotifyFired?.Invoke(notify, ctx);
 
-            if (playOnAwake && defaultMontage != null)
-                Play(defaultMontage);
         }
 
         private void Update()
@@ -63,12 +84,17 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 return;
             }
 
-            Transform animatorTransform = animator.transform;
-            animatorTransform.position += animator.deltaPosition;
-            animatorTransform.rotation *= animator.deltaRotation;
+            ApplyRootMotionDelta(animator.deltaPosition, animator.deltaRotation);
         }
 
         private void OnDestroy() => DestroyGraph();
+
+
+        public void SetRootMotionRigidbody(Rigidbody target) => rootMotionRigidbody = target;
+
+        public void SetRootMotionCharacterController(CharacterController target) => rootMotionCharacterController = target;
+
+        public void SetCustomRootMotionController(IMontageRootMotionController controller) => runtimeRootMotionController = controller;
 
         public void Play(AnimMontageSO montage, float startTime = 0f)
         {
@@ -130,6 +156,83 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             mixer = default;
             mixerInputCount = 0;
             RestoreAnimatorRootMotion();
+        }
+
+        private void CacheRootMotionComponents()
+        {
+            if (rootMotionRigidbody == null)
+                rootMotionRigidbody = GetComponentInParent<Rigidbody>();
+
+            if (rootMotionCharacterController == null)
+                rootMotionCharacterController = GetComponentInParent<CharacterController>();
+        }
+
+        private void ApplyRootMotionDelta(Vector3 deltaPosition, Quaternion deltaRotation)
+        {
+            switch (rootMotionMode)
+            {
+                case MontageRootMotionMode.Rigidbody:
+                    ApplyRigidbodyRootMotion(deltaPosition, deltaRotation);
+                    break;
+                case MontageRootMotionMode.CharacterController:
+                    ApplyCharacterControllerRootMotion(deltaPosition, deltaRotation);
+                    break;
+                case MontageRootMotionMode.Custom:
+                    ApplyCustomRootMotion(deltaPosition, deltaRotation);
+                    break;
+                default:
+                    ApplyTransformRootMotion(deltaPosition, deltaRotation);
+                    break;
+            }
+        }
+
+        private void ApplyTransformRootMotion(Vector3 deltaPosition, Quaternion deltaRotation)
+        {
+            Transform animatorTransform = animator.transform;
+            animatorTransform.position += deltaPosition;
+            animatorTransform.rotation *= deltaRotation;
+        }
+
+        private void ApplyRigidbodyRootMotion(Vector3 deltaPosition, Quaternion deltaRotation)
+        {
+            if (rootMotionRigidbody == null)
+                CacheRootMotionComponents();
+
+            if (rootMotionRigidbody == null)
+            {
+                ApplyTransformRootMotion(deltaPosition, deltaRotation);
+                return;
+            }
+
+            rootMotionRigidbody.MovePosition(rootMotionRigidbody.position + deltaPosition);
+            rootMotionRigidbody.MoveRotation(rootMotionRigidbody.rotation * deltaRotation);
+        }
+
+        private void ApplyCharacterControllerRootMotion(Vector3 deltaPosition, Quaternion deltaRotation)
+        {
+            if (rootMotionCharacterController == null)
+                CacheRootMotionComponents();
+
+            if (rootMotionCharacterController == null)
+            {
+                ApplyTransformRootMotion(deltaPosition, deltaRotation);
+                return;
+            }
+
+            rootMotionCharacterController.Move(deltaPosition);
+            rootMotionCharacterController.transform.rotation *= deltaRotation;
+        }
+
+        private void ApplyCustomRootMotion(Vector3 deltaPosition, Quaternion deltaRotation)
+        {
+            IMontageRootMotionController controller = CustomRootMotionController;
+            if (controller == null)
+            {
+                ApplyTransformRootMotion(deltaPosition, deltaRotation);
+                return;
+            }
+
+            controller.ApplyMontageRootMotion(this, animator, deltaPosition, deltaRotation);
         }
 
         private void ApplyAnimatorRootMotion(bool applyRootMotion)

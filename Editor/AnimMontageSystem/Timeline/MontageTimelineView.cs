@@ -3813,11 +3813,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             for (int i = segmentLayouts.Count - 1; i >= 0; i--)
             {
                 SegmentLayout layout = segmentLayouts[i];
-                if (!layout.Body.Contains(local))
+                if (!layout.Body.Contains(local) || !IsValidIndex(layout.Index, context.Montage.Segments))
                     continue;
 
                 MontageSegment segment = context.Montage.Segments[layout.Index];
-                string sectionName = string.IsNullOrEmpty(segment.SectionName) ? "Animation Clip" : segment.SectionName;
+                string sectionName = segment == null || string.IsNullOrEmpty(segment.SectionName) ? "Animation Clip" : segment.SectionName;
                 tooltip = new HoverTooltipInfo(sectionName, 120f);
                 return true;
             }
@@ -3825,7 +3825,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             for (int i = notifyStateLayouts.Count - 1; i >= 0; i--)
             {
                 NotifyStateLayout layout = notifyStateLayouts[i];
-                if (!layout.Body.Contains(local))
+                if (!layout.Body.Contains(local) || !IsValidIndex(layout.Index, context.Montage.NotifyStates))
                     continue;
 
                 AnimNotifyStatePlacement placement = context.Montage.NotifyStates[layout.Index];
@@ -3836,6 +3836,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (TryHitNotify(local, out int notifyIndex))
             {
+                if (!IsValidIndex(notifyIndex, context.Montage.Notifies))
+                    return false;
+
                 AnimNotifyPlacement placement = context.Montage.Notifies[notifyIndex];
                 string notifyName = placement.Notify != null ? placement.Notify.DisplayName : "Notify";
                 tooltip = new HoverTooltipInfo(notifyName, 96f);
@@ -3844,6 +3847,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (TryHitCustomElement(local, out int customElementIndex))
             {
+                if (!IsValidIndex(customElementIndex, context.Montage.CustomElements))
+                    return false;
+
                 CustomMontageElementPlacement placement = context.Montage.CustomElements[customElementIndex];
                 string elementName = placement.Element != null ? placement.Element.DisplayName : "Custom Element";
                 tooltip = new HoverTooltipInfo(elementName, 120f);
@@ -3853,6 +3859,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return false;
         }
 
+        private static bool IsValidIndex<T>(int index, IReadOnlyList<T> items) =>
+            items != null && index >= 0 && index < items.Count;
         private void UpdateHoverTooltip(Vector2 local, HoverTooltipInfo tooltip)
         {
             hoverTooltip.text = tooltip.Text;
