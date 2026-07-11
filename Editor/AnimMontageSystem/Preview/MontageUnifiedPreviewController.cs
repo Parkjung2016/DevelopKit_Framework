@@ -1,6 +1,7 @@
-using UnityEditor;
+﻿using UnityEditor;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.VFX;
 
 namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
@@ -11,6 +12,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private GameObject previewInstance;
         private GameObject gridInstance;
         private GameObject gizmoInstance;
+        private GameObject shadowReceiverInstance;
+        private Material shadowReceiverMaterial;
+        private GameObject projectedShadowInstance;
+        private Mesh projectedShadowMesh;
+        private Mesh bakedShadowMesh;
+        private Material projectedShadowMaterial;
+        private Material previewSkyboxMaterial;
+        private readonly List<Vector3> projectedShadowVertices = new();
+        private readonly List<int> projectedShadowIndices = new();
+        private readonly List<Color> projectedShadowColors = new();
         private Texture previewTexture;
         private MontageEditorContext boundContext;
         private readonly MontageViewportCamera viewportCamera = new();
@@ -53,6 +64,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             EnsurePreview();
             previewInstance = preview.InstantiatePrefabInScene(prefab);
             previewInstance.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            ConfigureShadowCasting(previewInstance);
             preview.AddSingleGO(previewInstance);
             RefreshPreviewEffectCache(true);
             MontagePreviewSampling.BindInstance(previewInstance);
@@ -168,19 +180,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (inputChanged)
                 requestRepaint?.Invoke();
-
             Event evt = Event.current;
-            if (evt.type == EventType.MouseDown && evt.clickCount == 2 && evt.button == 0 && hasBounds
-                && localRect.Contains(evt.mousePosition))
-            {
-                Sample(boundContext);
-                ApplyRootMotionPreviewTransform(boundContext);
-                StabilizePreviewTransform();
-                SimulatePreviewEffects();
-                CacheBounds();
-                viewportCamera.FrameBounds(renderBounds);
-                requestRepaint?.Invoke();
-            }
 
             if (evt.type == EventType.Repaint)
             {
@@ -199,9 +199,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 viewportCamera.ApplyToPreviewCamera(preview.camera, modeTransitionActive);
                 preview.camera.cameraType = CameraType.SceneView;
                 preview.camera.backgroundColor = new Color(0.16f, 0.16f, 0.16f, 1f);
-                preview.camera.clearFlags = CameraClearFlags.SolidColor;
-                preview.ambientColor = new Color(0.2f, 0.2f, 0.2f, 1f);
+                ApplyPreviewSkybox();
+                ApplyPreviewLighting();
                 float groundPlaneY = hasPreviewHeightLock ? previewGroundPlaneY : 0f;
+                UpdateShadowReceiver(groundPlaneY);
+                HideProjectedMeshShadow();
                 MontagePreviewSceneGizmos.Update(
                     gizmoInstance,
                     previewInstance,
@@ -252,7 +254,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private bool TryFrameModelOnKey(System.Action requestRepaint)
         {
             Event evt = Event.current;
-            if (evt.type != EventType.KeyDown || evt.keyCode != KeyCode.F || EditorGUIUtility.editingTextField)
+            if (evt.type != EventType.KeyDown || evt.keyCode != KeyCode.F)
+                return false;
+
+            if (!MontageViewportInput.IsViewportEngaged && EditorGUIUtility.editingTextField)
                 return false;
 
             if (!hasBounds)
@@ -394,6 +399,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             ClearInstance();
             ClearGrid();
             ClearGizmos();
+            ClearShadowReceiver();
+            ClearProjectedMeshShadow();
+            ClearPreviewSkybox();
 
             if (previewTexture != null)
             {
@@ -414,17 +422,347 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 EnsureGrid();
                 EnsureGizmos();
+                EnsureShadowReceiver();
+                EnsureProjectedMeshShadow();
                 return;
             }
 
             preview = new PreviewRenderUtility(true);
             preview.cameraFieldOfView = 30f;
-            preview.lights[0].intensity = 1.1f;
-            preview.lights[0].transform.rotation = Quaternion.Euler(40f, 40f, 0f);
-            preview.lights[1].intensity = 0.55f;
+            ApplyPreviewLighting();
 
             EnsureGrid();
             EnsureGizmos();
+            EnsureShadowReceiver();
+            EnsureProjectedMeshShadow();
+        }
+
+
+        private void ApplyPreviewSkybox()
+        {
+            if (preview?.camera == null)
+                return;
+
+            Skybox skybox = preview.camera.GetComponent<Skybox>();
+            if (MontageSceneViewNavigation.SkyboxEnabled)
+            {
+                Material sceneSkybox = MontageSceneViewNavigation.SkyboxMaterial;
+                if (sceneSkybox == null)
+                    sceneSkybox = GetPreviewSkyboxMaterial();
+
+                if (sceneSkybox != null)
+                {
+                    if (skybox == null)
+                        skybox = preview.camera.gameObject.AddComponent<Skybox>();
+
+                    skybox.material = sceneSkybox;
+                    skybox.enabled = true;
+                    preview.camera.clearFlags = CameraClearFlags.Skybox;
+                    return;
+                }
+            }
+
+            if (skybox != null)
+                skybox.enabled = false;
+
+            preview.camera.clearFlags = CameraClearFlags.SolidColor;
+        }
+
+
+        private static Material GetSceneViewSkyboxMaterial()
+        {
+            SceneView sceneView = SceneView.lastActiveSceneView;
+            if (sceneView != null && sceneView.camera != null)
+            {
+                Skybox sceneSkybox = sceneView.camera.GetComponent<Skybox>();
+                if (sceneSkybox != null && sceneSkybox.enabled && sceneSkybox.material != null)
+                    return sceneSkybox.material;
+            }
+
+            return RenderSettings.skybox;
+        }
+        private Material GetPreviewSkyboxMaterial()
+        {
+            if (previewSkyboxMaterial == null)
+            {
+                Shader shader = Shader.Find("Skybox/Procedural");
+                if (shader == null)
+                    return null;
+
+                previewSkyboxMaterial = new Material(shader)
+                {
+                    hideFlags = HideFlags.HideAndDontSave
+                };
+            }
+
+            ApplyPreviewSkyboxSettings(previewSkyboxMaterial);
+            return previewSkyboxMaterial;
+        }
+
+        private static void ApplyPreviewSkyboxSettings(Material material)
+        {
+            if (material == null)
+                return;
+
+            if (material.HasProperty("_SkyTint"))
+                material.SetColor("_SkyTint", MontageSceneViewNavigation.SkyTint);
+            if (material.HasProperty("_GroundColor"))
+                material.SetColor("_GroundColor", MontageSceneViewNavigation.SkyGroundColor);
+            if (material.HasProperty("_AtmosphereThickness"))
+                material.SetFloat("_AtmosphereThickness", MontageSceneViewNavigation.SkyAtmosphere);
+            if (material.HasProperty("_Exposure"))
+                material.SetFloat("_Exposure", MontageSceneViewNavigation.SkyExposure);
+        }
+
+        private void ApplyPreviewLighting()
+        {
+            if (preview == null)
+                return;
+
+            bool enabled = MontageSceneViewNavigation.LightEnabled;
+            float ambient = MontageSceneViewNavigation.LightAmbient;
+            preview.ambientColor = new Color(ambient, ambient, ambient, 1f);
+
+            if (preview.lights == null || preview.lights.Length == 0)
+                return;
+
+            Light keyLight = preview.lights[0];
+            if (keyLight != null)
+            {
+                keyLight.enabled = enabled;
+                keyLight.intensity = enabled ? MontageSceneViewNavigation.LightIntensity : 0f;
+                keyLight.transform.rotation = MontageSceneViewNavigation.LightRotation;
+                keyLight.shadows = enabled && MontageSceneViewNavigation.LightShadows ? LightShadows.Soft : LightShadows.None;
+                keyLight.shadowStrength = 0.82f;
+                keyLight.shadowBias = 0.02f;
+                keyLight.shadowNormalBias = 0.08f;
+                keyLight.shadowNearPlane = 0.05f;
+            }
+
+            if (preview.lights.Length <= 1)
+                return;
+
+            Light fillLight = preview.lights[1];
+            if (fillLight == null)
+                return;
+
+            fillLight.enabled = enabled;
+            fillLight.intensity = enabled ? MontageSceneViewNavigation.LightIntensity * 0.25f : 0f;
+            fillLight.transform.rotation = Quaternion.Euler(-MontageSceneViewNavigation.LightPitch * 0.5f, MontageSceneViewNavigation.LightYaw + 160f, 0f);
+            fillLight.shadows = LightShadows.None;
+        }
+        private void EnsureProjectedMeshShadow()
+        {
+            if (preview == null || projectedShadowInstance != null)
+                return;
+
+            projectedShadowInstance = new GameObject("Montage Preview Projected Mesh Shadow")
+            {
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            projectedShadowMesh = new Mesh
+            {
+                name = "Montage Preview Projected Shadow Mesh",
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            bakedShadowMesh = new Mesh
+            {
+                name = "Montage Preview Baked Shadow Mesh",
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            projectedShadowInstance.AddComponent<MeshFilter>().sharedMesh = projectedShadowMesh;
+            MeshRenderer renderer = projectedShadowInstance.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = GetProjectedShadowMaterial();
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.lightProbeUsage = LightProbeUsage.Off;
+            renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            projectedShadowInstance.SetActive(false);
+            preview.AddSingleGO(projectedShadowInstance);
+        }
+
+        private Material GetProjectedShadowMaterial()
+        {
+            if (projectedShadowMaterial != null)
+                return projectedShadowMaterial;
+
+            Shader shader = Shader.Find("Hidden/Internal-Colored");
+            projectedShadowMaterial = new Material(shader)
+            {
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            projectedShadowMaterial.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+            projectedShadowMaterial.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+            projectedShadowMaterial.SetInt("_Cull", (int)CullMode.Off);
+            projectedShadowMaterial.SetInt("_ZWrite", 0);
+            projectedShadowMaterial.SetInt("_ZTest", (int)CompareFunction.LessEqual);
+            return projectedShadowMaterial;
+        }
+
+        
+        private void HideProjectedMeshShadow()
+        {
+            if (projectedShadowInstance != null)
+                projectedShadowInstance.SetActive(false);
+        }
+
+        private void UpdateProjectedMeshShadow(float groundPlaneY)
+        {
+            HideProjectedMeshShadow();
+        }
+
+        private void AddProjectedShadowMesh(Mesh source, Matrix4x4 localToWorld, Vector3 lightDirection, float shadowY)
+        {
+            if (source == null)
+                return;
+
+            Vector3[] vertices = source.vertices;
+            int[] triangles = source.triangles;
+            if (vertices == null || triangles == null || vertices.Length == 0 || triangles.Length == 0)
+                return;
+
+            int vertexOffset = projectedShadowVertices.Count;
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                Vector3 world = localToWorld.MultiplyPoint3x4(vertices[i]);
+                float t = (shadowY - world.y) / lightDirection.y;
+                Vector3 projected = world + lightDirection * t;
+                projected.y = shadowY;
+                projectedShadowVertices.Add(projected);
+                projectedShadowColors.Add(new Color(0f, 0f, 0f, 0.34f));
+            }
+
+            for (int i = 0; i < triangles.Length; i++)
+                projectedShadowIndices.Add(vertexOffset + triangles[i]);
+        }
+
+        private void EnsureShadowReceiver()
+        {
+            if (preview == null || shadowReceiverInstance != null)
+                return;
+
+            shadowReceiverInstance = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            shadowReceiverInstance.name = "Montage Preview Shadow Receiver";
+            shadowReceiverInstance.hideFlags = HideFlags.HideAndDontSave;
+
+            if (shadowReceiverInstance.TryGetComponent(out Collider collider))
+                Object.DestroyImmediate(collider);
+
+            MeshRenderer renderer = shadowReceiverInstance.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                renderer.sharedMaterial = GetShadowReceiverMaterial();
+                renderer.shadowCastingMode = ShadowCastingMode.Off;
+                renderer.receiveShadows = true;
+                renderer.lightProbeUsage = LightProbeUsage.Off;
+                renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            }
+
+            preview.AddSingleGO(shadowReceiverInstance);
+        }
+
+        private Material GetShadowReceiverMaterial()
+        {
+            if (shadowReceiverMaterial != null)
+                return shadowReceiverMaterial;
+
+            Shader shader = GetLitPreviewShader();
+            shadowReceiverMaterial = new Material(shader)
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+                color = MontageSceneViewNavigation.PlaneColor
+            };
+            SetMaterialColor(shadowReceiverMaterial, MontageSceneViewNavigation.PlaneColor);
+            ConfigureOpaqueReceiverMaterial(shadowReceiverMaterial);
+            return shadowReceiverMaterial;
+        }
+
+        private static void ConfigureOpaqueReceiverMaterial(Material material)
+        {
+            if (material == null)
+                return;
+
+            material.renderQueue = (int)RenderQueue.Geometry;
+            if (material.HasProperty("_Surface"))
+                material.SetFloat("_Surface", 0f);
+            if (material.HasProperty("_AlphaClip"))
+                material.SetFloat("_AlphaClip", 0f);
+            if (material.HasProperty("_SrcBlend"))
+                material.SetFloat("_SrcBlend", (float)BlendMode.One);
+            if (material.HasProperty("_DstBlend"))
+                material.SetFloat("_DstBlend", (float)BlendMode.Zero);
+            if (material.HasProperty("_ZWrite"))
+                material.SetFloat("_ZWrite", 1f);
+            material.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.DisableKeyword("_ALPHABLEND_ON");
+        }
+
+        private static Shader GetLitPreviewShader()
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader != null)
+                return shader;
+
+            shader = Shader.Find("HDRP/Lit");
+            if (shader != null)
+                return shader;
+
+            shader = Shader.Find("Standard");
+            if (shader != null)
+                return shader;
+
+            Shader fallback = Shader.Find("Diffuse");
+            if (fallback != null)
+                return fallback;
+
+            return Shader.Find("Hidden/Internal-Colored");
+        }
+
+        private static void SetMaterialColor(Material material, Color color)
+        {
+            if (material == null)
+                return;
+
+            if (material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor", color);
+            if (material.HasProperty("_Color"))
+                material.SetColor("_Color", color);
+        }
+
+        private void UpdateShadowReceiver(float groundPlaneY)
+        {
+            EnsureShadowReceiver();
+            if (shadowReceiverInstance == null)
+                return;
+
+            bool visible = previewInstance != null
+                && hasBounds
+                && !viewportCamera.Is2DMode
+                && MontageSceneViewNavigation.LightEnabled
+                && MontageSceneViewNavigation.LightShadows;
+            shadowReceiverInstance.SetActive(visible);
+            if (visible && shadowReceiverMaterial != null)
+                SetMaterialColor(shadowReceiverMaterial, MontageSceneViewNavigation.PlaneColor);
+            if (!visible)
+                return;
+            shadowReceiverInstance.transform.position = new Vector3(renderBounds.center.x, groundPlaneY - 0.004f, renderBounds.center.z);
+            shadowReceiverInstance.transform.rotation = Quaternion.identity;
+            shadowReceiverInstance.transform.localScale = new Vector3(10f, 1f, 10f);
+        }
+
+        private static void ConfigureShadowCasting(GameObject instance)
+        {
+            if (instance == null)
+                return;
+
+            foreach (Renderer renderer in instance.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null)
+                    continue;
+
+                renderer.shadowCastingMode = ShadowCastingMode.On;
+                renderer.receiveShadows = true;
+            }
         }
 
         private void EnsureGrid()
@@ -608,6 +946,61 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             MontagePreviewSceneGizmos.Destroy(gizmoInstance);
             gizmoInstance = null;
+        }
+        private void ClearProjectedMeshShadow()
+        {
+            if (projectedShadowInstance != null)
+            {
+                Object.DestroyImmediate(projectedShadowInstance);
+                projectedShadowInstance = null;
+            }
+
+            if (projectedShadowMesh != null)
+            {
+                Object.DestroyImmediate(projectedShadowMesh);
+                projectedShadowMesh = null;
+            }
+
+            if (bakedShadowMesh != null)
+            {
+                Object.DestroyImmediate(bakedShadowMesh);
+                bakedShadowMesh = null;
+            }
+
+            if (projectedShadowMaterial != null)
+            {
+                Object.DestroyImmediate(projectedShadowMaterial);
+                projectedShadowMaterial = null;
+            }
+
+            projectedShadowVertices.Clear();
+            projectedShadowIndices.Clear();
+            projectedShadowColors.Clear();
+        }
+
+        private void ClearShadowReceiver()
+        {
+            if (shadowReceiverInstance != null)
+            {
+                Object.DestroyImmediate(shadowReceiverInstance);
+                shadowReceiverInstance = null;
+            }
+
+            if (shadowReceiverMaterial != null)
+            {
+                Object.DestroyImmediate(shadowReceiverMaterial);
+                shadowReceiverMaterial = null;
+            }
+        }
+
+
+        private void ClearPreviewSkybox()
+        {
+            if (previewSkyboxMaterial == null)
+                return;
+
+            Object.DestroyImmediate(previewSkyboxMaterial);
+            previewSkyboxMaterial = null;
         }
 
         private sealed class ParticlePreviewEffect

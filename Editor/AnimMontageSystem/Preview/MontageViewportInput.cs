@@ -5,7 +5,7 @@ using UnityEngine;
 namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 {
     /// <summary>
-    /// Unity Scene View와 동일한 프리뷰 내비게이션 (RMB Fly + WASD, Orbit, Pan, Zoom).
+    /// Unity Scene View?� ?�일???�리�??�비게이??(RMB Fly + WASD, Orbit, Pan, Zoom).
     /// </summary>
     internal static class MontageViewportInput
     {
@@ -41,11 +41,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private static Func<bool> tryTogglePlayback;
         private static int lastPlaybackToggleFrame = -1;
         private static int focusedControlId;
+        private static int activeControlId;
 
         public static bool IsActive => flyLookActive || IsFlyMoving() || HasFlyMomentum();
 
         public static bool IsViewportEngaged =>
-            flyLookActive || IsFlyMoving() || HasFlyMomentum() || GUIUtility.hotControl == ViewportControlHash;
+            flyLookActive || IsFlyMoving() || HasFlyMomentum() || IsViewportHotControl();
 
         public static void SetPlaybackToggleHandler(Func<bool> handler) => tryTogglePlayback = handler;
 
@@ -57,20 +58,24 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             repaintCallback = requestRepaint;
 
             if (MontageSceneViewNavigation.IsToolbarRect(viewportRect, Event.current.mousePosition)
-                && Event.current.type is EventType.MouseDown or EventType.MouseUp or EventType.MouseDrag)
+                && Event.current.type is EventType.MouseDown or EventType.MouseUp or EventType.MouseDrag or EventType.ScrollWheel or EventType.KeyDown or EventType.KeyUp)
             {
                 return false;
             }
 
             int controlId = GUIUtility.GetControlID(ViewportControlHash, FocusType.Keyboard);
+            activeControlId = controlId;
             Event evt = Event.current;
             bool inRect = viewportRect.Contains(evt.mousePosition);
+            ResetStaleFocusState(controlId, inRect, evt);
+            if (flyLookActive || GUIUtility.hotControl == controlId || focusedControlId == controlId)
+                GUIUtility.keyboardControl = controlId;
             bool changed = false;
 
             switch (evt.GetTypeForControl(controlId))
             {
                 case EventType.MouseDown:
-                    if (inRect && !EditorGUIUtility.editingTextField)
+                    if (inRect)
                     {
                         GUIUtility.keyboardControl = controlId;
                         focusedControlId = controlId;
@@ -139,6 +144,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     break;
 
                 case EventType.KeyDown:
+                    if (HasViewportInputCapture(controlId))
+                        EditorGUIUtility.editingTextField = false;
+
                     if (TryHandleModeShortcut(camera, viewportRect, controlId, inRect, requestRepaint))
                     {
                         evt.Use();
@@ -156,7 +164,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     if (evt.keyCode == KeyCode.LeftShift || evt.keyCode == KeyCode.RightShift)
                         shiftHeld = true;
 
-                    if (flyLookActive && !EditorGUIUtility.editingTextField && TrySetFlyKey(evt.keyCode, true))
+                    if (flyLookActive && TrySetFlyKey(evt.keyCode, true))
                     {
                         evt.Use();
                         changed = true;
@@ -191,11 +199,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         public static void CancelInteraction()
         {
             EndFlyLook();
-            if (GUIUtility.hotControl == ViewportControlHash)
-            {
+            if (IsViewportHotControl())
                 GUIUtility.hotControl = 0;
+
+            if (GUIUtility.keyboardControl == activeControlId || GUIUtility.keyboardControl == focusedControlId)
                 GUIUtility.keyboardControl = 0;
-            }
+
+            focusedControlId = 0;
         }
 
         public static void DrawOverlay(Rect viewportRect) =>
@@ -213,6 +223,38 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             tryTogglePlayback = null;
             lastPlaybackToggleFrame = -1;
             focusedControlId = 0;
+            activeControlId = 0;
+        }
+
+
+        private static bool IsViewportHotControl() =>
+            activeControlId != 0 && GUIUtility.hotControl == activeControlId;
+
+        private static void ResetStaleFocusState(int controlId, bool inRect, Event evt)
+        {
+            if (evt.rawType == EventType.MouseDown && inRect)
+            {
+                if (GUIUtility.hotControl != 0 && GUIUtility.hotControl != controlId)
+                    GUIUtility.hotControl = 0;
+
+                if (GUIUtility.keyboardControl != controlId)
+                    GUIUtility.keyboardControl = 0;
+
+                EditorGUIUtility.editingTextField = false;
+                EditorGUI.FocusTextInControl(null);
+                EndFlyLook();
+            }
+
+            if (evt.rawType == EventType.MouseLeaveWindow || evt.rawType == EventType.Ignore)
+                EndFlyLook();
+
+            if (evt.rawType == EventType.MouseEnterWindow && inRect)
+            {
+                ClearFlyKeys();
+                ResetFlyMotion();
+                if (GUIUtility.hotControl != controlId)
+                    GUIUtility.hotControl = 0;
+            }
         }
 
         private static bool TryHandleModeShortcut(
@@ -251,12 +293,21 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return InvokePlaybackToggle();
         }
 
-        private static bool HasViewportKeyboardContext(Rect viewportRect, int controlId, bool inRect) =>
+        private static bool HasViewportKeyboardContext(Rect viewportRect, int controlId, bool inRect)
+        {
+            bool pointerOverViewport = inRect
+                && viewportRect.Contains(Event.current.mousePosition)
+                && !MontageSceneViewNavigation.IsToolbarRect(viewportRect, Event.current.mousePosition);
+
+            return HasViewportInputCapture(controlId)
+                || focusedControlId == controlId
+                || pointerOverViewport;
+        }
+
+        private static bool HasViewportInputCapture(int controlId) =>
             flyLookActive
             || GUIUtility.hotControl == controlId
-            || GUIUtility.keyboardControl == controlId
-            || focusedControlId == controlId
-            || (inRect && viewportRect.Contains(Event.current.mousePosition));
+            || GUIUtility.keyboardControl == controlId;
 
         private static bool HasViewportFocus(int controlId) =>
             flyLookActive
@@ -548,7 +599,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             bool needsUpdate = flyLookActive
                 || HasFlyMomentum()
                 || MontageViewportFlyNotification.IsVisible
-                || GUIUtility.hotControl == ViewportControlHash;
+                || IsViewportHotControl();
             if (needsUpdate && !updateRegistered)
             {
                 EditorApplication.update += OnEditorUpdate;
@@ -574,11 +625,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (flyLookActive && activeCamera != null)
                 moved = ApplyFlyMove(activeCamera);
 
-            if (flyLookActive || GUIUtility.hotControl == ViewportControlHash || moved || MontageViewportFlyNotification.IsVisible)
+            if (flyLookActive || IsViewportHotControl() || moved || MontageViewportFlyNotification.IsVisible)
                 repaintCallback?.Invoke();
 
             if (!flyLookActive && !HasFlyMomentum() && !MontageViewportFlyNotification.IsVisible
-                && GUIUtility.hotControl != ViewportControlHash)
+                && !IsViewportHotControl())
                 UpdateEditorLoop();
         }
     }

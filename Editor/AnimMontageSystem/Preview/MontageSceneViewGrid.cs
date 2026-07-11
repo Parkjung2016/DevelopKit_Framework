@@ -259,7 +259,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private const string LinesName = "Montage Preview Avatar Gizmos";
         private const int ShadowSegments = 48;
 
-        private static readonly Color ShadowCenterColor = new(0f, 0f, 0f, 0.28f);
+        private static readonly Color ShadowCenterColor = new(0f, 0f, 0f, 0.42f);
         private static readonly Color ShadowEdgeColor = new(0f, 0f, 0f, 0f);
         private static readonly Color RootDirectionColor = new(1f, 0.62f, 0.08f, 1f);
         private static readonly Color PivotColor = new(1f, 0.9f, 0.24f, 1f);
@@ -304,7 +304,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (shadow != null)
             {
-                shadow.gameObject.SetActive(showSceneGizmos && !useFrontGrid);
+                bool shadowVisible = false;
+                shadow.gameObject.SetActive(shadowVisible);
                 if (shadow.gameObject.activeSelf)
                     UpdateShadow(shadow.gameObject, bounds, groundPlaneY);
             }
