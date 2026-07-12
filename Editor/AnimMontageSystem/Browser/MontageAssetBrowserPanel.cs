@@ -41,8 +41,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             tabs.style.flexShrink = 0;
             tabs.Add(CreateTabButton("Libraries", MontageBrowserTab.Libraries));
             tabs.Add(CreateTabButton("Montages", MontageBrowserTab.Montages));
-            tabs.Add(CreateTabButton("Notifies", MontageBrowserTab.Notifies));
-            tabs.Add(CreateTabButton("Clips", MontageBrowserTab.Clips));
             Add(tabs);
 
             searchField.style.flexShrink = 0;
@@ -94,13 +92,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     break;
                 case MontageBrowserTab.Montages:
                     PopulateMontages(filter);
-                    break;
-                case MontageBrowserTab.Notifies:
-                    PopulateNotifyTypes<AnimNotify>(filter, "Notify");
-                    PopulateNotifyTypes<AnimNotifyState>(filter, "Notify State");
-                    break;
-                case MontageBrowserTab.Clips:
-                    PopulateClips(filter);
                     break;
             }
         }
@@ -475,9 +466,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private enum MontageBrowserTab
         {
             Libraries,
-            Montages,
-            Notifies,
-            Clips
+            Montages
         }
     }
 }

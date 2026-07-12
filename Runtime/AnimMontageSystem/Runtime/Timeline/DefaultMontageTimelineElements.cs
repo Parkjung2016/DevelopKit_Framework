@@ -17,14 +17,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public override Vector3 ScaleOffset => scaleOffset;
     }
 
-    [System.Serializable]
-    public sealed class AnimationHoldMontageElement : MontageTimelineElement
-    {
-        public override string DisplayName => "Animation Hold";
-        public override Color EditorColor => new(1f, 0.72f, 0.32f, 0.95f);
-        public override float DefaultDuration => 0.2f;
-        public override bool HoldAnimation => true;
-    }
 
     [System.Serializable]
     public sealed class PlaybackSpeedMontageElement : MontageTimelineElement

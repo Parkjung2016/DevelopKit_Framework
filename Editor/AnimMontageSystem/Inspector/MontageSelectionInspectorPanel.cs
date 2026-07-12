@@ -111,13 +111,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (context.SelectedCustomElementIndex >= 0)
                 return BuildArrayElementInspector(
-                    "Custom Timeline Element",
+                    GetManagedReferenceTitle("Custom Element", "customElements", context.SelectedCustomElementIndex, "element"),
                     "customElements",
                     context.SelectedCustomElementIndex,
                     "element",
                     "startTime",
                     "endTime",
-                    "trackId",
                     "customColor");
 
             return false;
@@ -188,6 +187,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 AnimNotify notify => $"{fallback}: {notify.DisplayName}",
                 AnimNotifyState state => $"{fallback}: {state.DisplayName}",
+                MontageTimelineElement element => $"{fallback}: {element.DisplayName}",
                 _ => fallback
             };
         }

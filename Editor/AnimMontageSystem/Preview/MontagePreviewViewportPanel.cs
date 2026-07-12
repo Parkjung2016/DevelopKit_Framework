@@ -64,6 +64,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (evt.keyCode != KeyCode.Space)
                 return;
 
+            if (MontageViewportInput.TryInvokePlaybackToggle())
+                evt.StopImmediatePropagation();
+
             imguiHost.MarkDirtyRepaint();
         }
     }

@@ -62,13 +62,26 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             StartPreviewAnimationMode();
             lastEditorTime = EditorApplication.timeSinceStartup;
             MontageViewportInput.SetPlaybackToggleHandler(TryTogglePlaybackShortcut);
+            EditorApplication.update -= OnEditorUpdate;
             EditorApplication.update += OnEditorUpdate;
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            Undo.undoRedoPerformed -= OnUndoRedoPerformed;
             Undo.undoRedoPerformed += OnUndoRedoPerformed;
         }
 
+        private void OnPlayModeStateChanged(PlayModeStateChange state)
+        {
+            EndEditorNotifyPlayback();
+            context?.SetPlaying(false);
+            previewController?.HandlePlayModeStateChanged(state);
+            transportBar?.Refresh();
+            RequestPreviewRepaint();
+        }
         internal void HandleBeforeAssemblyReload()
         {
             EditorApplication.update -= OnEditorUpdate;
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             Undo.undoRedoPerformed -= OnUndoRedoPerformed;
             EndEditorNotifyPlayback();
             StopPreviewAnimationMode(force: true);
@@ -95,6 +108,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void OnDisable()
         {
             EditorApplication.update -= OnEditorUpdate;
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             Undo.undoRedoPerformed -= OnUndoRedoPerformed;
             MontageViewportInput.SetPlaybackToggleHandler(null);
             EndEditorNotifyPlayback();
@@ -127,6 +141,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             statusLabel.AddToClassList(AnimMontageEditorStyles.StatusBarClass);
             root.Add(statusLabel);
 
+            rootVisualElement.focusable = true;
             RegisterPlaybackShortcutHandler(rootVisualElement);
 
             context.Changed -= UpdateStatus;
@@ -150,6 +165,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             var browserPanel = new MontageAssetBrowserPanel(context, CreateMontageAsset, CreateMontageLibraryAsset);
             MontageEditorLayoutHelper.ConfigurePane(browserPanel);
+            RegisterPlaybackShortcutHandler(browserPanel);
             browserSplit.Add(browserPanel);
 
             var centerInspectorSplit = new TwoPaneSplitView(1, 320, TwoPaneSplitViewOrientation.Horizontal);
@@ -163,6 +179,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             viewportPanel = new MontagePreviewViewportPanel((rect, requestRepaint) =>
                 previewController?.DrawPreview(rect, requestRepaint));
             MontageEditorLayoutHelper.ConfigurePane(viewportPanel);
+            RegisterPlaybackShortcutHandler(viewportPanel);
             previewTimelineSplit.Add(viewportPanel);
 
             timelineView = new MontageTimelineView(context);
@@ -176,7 +193,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             RegisterPreviewFocusRelease(timelinePanel);
             RegisterPreviewFocusRelease(timelineView);
 
-            transportBar = new MontageTransportBar(context, TogglePlayPause, StopPlayback);
+            transportBar = new MontageTransportBar(
+                context,
+                TogglePlayPause,
+                StopPlayback,
+                () => timelineView?.SplitSelectedSegmentAtPlayhead(),
+                () => timelineView?.ReplaceSelectedSegmentClip(),
+                () => timelineView?.ResetSelectedSegmentTrim(),
+                () => timelineView?.HasSelectedSegment() == true,
+                () => timelineView?.CanSplitSelectedSegmentAtPlayhead() == true);
             RegisterPlaybackShortcutHandler(transportBar);
             RegisterPreviewFocusRelease(transportBar);
             timelinePanel.Add(transportBar);
@@ -192,10 +217,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             var inspectorPanel = new MontageSelectionInspectorPanel(context);
             MontageEditorLayoutHelper.ConfigurePane(inspectorPanel);
+            RegisterPlaybackShortcutHandler(inspectorPanel);
             inspectorLogSplit.Add(inspectorPanel);
 
             var logViewerPanel = new MontageLogViewerPanel();
             MontageEditorLayoutHelper.ConfigurePane(logViewerPanel);
+            RegisterPlaybackShortcutHandler(logViewerPanel);
             inspectorLogSplit.Add(logViewerPanel);
         }
 
@@ -515,9 +542,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (!IsEditorShortcutContext())
                 return;
 
-            if (MontageViewportInput.IsViewportEngaged && !IsTimelineAreaFocused())
-                return;
-
             if (IsShortcutInputBlocked())
                 return;
 
@@ -570,8 +594,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             float delta = (float)(now - lastEditorTime);
             lastEditorTime = now;
 
+            MontageTimelineElementEvaluation timelineEvaluation = MontageTimelineElementEvaluator.Evaluate(context.Montage, context.PlayheadTime);
             float length = context.Montage.Length;
-            float nextTime = context.PlayheadTime + delta * context.EffectivePlaybackSpeed;
+            float nextTime = context.PlayheadTime + delta * context.EffectivePlaybackSpeed * timelineEvaluation.SpeedMultiplier;
 
             if (nextTime >= length)
             {

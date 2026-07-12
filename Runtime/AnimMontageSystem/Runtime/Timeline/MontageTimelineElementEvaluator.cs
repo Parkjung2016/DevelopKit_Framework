@@ -4,22 +4,22 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
     public readonly struct MontageTimelineElementEvaluation
     {
-        public MontageTimelineElementEvaluation(bool holdAnimation, float speedMultiplier, Vector3 positionOffset, Quaternion rotationOffset, Vector3 scaleOffset)
+        public MontageTimelineElementEvaluation(float speedMultiplier, Vector3 positionOffset,
+            Quaternion rotationOffset, Vector3 scaleOffset)
         {
-            HoldAnimation = holdAnimation;
             SpeedMultiplier = speedMultiplier;
             PositionOffset = positionOffset;
             RotationOffset = rotationOffset;
             ScaleOffset = scaleOffset;
         }
-
-        public bool HoldAnimation { get; }
+        
         public float SpeedMultiplier { get; }
         public Vector3 PositionOffset { get; }
         public Quaternion RotationOffset { get; }
         public Vector3 ScaleOffset { get; }
 
-        public static MontageTimelineElementEvaluation Default => new(false, 1f, Vector3.zero, Quaternion.identity, Vector3.zero);
+        public static MontageTimelineElementEvaluation Default =>
+            new( 1f, Vector3.zero, Quaternion.identity, Vector3.zero);
     }
 
     public static class MontageTimelineElementEvaluator
@@ -29,7 +29,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (montage == null)
                 return MontageTimelineElementEvaluation.Default;
 
-            bool hold = false;
             float speed = 1f;
             Vector3 position = Vector3.zero;
             Quaternion rotation = Quaternion.identity;
@@ -42,15 +41,13 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 MontageTimelineElement element = placement?.Element;
                 if (element == null || montageTime < placement.StartTime || montageTime > placement.EndTime)
                     continue;
-
-                hold |= element.HoldAnimation;
                 speed *= Mathf.Max(0f, element.PlaybackSpeedMultiplier);
                 position += element.PositionOffset;
                 rotation *= Quaternion.Euler(element.RotationOffsetEuler);
                 scale += element.ScaleOffset;
             }
 
-            return new MontageTimelineElementEvaluation(hold, speed, position, rotation, scale);
+            return new MontageTimelineElementEvaluation(speed, position, rotation, scale);
         }
     }
 }

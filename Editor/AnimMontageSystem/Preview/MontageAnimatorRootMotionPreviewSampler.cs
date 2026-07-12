@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEngine;
 using UnityEngine.Animations;
@@ -77,7 +77,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 {
                     float deltaTime = Mathf.Min(EvaluationStep, targetTime - previousTime);
                     float currentTime = previousTime + deltaTime;
-                    UpdateAnimationSample(montage, currentTime, false);
+                    UpdateAnimationSample(montage, previousTime, false);
                     graph.Evaluate(deltaTime);
 
                     Vector3 currentRootPosition = rootTransform.position;
@@ -148,10 +148,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     resetPlayableTime = true;
                 }
 
+                float playableSpeed = sample.Segment.PlayRate;
                 if (resetPlayableTime)
-                    playable.SetTime(sample.PlayableClipTime);
+                {
+                    playable.SetTime(Mathf.Max(sample.Segment.ClipStartTime, sample.PlayableClipTime));
+                }
 
-                playable.SetSpeed(sample.Segment.PlayRate);
+                playable.SetSpeed(playableSpeed);
                 mixer.SetInputWeight(i, sample.Weight);
             }
 

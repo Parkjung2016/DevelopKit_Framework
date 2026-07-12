@@ -35,22 +35,25 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
         }
 
-        public static bool TrySample(GameObject instance, MontageEditorContext context)
+        public static bool TrySample(GameObject instance, MontageEditorContext context) =>
+            TrySample(instance, context, context?.PlayheadTime ?? 0f);
+
+        public static bool TrySample(GameObject instance, MontageEditorContext context, float sampleTime)
         {
             if (instance == null || context?.Montage == null)
                 return false;
 
-            if (BlendSampler.TrySample(instance, context.Montage, context.PlayheadTime, context.Montage.ApplyRootMotion))
+            if (BlendSampler.TrySample(instance, context.Montage, sampleTime, context.Montage.ApplyRootMotion))
                 return true;
 
-            if (!context.Montage.TryGetSegmentAtTime(context.PlayheadTime, out MontageSegment segment, out _))
+            if (!context.Montage.TryGetSegmentAtTime(sampleTime, out MontageSegment segment, out _))
                 return false;
 
             AnimationClip clip = segment?.Clip;
             if (clip == null)
                 return false;
 
-            float clipTime = segment.ToClipTime(context.PlayheadTime);
+            float clipTime = segment.ToClipTime(sampleTime);
             if (AnimationMode.InAnimationMode())
             {
                 AnimationMode.SampleAnimationClip(instance, clip, clipTime);

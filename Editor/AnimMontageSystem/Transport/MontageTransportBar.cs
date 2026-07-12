@@ -20,11 +20,28 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private readonly FloatField speedField;
         private readonly FloatField rateScaleField;
         private readonly Toggle applyRootMotionToggle;
+        private readonly VisualElement segmentDivider;
+        private readonly VisualElement segmentGroup;
+        private readonly ToolbarButton splitSegmentButton;
+        private readonly ToolbarButton replaceSegmentButton;
+        private readonly ToolbarButton resetSegmentTrimButton;
         private readonly Label timeLabel;
+        private readonly Func<bool> hasSelectedSegment;
+        private readonly Func<bool> canSplitSelectedSegment;
 
-        public MontageTransportBar(MontageEditorContext context, Action onPlayPause, Action onStop)
+        public MontageTransportBar(
+            MontageEditorContext context,
+            Action onPlayPause,
+            Action onStop,
+            Action onSplitSegment,
+            Action onReplaceSegmentClip,
+            Action onResetSegmentTrim,
+            Func<bool> hasSelectedSegment,
+            Func<bool> canSplitSelectedSegment)
         {
             this.context = context;
+            this.hasSelectedSegment = hasSelectedSegment;
+            this.canSplitSelectedSegment = canSplitSelectedSegment;
             AddToClassList(AnimMontageEditorStyles.TransportBarClass);
             style.flexDirection = FlexDirection.Row;
             style.alignItems = Align.Center;
@@ -85,6 +102,20 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             optionsGroup.Add(applyRootMotionToggle);
             Add(optionsGroup);
 
+            segmentDivider = CreateDivider();
+            Add(segmentDivider);
+
+            segmentGroup = CreateGroup();
+            splitSegmentButton = CreateTextButton("Split", onSplitSegment, "Split selected Animation Segment at playhead. Disabled for loop clips.");
+            segmentGroup.Add(splitSegmentButton);
+
+            replaceSegmentButton = CreateTextButton("Clip", onReplaceSegmentClip, "Replace selected Animation Segment clip.");
+            segmentGroup.Add(replaceSegmentButton);
+
+            resetSegmentTrimButton = CreateTextButton("Reset", onResetSegmentTrim, "Reset selected Animation Segment trim.");
+            segmentGroup.Add(resetSegmentTrimButton);
+            Add(segmentGroup);
+
             var spacer = new VisualElement();
             spacer.style.flexGrow = 1;
             Add(spacer);
@@ -96,12 +127,14 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             context.PlaybackStateChanged += RefreshPlaybackState;
             context.PlayheadChanged += RefreshTime;
             context.MontageChanged += Refresh;
+            context.SelectionChanged += RefreshSegmentActions;
             context.Changed += RefreshPlaybackState;
             RegisterCallback<DetachFromPanelEvent>(_ =>
             {
                 context.PlaybackStateChanged -= RefreshPlaybackState;
                 context.PlayheadChanged -= RefreshTime;
                 context.MontageChanged -= Refresh;
+                context.SelectionChanged -= RefreshSegmentActions;
                 context.Changed -= RefreshPlaybackState;
             });
 
@@ -111,6 +144,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         public void Refresh()
         {
             RefreshPlaybackState();
+            RefreshSegmentActions();
             RefreshTime();
         }
 
@@ -129,10 +163,22 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             applyRootMotionToggle.SetValueWithoutNotify(montage != null && montage.ApplyRootMotion);
         }
 
+        private void RefreshSegmentActions()
+        {
+            bool hasSegment = hasSelectedSegment?.Invoke() == true;
+            DisplayStyle display = hasSegment ? DisplayStyle.Flex : DisplayStyle.None;
+            segmentDivider.style.display = display;
+            segmentGroup.style.display = display;
+            splitSegmentButton.SetEnabled(hasSegment && canSplitSelectedSegment?.Invoke() == true);
+            replaceSegmentButton.SetEnabled(hasSegment);
+            resetSegmentTrimButton.SetEnabled(hasSegment);
+        }
+
         private void RefreshTime()
         {
             float length = context.Montage != null ? context.Montage.Length : 0f;
             timeLabel.text = $"{context.PlayheadTime:0.00} / {length:0.00}";
+            RefreshSegmentActions();
         }
 
         private string GetSpeedTooltip()
@@ -212,6 +258,26 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return divider;
         }
 
+        private static ToolbarButton CreateTextButton(string text, Action onClick, string tooltip)
+        {
+            var button = new ToolbarButton(onClick) { text = text, tooltip = tooltip };
+            button.AddToClassList(AnimMontageEditorStyles.TransportButtonClass);
+            float width = Mathf.Clamp(18f + text.Length * 7f, 42f, 62f);
+            button.style.width = width;
+            button.style.minWidth = width;
+            button.style.maxWidth = width;
+            button.style.height = 22;
+            button.style.minHeight = 22;
+            button.style.maxHeight = 22;
+            button.style.paddingLeft = 4;
+            button.style.paddingRight = 4;
+            button.style.paddingTop = 0;
+            button.style.paddingBottom = 0;
+            button.style.unityTextAlign = TextAnchor.MiddleCenter;
+            button.style.fontSize = 10;
+            button.style.flexShrink = 0;
+            return button;
+        }
         private static ToolbarButton CreateIconButton(out Image icon, Action onClick, GUIContent content = null)
         {
             var button = new ToolbarButton(onClick);
