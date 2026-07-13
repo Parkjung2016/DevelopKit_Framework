@@ -1,5 +1,4 @@
-﻿using PJDev.DevelopKit.Editors;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -34,7 +33,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private bool suppressEditorScrubNotify;
         private GameObject editorNotifyFallbackOwner;
 
-        [MenuItem("PJDev/Animation/Montage Editor", priority = PJDevMenuPriority.AnimMontage)]
+        [MenuItem("PJDev/Animation/Montage Editor", priority = -9750)]
         public static void Open()
         {
             var window = GetWindow<AnimMontageEditorWindow>();

@@ -1,5 +1,3 @@
-using PJDev.DevelopKit.Editors;
-using PJDev.DevelopKit.Framework.Editors;
 using PJDev.DevelopKit.Framework.UISystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -28,7 +26,7 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
         private UIViewCatalog viewCatalog;
         private UILayerSettings layerSettings;
 
-        [MenuItem("PJDev/UI/Settings", priority = PJDevMenuPriority.Ui)]
+        [MenuItem("PJDev/UI/Settings", priority = -9700)]
         public static void Open()
         {
             var window = GetWindow<UISystemSettingsWindow>();
