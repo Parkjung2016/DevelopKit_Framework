@@ -1,11 +1,11 @@
-using System;
+Ôªøusing System;
 using UnityEditor;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 {
     /// <summary>
-    /// Unity Scene View?Ä ?ôÏùº???ÑÎ¶¨Î∑??¥ÎπÑÍ≤åÏù¥??(RMB Fly + WASD, Orbit, Pan, Zoom).
+    /// Scene View style preview navigation input (RMB Fly + WASD, Orbit, Pan, Zoom).
     /// </summary>
     internal static class MontageViewportInput
     {

@@ -69,6 +69,10 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public Animator Animator => animator;
         public AnimMontageSO CurrentMontage => playback.Montage;
         public float CurrentTime => playback.CurrentTime;
+        public float CurrentLength => playback.Montage != null ? playback.Montage.Length : 0f;
+        public float NormalizedTime => CurrentLength > 0f ? Mathf.Clamp01(CurrentTime / CurrentLength) : 0f;
+        public float AnimationSampleTime => animationSampleTime;
+        public float AnimationSampleNormalizedTime => CurrentLength > 0f ? Mathf.Clamp01(animationSampleTime / CurrentLength) : 0f;
         public bool IsPlaying => playback.IsPlaying;
         public bool IsPaused => playback.IsPaused;
         public MontageRootMotionMode RootMotionMode => rootMotionMode;
@@ -549,16 +553,3 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

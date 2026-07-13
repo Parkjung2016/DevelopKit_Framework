@@ -215,5 +215,3 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
     }
 }
-
-

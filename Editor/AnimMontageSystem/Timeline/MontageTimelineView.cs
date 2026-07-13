@@ -665,6 +665,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return;
             }
 
+            if (IsEditingLockedInPlayMode())
+            {
+                evt.StopPropagation();
+                return;
+            }
+
             bool actionKey = evt.ctrlKey || evt.commandKey;
             if (actionKey && evt.shiftKey && evt.keyCode == KeyCode.Z)
             {
@@ -712,6 +718,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void OnDragUpdated(DragUpdatedEvent evt)
         {
+            if (IsEditingLockedInPlayMode())
+            {
+                DragAndDrop.visualMode = DragAndDropVisualMode.Rejected;
+                evt.StopPropagation();
+                return;
+            }
+
             if (CanDropProjectObjects(evt.localMousePosition))
             {
                 DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
@@ -724,6 +737,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void OnDragPerform(DragPerformEvent evt)
         {
+            if (IsEditingLockedInPlayMode())
+            {
+                evt.StopPropagation();
+                return;
+            }
+
             if (!TryDropProjectObjects(evt.localMousePosition))
                 return;
 
@@ -754,7 +773,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (evt.button == 1)
             {
-                ShowContextMenu(local);
+                if (!IsEditingLockedInPlayMode())
+                    ShowContextMenu(local);
+                evt.StopPropagation();
+                return;
+            }
+
+            if (IsEditingLockedInPlayMode())
+            {
+                SelectReadonlyTimelineItem(local, evt.shiftKey, evt.ctrlKey || evt.commandKey);
                 evt.StopPropagation();
                 return;
             }
@@ -1071,6 +1098,37 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
         }
 
+        private static bool IsEditingLockedInPlayMode() => EditorApplication.isPlaying;
+
+        private void SelectReadonlyTimelineItem(Vector2 local, bool additive, bool toggle)
+        {
+            if (TryGetTrackRow(local, out TrackRowLayout row) && IsTrackLabel(local, row))
+            {
+                context.SetSelectedTimelineTrack(GetTrackKey(row.Kind, row.TrackId), additive || toggle, toggle);
+                return;
+            }
+
+            if (TryHitSegment(local, out int segmentIndex, out _))
+            {
+                context.SetSelectedSegment(segmentIndex, additive, toggle);
+                return;
+            }
+
+            if (TryHitNotifyState(local, out int stateIndex, out _))
+            {
+                context.SetSelectedNotifyState(stateIndex, additive, toggle);
+                return;
+            }
+
+            if (TryHitNotify(local, out int notifyIndex))
+            {
+                context.SetSelectedNotify(notifyIndex, additive, toggle);
+                return;
+            }
+
+            if (TryHitCustomElement(local, out int customIndex, out _))
+                context.SetSelectedCustomElement(customIndex, additive, toggle);
+        }
         private void ShowContextMenu(Vector2 local)
         {
             AnimMontageSO montage = context.Montage;
@@ -3290,8 +3348,23 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             DrawSnapGuide(painter, rect);
             DrawPlayhead(painter, rect);
             DrawBoxSelection(painter);
+            DrawPlayModeLockedOverlay(painter, rect);
         }
 
+        private static void DrawPlayModeLockedOverlay(Painter2D painter, Rect rect)
+        {
+            if (!EditorApplication.isPlaying)
+                return;
+
+            painter.fillColor = new Color(0f, 0f, 0f, 0.28f);
+            painter.BeginPath();
+            painter.MoveTo(new Vector2(rect.xMin, rect.yMin));
+            painter.LineTo(new Vector2(rect.xMax, rect.yMin));
+            painter.LineTo(new Vector2(rect.xMax, rect.yMax));
+            painter.LineTo(new Vector2(rect.xMin, rect.yMax));
+            painter.ClosePath();
+            painter.Fill();
+        }
         private void DrawBackground(Painter2D painter, Rect rect)
         {
             painter.fillColor = new Color(0.12f, 0.12f, 0.12f, 1f);
@@ -4544,7 +4617,3 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private static float Snap(float time) => Mathf.Round(time / SnapStep) * SnapStep;
     }
 }
-
-
-
-

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -77,11 +77,14 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             loopToggle.RegisterValueChangedCallback(evt => context.Loop = evt.newValue);
             optionsGroup.Add(loopToggle);
 
-            speedField = new FloatField { value = context.PlaybackSpeed, label = "Speed" };
+            speedField = new FloatField { value = context.PlaybackSpeed, label = "Preview Speed" };
             speedField.AddToClassList(AnimMontageEditorStyles.TransportSpeedFieldClass);
             speedField.tooltip = GetSpeedTooltip();
             speedField.RegisterValueChangedCallback(evt =>
             {
+                if (EditorApplication.isPlaying)
+                    return;
+
                 context.PlaybackSpeed = Mathf.Max(0.01f, evt.newValue);
                 RefreshPlaybackState();
             });
@@ -91,14 +94,24 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             rateScaleField.AddToClassList(AnimMontageEditorStyles.TransportSpeedFieldClass);
             rateScaleField.tooltip = "Montage RateScale. Combined playback is Speed x Rate.";
             rateScaleField.RegisterValueChangedCallback(evt =>
-                SetMontageFloat("rateScale", Mathf.Max(0.01f, evt.newValue), "Set Montage RateScale"));
+            {
+                if (EditorApplication.isPlaying)
+                    return;
+
+                SetMontageFloat("rateScale", Mathf.Max(0.01f, evt.newValue), "Set Montage RateScale");
+            });
             optionsGroup.Add(rateScaleField);
 
             applyRootMotionToggle = new Toggle("Root");
             applyRootMotionToggle.AddToClassList(AnimMontageEditorStyles.TransportToggleClass);
             applyRootMotionToggle.tooltip = "Apply Root Motion for this montage";
             applyRootMotionToggle.RegisterValueChangedCallback(evt =>
-                SetMontageBool("applyRootMotion", evt.newValue, "Set Montage Root Motion"));
+            {
+                if (EditorApplication.isPlaying)
+                    return;
+
+                SetMontageBool("applyRootMotion", evt.newValue, "Set Montage Root Motion");
+            });
             optionsGroup.Add(applyRootMotionToggle);
             Add(optionsGroup);
 
@@ -152,13 +165,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         {
             AnimMontageSO montage = context.Montage;
             ApplyIcon(playPauseButton, playPauseIcon, context.IsPlaying ? PauseContent : PlayContent);
-            playPauseButton.SetEnabled(montage != null);
-            stopButton.SetEnabled(montage != null);
+            bool locked = EditorApplication.isPlaying;
+            playPauseButton.SetEnabled(montage != null && !locked);
+            stopButton.SetEnabled(montage != null && !locked && context.IsPlaying);
             loopToggle.SetValueWithoutNotify(context.Loop);
             speedField.SetValueWithoutNotify(context.PlaybackSpeed);
             speedField.tooltip = GetSpeedTooltip();
-            rateScaleField.SetEnabled(montage != null);
-            applyRootMotionToggle.SetEnabled(montage != null);
+            loopToggle.SetEnabled(!locked);
+            speedField.SetEnabled(!locked);
+            rateScaleField.SetEnabled(montage != null && !locked);
+            applyRootMotionToggle.SetEnabled(montage != null && !locked);
             rateScaleField.SetValueWithoutNotify(montage != null ? montage.RateScale : 1f);
             applyRootMotionToggle.SetValueWithoutNotify(montage != null && montage.ApplyRootMotion);
         }
@@ -169,9 +185,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             DisplayStyle display = hasSegment ? DisplayStyle.Flex : DisplayStyle.None;
             segmentDivider.style.display = display;
             segmentGroup.style.display = display;
-            splitSegmentButton.SetEnabled(hasSegment && canSplitSelectedSegment?.Invoke() == true);
-            replaceSegmentButton.SetEnabled(hasSegment);
-            resetSegmentTrimButton.SetEnabled(hasSegment);
+            bool locked = EditorApplication.isPlaying;
+            splitSegmentButton.SetEnabled(!locked && hasSegment && canSplitSelectedSegment?.Invoke() == true);
+            replaceSegmentButton.SetEnabled(!locked && hasSegment);
+            resetSegmentTrimButton.SetEnabled(!locked && hasSegment);
         }
 
         private void RefreshTime()

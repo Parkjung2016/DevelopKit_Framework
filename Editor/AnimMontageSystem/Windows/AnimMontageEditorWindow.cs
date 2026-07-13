@@ -16,6 +16,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private MontageTimelineView timelineView;
         private MontagePreviewViewportPanel viewportPanel;
         private MontageTransportBar transportBar;
+        private MontageSelectionInspectorPanel inspectorPanel;
         private ObjectField montageField;
         private ObjectField montageLibraryField;
         private ObjectField previewModelField;
@@ -53,6 +54,19 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 window.montageField.SetValueWithoutNotify(montage);
         }
 
+        public static void Open(AnimMontageLibrarySO library)
+        {
+            var window = GetWindow<AnimMontageEditorWindow>();
+            window.titleContent = new GUIContent("Montage Editor");
+            window.minSize = new Vector2(1200, 680);
+            window.Show();
+            window.context ??= new MontageEditorContext();
+            window.context.SetMontageLibrary(library);
+            if (window.montageLibraryField != null)
+                window.montageLibraryField.SetValueWithoutNotify(library);
+            if (window.previewModelField != null)
+                window.previewModelField.SetValueWithoutNotify(library != null ? library.PreviewModel : null);
+        }
         private void OnEnable()
         {
             context ??= new MontageEditorContext();
@@ -75,6 +89,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             EndEditorNotifyPlayback();
             context?.SetPlaying(false);
             previewController?.HandlePlayModeStateChanged(state);
+            inspectorPanel?.RefreshPlayModeReadonly();
             transportBar?.Refresh();
             RequestPreviewRepaint();
         }
@@ -215,7 +230,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             MontageEditorLayoutHelper.ConfigureSplit(inspectorLogSplit, "am-split-log-viewer");
             centerInspectorSplit.Add(inspectorLogSplit);
 
-            var inspectorPanel = new MontageSelectionInspectorPanel(context);
+            inspectorPanel = new MontageSelectionInspectorPanel(context);
             MontageEditorLayoutHelper.ConfigurePane(inspectorPanel);
             RegisterPlaybackShortcutHandler(inspectorPanel);
             inspectorLogSplit.Add(inspectorPanel);
@@ -499,6 +514,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void TogglePlayPause()
         {
+            if (EditorApplication.isPlaying)
+                return;
+
             if (context.Montage == null)
                 return;
 
@@ -573,6 +591,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private bool TryTogglePlaybackShortcut()
         {
+            if (EditorApplication.isPlaying)
+                return false;
+
             if (context == null || context.Montage == null || IsShortcutInputBlocked())
                 return false;
 
@@ -583,6 +604,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void OnEditorUpdate()
         {
             PollPlaybackShortcut();
+
+            if (EditorApplication.isPlaying && context != null && context.IsPlaying)
+            {
+                EndEditorNotifyPlayback();
+                context.SetPlaying(false);
+                inspectorPanel?.RefreshPlayModeReadonly();
+                transportBar?.Refresh();
+                UpdateStatus();
+                RequestPreviewRepaint();
+            }
 
             if (context == null || !context.IsPlaying || context.Montage == null)
             {
@@ -895,7 +926,3 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
     }
 }
-
-
-
-

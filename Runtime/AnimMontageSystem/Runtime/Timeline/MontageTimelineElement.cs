@@ -86,4 +86,3 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public sealed override Type RequiredTrackType => typeof(TTrack);
     }
 }
-
