@@ -34,7 +34,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             Reset();
             boundInstance = instance;
-            boundAnimator = instance != null ? instance.GetComponentInChildren<Animator>() : null;
+            boundAnimator = instance != null ? instance.GetComponentInChildren<Animator>(true) : null;
         }
 
         public void Dispose()
@@ -68,12 +68,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (!requiresMixer && AnimationMode.InAnimationMode())
             {
                 MontageSegmentSample sample = samples[0];
-                AnimationMode.SampleAnimationClip(instance, sample.Segment.Clip, sample.ClipTime);
+                AnimationMode.SampleAnimationClip(GetAnimationSampleTarget(instance), sample.Segment.Clip, sample.ClipTime);
                 return true;
             }
 
             if (boundAnimator == null)
-                return SampleFallbackClip(instance, samples[0]);
+                return SampleFallbackClip(GetAnimationSampleTarget(instance), samples[0]);
 
             PrepareAnimatorForPlayables(applyRootMotion);
             EnsureGraph(samples.Count);
@@ -110,6 +110,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             return true;
         }
+
+
+        private GameObject GetAnimationSampleTarget(GameObject fallback) =>
+            boundAnimator != null ? boundAnimator.gameObject : fallback;
 
         private static bool SampleFallbackClip(GameObject instance, MontageSegmentSample sample)
         {

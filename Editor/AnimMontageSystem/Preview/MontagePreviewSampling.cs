@@ -1,4 +1,4 @@
-using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
+﻿using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEngine;
 
@@ -54,14 +54,21 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return false;
 
             float clipTime = segment.ToClipTime(sampleTime);
+            GameObject sampleTarget = GetAnimationSampleTarget(instance);
             if (AnimationMode.InAnimationMode())
             {
-                AnimationMode.SampleAnimationClip(instance, clip, clipTime);
+                AnimationMode.SampleAnimationClip(sampleTarget, clip, clipTime);
                 return true;
             }
 
-            clip.SampleAnimation(instance, clipTime);
+            clip.SampleAnimation(sampleTarget, clipTime);
             return true;
+        }
+
+        private static GameObject GetAnimationSampleTarget(GameObject instance)
+        {
+            Animator animator = instance != null ? instance.GetComponentInChildren<Animator>(true) : null;
+            return animator != null ? animator.gameObject : instance;
         }
     }
 }
