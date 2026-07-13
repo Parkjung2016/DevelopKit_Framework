@@ -48,6 +48,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private readonly MontageNotifyDispatcher dispatcher = new();
         private readonly List<MontageSegmentSample> samples = new();
         private readonly List<AnimationClipPlayable> clipPlayables = new();
+        private readonly List<int> clipPlayableSegmentIndices = new();
         private PlayableGraph graph;
         private AnimationPlayableOutput output;
         private AnimationMixerPlayable mixer;
@@ -382,7 +383,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 MontageSegmentSample sample = samples[i];
                 AnimationClipPlayable playable = clipPlayables[i];
                 bool resetPlayableTime = force;
-                if (!playable.IsValid() || playable.GetAnimationClip() != sample.Segment.Clip)
+                if (!playable.IsValid() || playable.GetAnimationClip() != sample.Segment.Clip || clipPlayableSegmentIndices[i] != sample.SegmentIndex)
                 {
                     if (playable.IsValid())
                         playable.Destroy();
@@ -394,6 +395,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                         ? Mathf.Max(sample.Segment.ClipEndTime, sample.Segment.Clip.length)
                         : sample.Segment.Clip.length);
                     clipPlayables[i] = playable;
+                    clipPlayableSegmentIndices[i] = sample.SegmentIndex;
                     graph.Connect(playable, 0, mixer, i);
                     resetPlayableTime = true;
                 }
@@ -440,11 +442,19 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             mixerInputCount = required;
             output.SetSourcePlayable(mixer);
             clipPlayables.Clear();
+            clipPlayableSegmentIndices.Clear();
             for (int i = 0; i < required; i++)
+            {
                 clipPlayables.Add(default);
+                clipPlayableSegmentIndices.Add(-1);
+            }
         }
     }
 }
+
+
+
+
 
 
 

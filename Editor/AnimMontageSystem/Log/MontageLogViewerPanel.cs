@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -10,6 +11,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
     internal sealed class MontageLogViewerPanel : VisualElement
     {
         private const int MaxEntries = 500;
+        private static readonly MethodInfo ConsoleLogCountMethod = typeof(EditorWindow).Assembly
+            .GetType("UnityEditor.LogEntries")?
+            .GetMethod("GetCount", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
 
         private readonly List<LogEntry> entries = new();
         private readonly ScrollView scrollView = new(ScrollViewMode.Vertical);
@@ -18,6 +22,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private readonly ToolbarToggle warningToggle = new() { text = "Warn", value = true };
         private readonly ToolbarToggle errorToggle = new() { text = "Error", value = true };
         private bool rebuildQueued;
+        private int lastConsoleLogCount = -1;
         private bool queuedScrollToEnd;
 
         public MontageLogViewerPanel()
@@ -37,8 +42,18 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             scrollView.style.backgroundColor = new Color(0f, 0f, 0f, 0.12f);
             Add(scrollView);
 
-            RegisterCallback<AttachToPanelEvent>(_ => Application.logMessageReceived += OnLogMessageReceived);
-            RegisterCallback<DetachFromPanelEvent>(_ => Application.logMessageReceived -= OnLogMessageReceived);
+            RegisterCallback<AttachToPanelEvent>(_ =>
+            {
+                lastConsoleLogCount = GetConsoleLogCount();
+                Application.logMessageReceived += OnLogMessageReceived;
+                EditorApplication.update += OnEditorUpdate;
+            });
+
+            RegisterCallback<DetachFromPanelEvent>(_ =>
+            {
+                Application.logMessageReceived -= OnLogMessageReceived;
+                EditorApplication.update -= OnEditorUpdate;
+            });
         }
 
         private VisualElement BuildHeader()
@@ -82,6 +97,28 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             toolbar.Add(toggle);
         }
 
+        private void OnEditorUpdate()
+        {
+            int consoleLogCount = GetConsoleLogCount();
+            if (consoleLogCount < 0)
+                return;
+
+            if (lastConsoleLogCount >= 0 && consoleLogCount < lastConsoleLogCount && entries.Count > 0)
+            {
+                entries.Clear();
+                RequestRebuild();
+            }
+
+            lastConsoleLogCount = consoleLogCount;
+        }
+
+        private static int GetConsoleLogCount()
+        {
+            if (ConsoleLogCountMethod == null)
+                return -1;
+
+            return ConsoleLogCountMethod.Invoke(null, null) is int count ? count : -1;
+        }
         private void OnLogMessageReceived(string condition, string stackTrace, LogType type)
         {
             entries.Add(new LogEntry(DateTime.Now, condition, stackTrace, type));
@@ -226,3 +263,5 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
     }
 }
+
+

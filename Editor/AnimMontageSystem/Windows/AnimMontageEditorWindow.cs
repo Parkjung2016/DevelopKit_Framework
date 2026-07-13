@@ -1,4 +1,4 @@
-using PJDev.DevelopKit.Editors;
+﻿using PJDev.DevelopKit.Editors;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
@@ -617,8 +617,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     context.SetPlayhead(length);
                     EndEditorNotifyPlayback();
                     context.SetPlaying(false);
-                    SetPlayheadWithoutEditorScrubNotify(0f);
-                    previewController?.ResetRootMotionPreviewPose();
                     transportBar?.Refresh();
                     UpdateStatus();
                     RequestPreviewRepaint();
@@ -895,3 +893,4 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
     }
 }
+

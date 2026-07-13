@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -185,6 +185,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (!ShaderUtil.hardwareSupportsRectRenderTexture)
             {
                 EditorGUI.HelpBox(rect, "Preview is not supported on this GPU.", MessageType.Warning);
+                return;
+            }
+
+            if (IsPlayModePreviewBlocked())
+            {
+                DrawEmptyState(rect, "Play Mode 중에는 Montage Preview를 사용할 수 없습니다.");
                 return;
             }
 
@@ -427,35 +433,50 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 or PlayModeStateChange.EnteredPlayMode
                 or PlayModeStateChange.ExitingPlayMode)
             {
-                rootMotionSampler.Dispose();
-                MontagePreviewSampling.Dispose();
-                previousPreviewTimelineElementEvaluation = MontageTimelineElementEvaluation.Default;
-                previewAnimationSampleTime = 0f;
+                ResetPreviewRuntimeState(clearInstance: true);
                 return;
             }
 
             if (state != PlayModeStateChange.EnteredEditMode)
                 return;
 
-            rootMotionSampler.Dispose();
-            MontagePreviewSampling.Reset();
-            previousPreviewTimelineElementEvaluation = MontageTimelineElementEvaluation.Default;
-            previewAnimationSampleTime = 0f;
+            ResetPreviewRuntimeState(clearInstance: true);
 
-            if (previewInstance == null)
-            {
-                if (boundContext?.PreviewModel != null)
-                    SetPreviewModel(boundContext.PreviewModel);
+            if (boundContext?.PreviewModel == null)
                 return;
-            }
 
-            MontagePreviewSampling.BindInstance(previewInstance);
-            previewMotionRoot = previewInstance.GetComponentInChildren<Animator>()?.transform ?? previewInstance.transform;
-            StoreInitialPreviewTransform();
+            SetPreviewModel(boundContext.PreviewModel);
             ResetRootMotionPreviewPose();
             RefreshPreviewEffectCache(true);
             CacheBounds();
         }
+        private static bool IsPlayModePreviewBlocked() =>
+            EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode;
+
+        private void ResetPreviewRuntimeState(bool clearInstance)
+        {
+            rootMotionSampler.Dispose();
+            MontagePreviewSampling.Dispose();
+            previousPreviewTimelineElementEvaluation = MontageTimelineElementEvaluation.Default;
+            previewAnimationSampleTime = 0f;
+            previewParticleSystems.Clear();
+            previewVisualEffects.Clear();
+            particleCacheBuffer.Clear();
+            visualEffectCacheBuffer.Clear();
+            hasBounds = false;
+            hasPreviewHeightLock = false;
+            hasInitialPreviewTransform = false;
+
+            if (previewTexture != null)
+            {
+                Object.DestroyImmediate(previewTexture);
+                previewTexture = null;
+            }
+
+            if (clearInstance)
+                ClearInstance();
+        }
+
         public void Dispose()
         {
             MontageViewportInput.Shutdown();
@@ -934,20 +955,20 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (context?.Montage == null || previewInstance == null || !hasInitialPreviewTransform)
                 return;
 
-            bool evaluated = rootMotionSampler.TryEvaluate(
-                previewInstance,
+            bool evaluated = MontageRootMotionPreviewUtility.TryEvaluate(
                 context.Montage,
                 context.PlayheadTime,
-                initialPreviewPosition,
-                initialPreviewRotation,
                 out Vector3 rootPosition,
                 out Quaternion rootRotation);
 
             if (!evaluated)
             {
-                evaluated = MontageRootMotionPreviewUtility.TryEvaluate(
+                evaluated = rootMotionSampler.TryEvaluate(
+                    previewInstance,
                     context.Montage,
                     context.PlayheadTime,
+                    initialPreviewPosition,
+                    initialPreviewRotation,
                     out rootPosition,
                     out rootRotation);
             }
@@ -1158,3 +1179,5 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
     }
 }
+
+

@@ -12,6 +12,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private readonly List<MontageSegmentSample> samples = new();
         private readonly List<AnimationClipPlayable> clipPlayables = new();
+        private readonly List<int> clipPlayableSegmentIndices = new();
 
         private PlayableGraph graph;
         private AnimationPlayableOutput output;
@@ -132,7 +133,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 MontageSegmentSample sample = samples[i];
                 AnimationClipPlayable playable = clipPlayables[i];
                 bool resetPlayableTime = force;
-                if (!playable.IsValid() || playable.GetAnimationClip() != sample.Segment.Clip)
+                if (!playable.IsValid() || playable.GetAnimationClip() != sample.Segment.Clip || clipPlayableSegmentIndices[i] != sample.SegmentIndex)
                 {
                     if (playable.IsValid())
                         playable.Destroy();
@@ -144,6 +145,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                         ? Mathf.Max(sample.Segment.ClipEndTime, sample.Segment.Clip.length)
                         : sample.Segment.Clip.length);
                     clipPlayables[i] = playable;
+                    clipPlayableSegmentIndices[i] = sample.SegmentIndex;
                     graph.Connect(playable, 0, mixer, i);
                     resetPlayableTime = true;
                 }
@@ -185,8 +187,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             graph.Play();
 
             clipPlayables.Clear();
+            clipPlayableSegmentIndices.Clear();
             for (int i = 0; i < required; i++)
+            {
                 clipPlayables.Add(default);
+                clipPlayableSegmentIndices.Add(-1);
+            }
         }
 
         private void DestroyGraph()
@@ -199,6 +205,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             output = default;
             mixerInputCount = 0;
             clipPlayables.Clear();
+            clipPlayableSegmentIndices.Clear();
         }
     }
 }
+
+
+
+
+
