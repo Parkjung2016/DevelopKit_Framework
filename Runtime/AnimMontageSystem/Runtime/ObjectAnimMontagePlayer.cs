@@ -26,6 +26,45 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         Interrupted
     }
 
+
+    /// <summary>
+    /// 이벤트에서 사용할 몽타주 런타임 정보입니다.
+    /// </summary>
+    public sealed class MontageRuntimeInfo
+    {
+        public MontageRuntimeInfo(string name, float length, float rateScale, bool applyRootMotion)
+        {
+            Name = name;
+            Length = length;
+            RateScale = rateScale;
+            ApplyRootMotion = applyRootMotion;
+        }
+
+        /// <summary>
+        /// 몽타주 이름입니다.
+        /// </summary>
+        public string Name { get; }
+        /// <summary>
+        /// 몽타주 전체 길이입니다.
+        /// </summary>
+        public float Length { get; }
+        /// <summary>
+        /// 몽타주 재생 배율입니다.
+        /// </summary>
+        public float RateScale { get; }
+        /// <summary>
+        /// 루트 모션 적용 여부입니다.
+        /// </summary>
+        public bool ApplyRootMotion { get; }
+
+        internal static MontageRuntimeInfo FromMontage(AnimMontageSO montage)
+        {
+            return montage != null
+                ? new MontageRuntimeInfo(montage.name, montage.Length, montage.RateScale, montage.ApplyRootMotion)
+                : null;
+        }
+    }
+
     /// <summary>
     /// 몽타주 재생 이벤트에 함께 전달되는 정보입니다.
     /// </summary>
@@ -33,13 +72,13 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     {
         public MontagePlaybackEventContext(
             ObjectAnimMontagePlayer player,
-            AnimMontageSO montage,
+            MontageRuntimeInfo runtimeInfo,
             MontagePlaybackEventType eventType,
             float previousTime,
             float currentTime)
         {
             Player = player;
-            Montage = montage;
+            RuntimeInfo = runtimeInfo;
             EventType = eventType;
             PreviousTime = previousTime;
             CurrentTime = currentTime;
@@ -50,9 +89,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         /// </summary>
         public ObjectAnimMontagePlayer Player { get; }
         /// <summary>
-        /// 이벤트가 발생한 몽타주입니다.
+        /// 이벤트가 발생한 몽타주의 런타임 정보입니다.
         /// </summary>
-        public AnimMontageSO Montage { get; }
+        public MontageRuntimeInfo RuntimeInfo { get; }
         /// <summary>
         /// 발생한 재생 이벤트 타입입니다.
         /// </summary>
@@ -68,7 +107,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         /// <summary>
         /// 몽타주 전체 길이입니다. 몽타주가 없으면 0입니다.
         /// </summary>
-        public float Length => Montage != null ? Montage.Length : 0f;
+        public float Length => RuntimeInfo != null ? RuntimeInfo.Length : 0f;
         /// <summary>
         /// 현재 재생 위치를 0~1 범위로 나타낸 값입니다.
         /// </summary>
@@ -323,7 +362,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             float previousTime,
             float currentTime)
         {
-            var context = new MontagePlaybackEventContext(this, montage, eventType, previousTime, currentTime);
+            var context = new MontagePlaybackEventContext(this, MontageRuntimeInfo.FromMontage(montage), eventType, previousTime, currentTime);
             OnPlaybackEvent?.Invoke(context);
 
             switch (eventType)
