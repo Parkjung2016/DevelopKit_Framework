@@ -14,10 +14,65 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         Custom
     }
 
-    public enum MontageRootMotionPositionSpace
+
+    /// <summary>
+    /// 몽타주 재생 상태 변경 타입입니다.
+    /// </summary>
+    public enum MontagePlaybackEventType
     {
-        Local,
-        World
+        Play,
+        Complete,
+        Stop,
+        Interrupted
+    }
+
+    /// <summary>
+    /// 몽타주 재생 이벤트에 함께 전달되는 정보입니다.
+    /// </summary>
+    public readonly struct MontagePlaybackEventContext
+    {
+        public MontagePlaybackEventContext(
+            ObjectAnimMontagePlayer player,
+            AnimMontageSO montage,
+            MontagePlaybackEventType eventType,
+            float previousTime,
+            float currentTime)
+        {
+            Player = player;
+            Montage = montage;
+            EventType = eventType;
+            PreviousTime = previousTime;
+            CurrentTime = currentTime;
+        }
+
+        /// <summary>
+        /// 이벤트를 보낸 플레이어입니다.
+        /// </summary>
+        public ObjectAnimMontagePlayer Player { get; }
+        /// <summary>
+        /// 이벤트가 발생한 몽타주입니다.
+        /// </summary>
+        public AnimMontageSO Montage { get; }
+        /// <summary>
+        /// 발생한 재생 이벤트 타입입니다.
+        /// </summary>
+        public MontagePlaybackEventType EventType { get; }
+        /// <summary>
+        /// 이벤트 직전의 재생 시간입니다.
+        /// </summary>
+        public float PreviousTime { get; }
+        /// <summary>
+        /// 이벤트가 발생한 재생 시간입니다.
+        /// </summary>
+        public float CurrentTime { get; }
+        /// <summary>
+        /// 몽타주 전체 길이입니다. 몽타주가 없으면 0입니다.
+        /// </summary>
+        public float Length => Montage != null ? Montage.Length : 0f;
+        /// <summary>
+        /// 현재 재생 위치를 0~1 범위로 나타낸 값입니다.
+        /// </summary>
+        public float NormalizedTime => Length > 0f ? Mathf.Clamp01(CurrentTime / Length) : 0f;
     }
 
     public interface IMontageRootMotionController
@@ -37,9 +92,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     {
         [SerializeField] private Animator animator;
         [SerializeField] private MontageRootMotionMode rootMotionMode = MontageRootMotionMode.Transform;
-
-        [SerializeField]
-        private MontageRootMotionPositionSpace rootMotionPositionSpace = MontageRootMotionPositionSpace.World;
 
         [SerializeField] private Rigidbody rootMotionRigidbody;
         [SerializeField] private CharacterController rootMotionCharacterController;
@@ -76,14 +128,35 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public bool IsPlaying => playback.IsPlaying;
         public bool IsPaused => playback.IsPaused;
         public MontageRootMotionMode RootMotionMode => rootMotionMode;
-        public MontageRootMotionPositionSpace RootMotionPositionSpace => rootMotionPositionSpace;
         public Rigidbody RootMotionRigidbody => rootMotionRigidbody;
         public CharacterController RootMotionCharacterController => rootMotionCharacterController;
 
         public IMontageRootMotionController CustomRootMotionController =>
             runtimeRootMotionController ?? customRootMotionController;
-
-        public event Action<AnimNotify, AnimNotifyContext> NotifyFired;
+        /// <summary>
+        /// AnimNotify가 실행될 때 호출됩니다.
+        /// </summary>
+        public event Action<AnimNotify, AnimNotifyContext> OnNotify;
+        /// <summary>
+        /// 재생 시작, 완료, 정지, 교체 이벤트를 한 번에 받고 싶을 때 사용합니다.
+        /// </summary>
+        public event Action<MontagePlaybackEventContext> OnPlaybackEvent;
+        /// <summary>
+        /// 몽타주 재생이 시작될 때 호출됩니다.
+        /// </summary>
+        public event Action<MontagePlaybackEventContext> OnPlay;
+        /// <summary>
+        /// 몽타주가 끝까지 재생되면 호출됩니다.
+        /// </summary>
+        public event Action<MontagePlaybackEventContext> OnComplete;
+        /// <summary>
+        /// Stop으로 재생을 멈췄을 때 호출됩니다.
+        /// </summary>
+        public event Action<MontagePlaybackEventContext> OnStop;
+        /// <summary>
+        /// 재생 중인 몽타주가 새 몽타주로 교체될 때 호출됩니다.
+        /// </summary>
+        public event Action<MontagePlaybackEventContext> OnInterrupted;
 
         private void Awake()
         {
@@ -91,7 +164,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 animator = GetComponentInChildren<Animator>();
 
             CacheRootMotionComponents();
-            dispatcher.NotifyFired += (notify, ctx) => NotifyFired?.Invoke(notify, ctx);
+            dispatcher.NotifyFired += (notify, ctx) => OnNotify?.Invoke(notify, ctx);
         }
 
         private void Update()
@@ -103,6 +176,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             float deltaTime = Time.unscaledDeltaTime;
             AnimMontageSO montage = playback.Montage;
             float currentTime = playback.CurrentTime;
+            bool wasPlayingBeforeAdvance = playback.IsPlaying;
             MontageTimelineElementEvaluation timelineEvaluation =
                 MontageTimelineElementEvaluator.Evaluate(montage, currentTime);
             float timelineSpeed = timelineEvaluation.SpeedMultiplier;
@@ -133,6 +207,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (!playback.IsPlaying)
                 EndActiveTimelineElements(montage, playback.CurrentTime);
             dispatcher.Dispatch(playback, gameObject, animator, this);
+
+            if (wasPlayingBeforeAdvance && !playback.IsPlaying)
+                EmitPlaybackEvent(MontagePlaybackEventType.Complete, montage, currentTime, playback.CurrentTime);
         }
 
         private void OnAnimatorMove()
@@ -175,7 +252,16 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (montage == null || animator == null)
                 return;
 
-            EndActiveTimelineElements(playback.Montage, playback.CurrentTime);
+            AnimMontageSO previousMontage = playback.Montage;
+            float previousTime = playback.CurrentTime;
+            bool wasPlaying = playback.IsPlaying;
+            if (wasPlaying)
+            {
+                dispatcher.EndActiveStates(gameObject, animator, previousMontage, previousTime);
+                EmitPlaybackEvent(MontagePlaybackEventType.Interrupted, previousMontage, previousTime, previousTime);
+            }
+
+            EndActiveTimelineElements(previousMontage, previousTime);
             EnsureGraph();
             ApplyAnimatorRootMotion(montage.ApplyRootMotion);
             playback.Begin(montage, Mathf.Clamp(startTime, 0f, montage.Length));
@@ -185,32 +271,44 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             UpdateTimelineElementBehaviours(montage, playback.CurrentTime, 0f);
             UpdateAnimationSample(force: true);
             EvaluateGraph(0f);
+            EmitPlaybackEvent(MontagePlaybackEventType.Play, montage, previousTime, playback.CurrentTime);
             dispatcher.Dispatch(playback, gameObject, animator, this);
         }
-
         public void Stop()
         {
-            dispatcher.EndActiveStates(gameObject, animator, playback.Montage, playback.CurrentTime);
-            EndActiveTimelineElements(playback.Montage, playback.CurrentTime);
+            AnimMontageSO montage = playback.Montage;
+            float currentTime = playback.CurrentTime;
+            bool hadPlayback = montage != null && (playback.IsPlaying || playback.IsPaused);
+
+            dispatcher.EndActiveStates(gameObject, animator, montage, currentTime);
+            EndActiveTimelineElements(montage, currentTime);
             playback.Stop();
             DestroyGraph();
             RestoreAnimatorRootMotion();
-        }
 
+            if (hadPlayback)
+                EmitPlaybackEvent(MontagePlaybackEventType.Stop, montage, currentTime, currentTime);
+        }
         public void Pause(bool paused = true)
         {
+            if (playback.Montage == null || playback.IsPaused == paused)
+                return;
+
+            AnimMontageSO montage = playback.Montage;
+            float currentTime = playback.CurrentTime;
             if (paused)
             {
-                dispatcher.EndActiveStates(gameObject, animator, playback.Montage, playback.CurrentTime);
-                EndActiveTimelineElements(playback.Montage, playback.CurrentTime);
+                dispatcher.EndActiveStates(gameObject, animator, montage, currentTime);
+                EndActiveTimelineElements(montage, currentTime);
             }
 
             playback.Pause(paused);
         }
-
         public void SetTime(float montageTime)
         {
-            EndActiveTimelineElements(playback.Montage, playback.CurrentTime);
+            AnimMontageSO montage = playback.Montage;
+            float previousTime = playback.CurrentTime;
+            EndActiveTimelineElements(montage, previousTime);
             playback.SetTime(montageTime);
             UpdateTimelineElementBehaviours(playback.Montage, playback.CurrentTime, 0f);
             suppressNextRootMotion = playback.Montage != null && playback.Montage.ApplyRootMotion;
@@ -218,8 +316,32 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             EvaluateGraph(0f);
             dispatcher.ScrubTo(playback, gameObject, animator);
         }
-
         public bool TryHandle(AnimNotify notify, AnimNotifyContext context) => false;
+        private void EmitPlaybackEvent(
+            MontagePlaybackEventType eventType,
+            AnimMontageSO montage,
+            float previousTime,
+            float currentTime)
+        {
+            var context = new MontagePlaybackEventContext(this, montage, eventType, previousTime, currentTime);
+            OnPlaybackEvent?.Invoke(context);
+
+            switch (eventType)
+            {
+                case MontagePlaybackEventType.Play:
+                    OnPlay?.Invoke(context);
+                    break;
+                case MontagePlaybackEventType.Complete:
+                    OnComplete?.Invoke(context);
+                    break;
+                case MontagePlaybackEventType.Stop:
+                    OnStop?.Invoke(context);
+                    break;
+                case MontagePlaybackEventType.Interrupted:
+                    OnInterrupted?.Invoke(context);
+                    break;
+            }
+        }
 
         private void EnsureGraph()
         {
@@ -390,12 +512,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             }
         }
 
-
-        private Vector3 ConvertRootMotionPosition(Vector3 deltaPosition, Quaternion targetRotation) => deltaPosition;
-
         private void ApplyTransformRootMotion(Vector3 deltaPosition, Quaternion deltaRotation)
         {
-            transform.position += ConvertRootMotionPosition(deltaPosition, transform.rotation);
+            transform.position += deltaPosition;
             transform.rotation *= deltaRotation;
         }
 
@@ -410,8 +529,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 return;
             }
 
-            rootMotionRigidbody.MovePosition(rootMotionRigidbody.position +
-                                             ConvertRootMotionPosition(deltaPosition, rootMotionRigidbody.rotation));
+            rootMotionRigidbody.MovePosition(rootMotionRigidbody.position + deltaPosition);
             rootMotionRigidbody.MoveRotation(rootMotionRigidbody.rotation * deltaRotation);
         }
 
@@ -426,8 +544,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 return;
             }
 
-            rootMotionCharacterController.Move(ConvertRootMotionPosition(deltaPosition,
-                rootMotionCharacterController.transform.rotation));
+            rootMotionCharacterController.Move(deltaPosition);
             rootMotionCharacterController.transform.rotation *= deltaRotation;
         }
 
