@@ -35,6 +35,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private Quaternion initialPreviewRotation;
         private Vector3 initialPreviewScale;
         private float previewAnimationSampleTime;
+        private float lastPreviewPlayheadTime;
 
         private MontageTimelineElementEvaluation previousPreviewTimelineElementEvaluation =
             MontageTimelineElementEvaluation.Default;
@@ -140,7 +141,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             RevertTimelineElementPreviewTransform();
             float sampleTime = GetPreviewAnimationSampleTime(context);
             MontagePreviewSampling.TrySample(previewInstance, context, sampleTime);
-            ApplyRootMotionPreviewTransform(context);
+            ApplyRootMotionPreviewTransform(context, sampleTime);
             StabilizePreviewTransform();
             ApplyTimelineElementPreviewTransform(context);
         }
@@ -150,11 +151,32 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (context?.Montage == null)
             {
                 previewAnimationSampleTime = 0f;
+                lastPreviewPlayheadTime = 0f;
                 return 0f;
             }
-            
-            previewAnimationSampleTime = context.PlayheadTime;
 
+            if (!context.IsPlaying)
+            {
+                previewAnimationSampleTime = context.PlayheadTime;
+                lastPreviewPlayheadTime = context.PlayheadTime;
+                return previewAnimationSampleTime;
+            }
+
+            float playheadDelta = context.PlayheadTime - lastPreviewPlayheadTime;
+            if (playheadDelta < 0f)
+            {
+                previewAnimationSampleTime = context.PlayheadTime;
+                lastPreviewPlayheadTime = context.PlayheadTime;
+                return previewAnimationSampleTime;
+            }
+
+            MontageTimelineElementEvaluation evaluation =
+                MontageTimelineElementEvaluator.Evaluate(context.Montage, lastPreviewPlayheadTime);
+            previewAnimationSampleTime = Mathf.Clamp(
+                previewAnimationSampleTime + playheadDelta * evaluation.TimeScaleMultiplier,
+                0f,
+                context.Montage.Length);
+            lastPreviewPlayheadTime = context.PlayheadTime;
             return previewAnimationSampleTime;
         }
 
@@ -950,14 +972,14 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private bool IsRootMotionPreviewEnabled() =>
             (boundContext?.Montage?.ApplyRootMotion ?? false);
 
-        private void ApplyRootMotionPreviewTransform(MontageEditorContext context)
+        private void ApplyRootMotionPreviewTransform(MontageEditorContext context, float sampleTime)
         {
             if (context?.Montage == null || previewInstance == null || !hasInitialPreviewTransform)
                 return;
 
             bool evaluated = MontageRootMotionPreviewUtility.TryEvaluate(
                 context.Montage,
-                context.PlayheadTime,
+                sampleTime,
                 out Vector3 rootPosition,
                 out Quaternion rootRotation);
 
@@ -966,7 +988,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 evaluated = rootMotionSampler.TryEvaluate(
                     previewInstance,
                     context.Montage,
-                    context.PlayheadTime,
+                    sampleTime,
                     initialPreviewPosition,
                     initialPreviewRotation,
                     out rootPosition,
@@ -976,7 +998,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (!evaluated)
                 return;
 
-            MontagePreviewSampling.TrySample(previewInstance, context);
+            MontagePreviewSampling.TrySample(previewInstance, context, sampleTime);
 
             if (previewMotionRoot != null && previewMotionRoot != previewInstance.transform)
             {
@@ -1179,5 +1201,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
     }
 }
+
+
+
 
 

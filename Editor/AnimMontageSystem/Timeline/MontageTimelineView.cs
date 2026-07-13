@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
@@ -448,7 +448,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             private string actionLabel = "Create";
             private Type selectedType;
 
-            public static void Show<T>(string title, Action<T> onPick) where T : class
+            public static void Show<T>(string title, Action<T> onPick, Func<Type, bool> typeFilter = null) where T : class
             {
                 TypePickerPopup window = CreateInstance<TypePickerPopup>();
                 window.titleContent = new GUIContent(title);
@@ -459,18 +459,21 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 {
                     if (Activator.CreateInstance(picked) is T instance)
                         onPick?.Invoke(instance);
-                });
+                }, typeFilter);
                 window.ShowAuxWindow();
                 window.Focus();
             }
 
-            private void Initialize(Type baseType, Action<Type> pickCallback)
+            private void Initialize(Type baseType, Action<Type> pickCallback, Func<Type, bool> typeFilter)
             {
                 onPick = pickCallback;
                 types.Clear();
                 foreach (Type type in TypeCache.GetTypesDerivedFrom(baseType))
                 {
                     if (type.IsAbstract || type.IsGenericType || type.GetConstructor(Type.EmptyTypes) == null)
+                        continue;
+
+                    if (typeFilter != null && !typeFilter(type))
                         continue;
 
                     types.Add(type);
@@ -1141,9 +1144,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             else if (hasRow && row.Kind == TrackKind.Custom)
             {
                 string trackId = row.TrackId;
-                menu.AddItem(new GUIContent("Create/Transform Offset"), false, () => AddCustomElementAtTime(time, new TransformOffsetMontageElement(), trackId));
-                menu.AddItem(new GUIContent("Create/Playback Speed"), false, () => AddCustomElementAtTime(time, new PlaybackSpeedMontageElement(), trackId));
-                menu.AddItem(new GUIContent("Create/Camera Shake Marker"), false, () => AddCustomElementAtTime(time, new CameraShakeMarkerMontageElement(), trackId));
+                menu.AddItem(new GUIContent("Create/Element..."), false, () => OpenCreatePicker(PendingCreateKind.CustomElement, time, trackId));
             }
             else
             {
@@ -1368,9 +1369,30 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     break;
 
                 case PendingCreateKind.CustomElement:
-                    TypePickerPopup.Show<MontageTimelineElement>("Create Custom Element", element => AddCustomElementAtTime(time, element, trackId));
+                    TypePickerPopup.Show<MontageTimelineElement>(
+                        "Create Custom Element",
+                        element => AddCustomElementAtTime(time, element, trackId),
+                        type => CanElementTypeAttachToTrack(type, context.Montage, trackId));
                     break;
             }
+        }
+
+        private static bool CanElementTypeAttachToTrack(Type elementType, AnimMontageSO montage, string trackId)
+        {
+            if (elementType == null || elementType.IsAbstract || elementType.GetConstructor(Type.EmptyTypes) == null)
+                return false;
+
+            return Activator.CreateInstance(elementType) is MontageTimelineElement element
+                && CanElementAttachToTrack(element, montage, trackId);
+        }
+
+        private static bool CanElementAttachToTrack(MontageTimelineElement element, AnimMontageSO montage, string trackId)
+        {
+            if (element == null || montage == null)
+                return false;
+
+            CustomMontageTrack track = FindCustomTrack(montage, trackId);
+            return element.CanAttachToTrack(track?.TrackType);
         }
 
         private bool IsCompatibleAnimationClip(AnimationClip clip) =>
@@ -1944,6 +1966,14 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             AnimMontageSO montage = context.Montage;
             if (montage == null)
                 return;
+
+            trackId = SanitizeTrackId(trackId);
+            if (!CanElementAttachToTrack(elementAsset, montage, trackId))
+            {
+                string elementName = elementAsset != null ? elementAsset.DisplayName : "Custom Element";
+                Debug.LogWarning($"[AnimMontage] '{elementName}' cannot be added to '{trackId}' track.", montage);
+                return;
+            }
 
             float duration = Mathf.Max(MinSegmentDuration, elementAsset != null ? elementAsset.DefaultDuration : DefaultQuickBlendDuration);
             Undo.RecordObject(montage, "Add Custom Montage Element");
@@ -4514,3 +4544,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private static float Snap(float time) => Mathf.Round(time / SnapStep) * SnapStep;
     }
 }
+
+
+
+

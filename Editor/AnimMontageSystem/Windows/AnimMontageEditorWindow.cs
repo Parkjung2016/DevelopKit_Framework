@@ -594,9 +594,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             float delta = (float)(now - lastEditorTime);
             lastEditorTime = now;
 
-            MontageTimelineElementEvaluation timelineEvaluation = MontageTimelineElementEvaluator.Evaluate(context.Montage, context.PlayheadTime);
+            MontageTimelineElementEvaluation timelineEvaluation =
+                MontageTimelineElementEvaluator.Evaluate(context.Montage, context.PlayheadTime);
             float length = context.Montage.Length;
-            float nextTime = context.PlayheadTime + delta * context.EffectivePlaybackSpeed * timelineEvaluation.SpeedMultiplier;
+            float nextTime = context.PlayheadTime
+                + delta * context.EffectivePlaybackSpeed * timelineEvaluation.SpeedMultiplier;
 
             if (nextTime >= length)
             {
@@ -893,4 +895,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
     }
 }
+
+
+
 
