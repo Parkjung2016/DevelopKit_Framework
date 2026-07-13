@@ -148,11 +148,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private int mixerInputCount;
         private bool cachedAnimatorRootMotion;
         private bool hasCachedAnimatorRootMotion;
-        private RuntimeAnimatorController cachedAnimatorController;
-        private bool hasCachedAnimatorController;
+        private float cachedAnimatorSpeed = 1f;
+        private bool hasCachedAnimatorSpeed;
         private IMontageRootMotionController runtimeRootMotionController;
         private bool rootMotionActiveThisFrame;
         private bool suppressNextRootMotion;
+        private bool suppressRootMotionForPoseRefresh;
         private bool mixerRebuiltThisSample;
         private float animationSampleTime;
 
@@ -202,7 +203,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private void Awake()
         {
             if (animator == null)
-                animator = GetComponentInChildren<Animator>();
+                animator = GetComponentInChildren<Animator>(true);
 
             CacheRootMotionComponents();
             dispatcher.NotifyFired += (notify, ctx) => OnNotify?.Invoke(notify, ctx);
@@ -256,6 +257,21 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             }
         }
 
+
+        private void LateUpdate()
+        {
+            if (!graph.IsValid() || playback.Montage == null || (!playback.IsPlaying && !playback.IsPaused))
+                return;
+
+            bool suppressRootMotion = playback.Montage.ApplyRootMotion;
+            if (suppressRootMotion)
+                suppressRootMotionForPoseRefresh = true;
+
+            EvaluateGraph(0f);
+
+            if (suppressRootMotion)
+                suppressRootMotionForPoseRefresh = false;
+        }
         private void OnAnimatorMove()
         {
             if (animator == null
@@ -266,6 +282,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             {
                 return;
             }
+
+            if (suppressRootMotionForPoseRefresh)
+                return;
 
             if (suppressNextRootMotion)
             {
@@ -282,6 +301,11 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             DestroyGraph();
         }
 
+        private void OnDisable()
+        {
+            EndActiveTimelineElements(playback.Montage, playback.CurrentTime);
+            DestroyGraph();
+        }
 
         public void SetRootMotionRigidbody(Rigidbody target) => rootMotionRigidbody = target;
 
@@ -306,8 +330,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             }
 
             EndActiveTimelineElements(previousMontage, previousTime);
-            PrepareAnimatorForMontagePlayback();
             EnsureGraph();
+            PauseAnimatorControllerPlayback();
             ApplyAnimatorRootMotion(montage.ApplyRootMotion);
             playback.Begin(montage, Mathf.Clamp(startTime, 0f, montage.Length));
             animationSampleTime = playback.CurrentTime;
@@ -419,17 +443,16 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         private void DestroyGraph()
         {
-            if (!graph.IsValid())
-                return;
+            if (graph.IsValid())
+                graph.Destroy();
 
-            graph.Destroy();
             samples.Clear();
             clipPlayables.Clear();
             mixer = default;
             mixerInputCount = 0;
             RestoreAnimatorRootMotion();
+            RestoreAnimatorControllerPlayback();
         }
-
         private void CacheRootMotionComponents()
         {
             if (rootMotionRigidbody == null)
@@ -606,39 +629,28 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         }
 
 
-        private void PrepareAnimatorForMontagePlayback()
+
+        private void PauseAnimatorControllerPlayback()
         {
             if (animator == null)
                 return;
 
-            if (!hasCachedAnimatorController)
+            if (!hasCachedAnimatorSpeed)
             {
-                cachedAnimatorController = animator.runtimeAnimatorController;
-                hasCachedAnimatorController = true;
+                cachedAnimatorSpeed = animator.speed;
+                hasCachedAnimatorSpeed = true;
             }
 
-            if (animator.runtimeAnimatorController != null)
-            {
-                animator.runtimeAnimatorController = null;
-                animator.Rebind();
-                animator.Update(0f);
-            }
+            animator.speed = 0f;
         }
 
-        private void RestoreAnimatorController()
+        private void RestoreAnimatorControllerPlayback()
         {
-            if (animator == null || !hasCachedAnimatorController)
-            {
-                hasCachedAnimatorController = false;
-                cachedAnimatorController = null;
-                return;
-            }
+            if (animator != null && hasCachedAnimatorSpeed)
+                animator.speed = cachedAnimatorSpeed;
 
-            if (animator.runtimeAnimatorController != cachedAnimatorController)
-                animator.runtimeAnimatorController = cachedAnimatorController;
-
-            hasCachedAnimatorController = false;
-            cachedAnimatorController = null;
+            hasCachedAnimatorSpeed = false;
+            cachedAnimatorSpeed = 1f;
         }
         private void ApplyAnimatorRootMotion(bool applyRootMotion)
         {
