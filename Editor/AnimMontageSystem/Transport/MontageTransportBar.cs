@@ -19,7 +19,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private readonly Toggle loopToggle;
         private readonly FloatField speedField;
         private readonly FloatField rateScaleField;
-        private readonly Toggle applyRootMotionToggle;
+        private readonly Toggle horizontalRootMotionToggle;
+        private readonly Toggle verticalRootMotionToggle;
+        private readonly Toggle rotationRootMotionToggle;
         private readonly VisualElement segmentDivider;
         private readonly VisualElement segmentGroup;
         private readonly ToolbarButton splitSegmentButton;
@@ -102,17 +104,26 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             });
             optionsGroup.Add(rateScaleField);
 
-            applyRootMotionToggle = new Toggle("Root");
-            applyRootMotionToggle.AddToClassList(AnimMontageEditorStyles.TransportToggleClass);
-            applyRootMotionToggle.tooltip = "Apply Root Motion for this montage";
-            applyRootMotionToggle.RegisterValueChangedCallback(evt =>
-            {
-                if (EditorApplication.isPlaying)
-                    return;
+            horizontalRootMotionToggle = CreateRootMotionToggle(
+                "H",
+                "Horizontal Root Motion (X/Z movement)",
+                "applyHorizontalRootMotion",
+                "Set Horizontal Root Motion");
+            optionsGroup.Add(horizontalRootMotionToggle);
 
-                SetMontageBool("applyRootMotion", evt.newValue, "Set Montage Root Motion");
-            });
-            optionsGroup.Add(applyRootMotionToggle);
+            verticalRootMotionToggle = CreateRootMotionToggle(
+                "V",
+                "Vertical Root Motion (Y movement)",
+                "applyVerticalRootMotion",
+                "Set Vertical Root Motion");
+            optionsGroup.Add(verticalRootMotionToggle);
+
+            rotationRootMotionToggle = CreateRootMotionToggle(
+                "R",
+                "Rotation Root Motion",
+                "applyRotationRootMotion",
+                "Set Rotation Root Motion");
+            optionsGroup.Add(rotationRootMotionToggle);
             Add(optionsGroup);
 
             segmentDivider = CreateDivider();
@@ -174,9 +185,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             loopToggle.SetEnabled(!locked);
             speedField.SetEnabled(!locked);
             rateScaleField.SetEnabled(montage != null && !locked);
-            applyRootMotionToggle.SetEnabled(montage != null && !locked);
+            horizontalRootMotionToggle.SetEnabled(montage != null && !locked);
+            verticalRootMotionToggle.SetEnabled(montage != null && !locked);
+            rotationRootMotionToggle.SetEnabled(montage != null && !locked);
             rateScaleField.SetValueWithoutNotify(montage != null ? montage.RateScale : 1f);
-            applyRootMotionToggle.SetValueWithoutNotify(montage != null && montage.ApplyRootMotion);
+            horizontalRootMotionToggle.SetValueWithoutNotify(montage != null && montage.ApplyHorizontalRootMotion);
+            verticalRootMotionToggle.SetValueWithoutNotify(montage != null && montage.ApplyVerticalRootMotion);
+            rotationRootMotionToggle.SetValueWithoutNotify(montage != null && montage.ApplyRotationRootMotion);
         }
 
         private void RefreshSegmentActions()
@@ -204,6 +219,20 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return $"Timeline Speed x Montage RateScale = {context.PlaybackSpeed:0.###} x {rateScale:0.###} = {context.EffectivePlaybackSpeed:0.###}";
         }
 
+        private Toggle CreateRootMotionToggle(string label, string tooltip, string propertyName, string undoName)
+        {
+            var toggle = new Toggle(label);
+            toggle.AddToClassList(AnimMontageEditorStyles.TransportToggleClass);
+            toggle.tooltip = tooltip;
+            toggle.RegisterValueChangedCallback(evt =>
+            {
+                if (EditorApplication.isPlaying)
+                    return;
+
+                SetMontageBool(propertyName, evt.newValue, undoName);
+            });
+            return toggle;
+        }
         private void SetMontageFloat(string propertyName, float value, string undoName)
         {
             AnimMontageSO montage = context.Montage;

@@ -537,7 +537,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             AddMontageSettingsCard(root, "Playback", "rateScale");
             AddMontageSettingsCard(root, "Blend", "blendIn", "blendOut");
-            AddMontageSettingsCard(root, "Root Motion", "applyRootMotion");
+            AddMontageSettingsCard(root, "Root Motion", "applyHorizontalRootMotion", "applyVerticalRootMotion", "applyRotationRootMotion");
 
             root.Add(new Label(
                 $"Segments: {montage.Segments.Count} | Notifies: {montage.Notifies.Count} | States: {montage.NotifyStates.Count}")

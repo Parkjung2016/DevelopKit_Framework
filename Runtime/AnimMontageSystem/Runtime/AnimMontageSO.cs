@@ -9,11 +9,13 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     {
         [Min(0.01f)]
         [SerializeField] private float rateScale = 1f;
-                [Min(0f)]
+        [Min(0f)]
         [SerializeField] private float blendIn;
         [Min(0f)]
         [SerializeField] private float blendOut;
-        [SerializeField] private bool applyRootMotion;
+        [SerializeField] private bool applyHorizontalRootMotion = true;
+        [SerializeField] private bool applyVerticalRootMotion = true;
+        [SerializeField] private bool applyRotationRootMotion = true;
         [SerializeField] private MontageSegment[] segments = Array.Empty<MontageSegment>();
         [SerializeField] private AnimNotifyPlacement[] notifies = Array.Empty<AnimNotifyPlacement>();
         [SerializeField] private AnimNotifyStatePlacement[] notifyStates = Array.Empty<AnimNotifyStatePlacement>();
@@ -28,7 +30,10 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public float RateScale => Mathf.Max(0.01f, rateScale);
         public float BlendIn => Mathf.Max(0f, blendIn);
         public float BlendOut => Mathf.Max(0f, blendOut);
-        public bool ApplyRootMotion => applyRootMotion;
+        public bool ApplyRootMotion => applyHorizontalRootMotion || applyVerticalRootMotion || applyRotationRootMotion;
+        public bool ApplyHorizontalRootMotion => applyHorizontalRootMotion;
+        public bool ApplyVerticalRootMotion => applyVerticalRootMotion;
+        public bool ApplyRotationRootMotion => applyRotationRootMotion;
         public IReadOnlyList<MontageSegment> Segments => segments ?? Array.Empty<MontageSegment>();
         public IReadOnlyList<AnimNotifyPlacement> Notifies => notifies ?? Array.Empty<AnimNotifyPlacement>();
         public IReadOnlyList<AnimNotifyStatePlacement> NotifyStates => notifyStates ?? Array.Empty<AnimNotifyStatePlacement>();
@@ -121,7 +126,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             rateScale = Mathf.Max(0.01f, rateScale);
             blendIn = Mathf.Max(0f, blendIn);
             blendOut = Mathf.Max(0f, blendOut);
-
             animationTracks = SanitizeTracks(animationTracks);
             notifyTracks = SanitizeTracks(notifyTracks);
             notifyStateTracks = SanitizeTracks(notifyStateTracks);

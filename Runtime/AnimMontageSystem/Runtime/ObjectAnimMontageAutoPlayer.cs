@@ -10,13 +10,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         [SerializeField] private AnimMontageSO montage;
         [SerializeField] private bool playOnAwake = true;
         [SerializeField] private float startTime;
+        
 
-        public ObjectAnimMontagePlayer Player => player;
-        public AnimMontageSO Montage => montage;
-        public bool PlayOnAwake => playOnAwake;
-        public float StartTime => startTime;
-
-        private void Awake()
+        private void Start()
         {
             if (player == null)
                 player = GetComponent<ObjectAnimMontagePlayer>();
@@ -24,7 +20,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (playOnAwake)
                 Play();
         }
-
+        
         public void Play()
         {
             if (player == null || montage == null)

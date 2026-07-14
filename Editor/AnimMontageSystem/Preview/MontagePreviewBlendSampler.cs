@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -76,7 +76,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return SampleFallbackClip(GetAnimationSampleTarget(instance), samples[0]);
 
             PrepareAnimatorForPlayables(applyRootMotion);
-            EnsureGraph(samples.Count);
+            EnsureGraph(Mathf.Max(samples.Count, montage.Segments.Count));
 
             for (int i = 0; i < samples.Count; i++)
             {
@@ -93,7 +93,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     graph.Connect(clipPlayable, 0, mixer, i);
                 }
 
-                clipPlayable.SetApplyFootIK(true);
+                clipPlayable.SetApplyFootIK(false);
                 clipPlayable.SetApplyPlayableIK(true);
                 clipPlayable.SetTime(sample.ClipTime);
                 clipPlayable.SetSpeed(0f);

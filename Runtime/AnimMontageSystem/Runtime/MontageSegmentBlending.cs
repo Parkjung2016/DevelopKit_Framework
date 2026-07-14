@@ -5,13 +5,20 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
     public readonly struct MontageSegmentSample
     {
-        public MontageSegmentSample(MontageSegment segment, int segmentIndex, float clipTime, float playableClipTime, float weight)
+        public MontageSegmentSample(
+            MontageSegment segment,
+            int segmentIndex,
+            float clipTime,
+            float playableClipTime,
+            float weight,
+            bool isHeldPose = false)
         {
             Segment = segment;
             SegmentIndex = segmentIndex;
             ClipTime = clipTime;
             PlayableClipTime = playableClipTime;
             Weight = weight;
+            IsHeldPose = isHeldPose;
         }
 
         public MontageSegmentSample(MontageSegment segment, int segmentIndex, float clipTime, float weight)
@@ -24,6 +31,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public float ClipTime { get; }
         public float PlayableClipTime { get; }
         public float Weight { get; }
+        public bool IsHeldPose { get; }
     }
 
     public static class MontageSegmentBlending
@@ -73,7 +81,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 if (segment?.Clip == null)
                     continue;
 
-                float weight = ComputeWeight(montageTime, segment, i, segments);
+                float weight = MontageBlendUtility.Evaluate(
+                    ComputeWeight(montageTime, segment, i, segments));
                 if (weight <= 0.0001f)
                     continue;
 
@@ -90,6 +99,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (totalWeight <= 0.0001f)
             {
                 results.Clear();
+                TryAddGapPoseSample(montageTime, segments, results);
                 return;
             }
 
@@ -108,6 +118,56 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             }
         }
 
+        private static bool TryAddGapPoseSample(
+            float montageTime,
+            IReadOnlyList<MontageSegment> segments,
+            List<MontageSegmentSample> results)
+        {
+            int previousIndex = -1;
+            int nextIndex = -1;
+            float latestEndTime = float.MinValue;
+            float earliestStartTime = float.MaxValue;
+            for (int i = 0; i < segments.Count; i++)
+            {
+                MontageSegment segment = segments[i];
+                if (segment?.Clip == null || segment.Duration <= 0f)
+                    continue;
+                if (segment.EndTime <= montageTime + 0.0001f && segment.EndTime > latestEndTime)
+                {
+                    previousIndex = i;
+                    latestEndTime = segment.EndTime;
+                }
+                if (segment.StartTime >= montageTime - 0.0001f && segment.StartTime < earliestStartTime)
+                {
+                    nextIndex = i;
+                    earliestStartTime = segment.StartTime;
+                }
+            }
+            int segmentIndex = previousIndex >= 0 ? previousIndex : nextIndex;
+            if (segmentIndex < 0)
+                return false;
+            MontageSegment fallback = segments[segmentIndex];
+            float playableClipTime;
+            if (previousIndex >= 0)
+            {
+                float sampleTime = fallback.IsLoopingClip
+                    ? Mathf.Max(fallback.StartTime, fallback.EndTime - 0.0001f / fallback.PlayRate)
+                    : fallback.EndTime;
+                playableClipTime = fallback.ToPlayableClipTime(sampleTime);
+            }
+            else
+            {
+                playableClipTime = fallback.ClipStartTime;
+            }
+            results.Add(new MontageSegmentSample(
+                fallback,
+                segmentIndex,
+                fallback.NormalizeClipTime(playableClipTime),
+                playableClipTime,
+                1f,
+                true));
+            return true;
+        }
         private static float ComputeWeight(
             float montageTime,
             MontageSegment segment,

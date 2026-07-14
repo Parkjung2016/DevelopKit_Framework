@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEngine;
 using UnityEngine.Animations;
@@ -63,10 +63,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 animator.Rebind();
                 animator.Update(0f);
 
-                EnsureGraph(1, animator);
+                EnsureGraph(Mathf.Max(1, montage.Segments.Count), animator);
                 UpdateAnimationSample(montage, 0f, true);
                 graph.Evaluate(0f);
-
                 Transform rootTransform = animator.transform;
                 Vector3 previousRootPosition = rootTransform.position;
                 Quaternion previousRootRotation = rootTransform.rotation;
@@ -83,17 +82,20 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
                     Vector3 currentRootPosition = rootTransform.position;
                     Quaternion currentRootRotation = rootTransform.rotation;
-                    Vector3 worldDeltaPosition = currentRootPosition - previousRootPosition;
-                    Quaternion worldDeltaRotation = Quaternion.Inverse(previousRootRotation) * currentRootRotation;
+                    Vector3 worldDeltaPosition = animator.deltaPosition;
+                    Quaternion deltaRotation = animator.deltaRotation;
 
-                    if (worldDeltaPosition.sqrMagnitude <= 0.0000001f && animator.deltaPosition.sqrMagnitude > 0.0000001f)
-                        worldDeltaPosition = initialRotation * (rotation * animator.deltaPosition);
+                    if (worldDeltaPosition.sqrMagnitude <= 0.0000001f)
+                        worldDeltaPosition = currentRootPosition - previousRootPosition;
 
-                    if (IsIdentity(worldDeltaRotation) && !IsIdentity(animator.deltaRotation))
-                        worldDeltaRotation = animator.deltaRotation;
+                    if (IsIdentity(deltaRotation))
+                        deltaRotation = Quaternion.Inverse(previousRootRotation) * currentRootRotation;
+
+                    if (montage.ApplyRotationRootMotion)
+                        deltaRotation = MontageRootMotionUtility.ExtractYaw(deltaRotation);
 
                     position += inverseInitialRotation * worldDeltaPosition;
-                    rotation *= worldDeltaRotation;
+                    rotation *= deltaRotation;
                     previousRootPosition = currentRootPosition;
                     previousRootRotation = currentRootRotation;
                     previousTime = currentTime;
@@ -127,7 +129,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (samples.Count == 0)
                 return;
 
-            EnsureGraph(samples.Count, null);
+            EnsureGraph(Mathf.Max(samples.Count, montage.Segments.Count), null);
             for (int i = 0; i < samples.Count; i++)
             {
                 MontageSegmentSample sample = samples[i];
@@ -139,7 +141,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                         playable.Destroy();
 
                     playable = AnimationClipPlayable.Create(graph, sample.Segment.Clip);
-                    playable.SetApplyFootIK(true);
+                    playable.SetApplyFootIK(false);
                     playable.SetApplyPlayableIK(true);
                     playable.SetDuration(sample.Segment.IsLoopingClip
                         ? Mathf.Max(sample.Segment.ClipEndTime, sample.Segment.Clip.length)
@@ -150,11 +152,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     resetPlayableTime = true;
                 }
 
-                float playableSpeed = sample.Segment.PlayRate;
-                if (resetPlayableTime)
-                {
+                float playableSpeed = sample.IsHeldPose ? 0f : sample.Segment.PlayRate;
+                if (sample.IsHeldPose)
+                    playable.SetTime(sample.ClipTime);
+                else if (resetPlayableTime)
                     playable.SetTime(Mathf.Max(sample.Segment.ClipStartTime, sample.PlayableClipTime));
-                }
 
                 playable.SetSpeed(playableSpeed);
                 mixer.SetInputWeight(i, sample.Weight);

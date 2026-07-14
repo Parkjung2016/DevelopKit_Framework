@@ -95,7 +95,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 hasRootMotion = true;
             }
 
-            rotation = rotationWeight > 0f ? blendedRotationDelta : Quaternion.identity;
+            rotation = rotationWeight > 0f
+                ? MontageRootMotionUtility.ExtractYaw(blendedRotationDelta)
+                : Quaternion.identity;
         }
 
         private static MontageSegmentSample FindPreviousSample(List<MontageSegmentSample> samples, MontageSegmentSample current)

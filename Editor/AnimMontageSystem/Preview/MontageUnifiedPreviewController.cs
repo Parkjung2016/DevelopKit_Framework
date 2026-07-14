@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -970,7 +970,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
 
         private bool IsRootMotionPreviewEnabled() =>
-            (boundContext?.Montage?.ApplyRootMotion ?? false);
+            (boundContext?.Montage?.ApplyHorizontalRootMotion ?? false)
+            || (boundContext?.Montage?.ApplyVerticalRootMotion ?? false)
+            || (boundContext?.Montage?.ApplyRotationRootMotion ?? false);
 
         private void ApplyRootMotionPreviewTransform(MontageEditorContext context, float sampleTime)
         {
@@ -998,6 +1000,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (!evaluated)
                 return;
 
+            FilterRootMotionPreview(context.Montage, ref rootPosition, ref rootRotation);
             MontagePreviewSampling.TrySample(previewInstance, context, sampleTime);
 
             if (previewMotionRoot != null && previewMotionRoot != previewInstance.transform)
@@ -1012,6 +1015,32 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 initialPreviewRotation * rootRotation);
         }
 
+        private static void FilterRootMotionPreview(
+            AnimMontageSO montage,
+            ref Vector3 position,
+            ref Quaternion rotation)
+        {
+            if (montage == null || !montage.ApplyRootMotion)
+            {
+                position = Vector3.zero;
+                rotation = Quaternion.identity;
+                return;
+            }
+
+            if (!montage.ApplyHorizontalRootMotion)
+            {
+                position.x = 0f;
+                position.z = 0f;
+            }
+
+            if (!montage.ApplyVerticalRootMotion)
+                position.y = 0f;
+
+            if (!montage.ApplyRotationRootMotion)
+                rotation = Quaternion.identity;
+            else
+                rotation = MontageRootMotionUtility.ExtractYaw(rotation);
+        }
         private void RevertTimelineElementPreviewTransform()
         {
             if (previewInstance == null || !HasTimelineElementTransform(previousPreviewTimelineElementEvaluation))
