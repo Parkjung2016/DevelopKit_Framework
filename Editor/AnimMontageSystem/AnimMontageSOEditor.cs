@@ -1,5 +1,6 @@
 ﻿using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
+using UnityEditor.Callbacks;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
@@ -73,6 +74,26 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
     }
 
+
+    internal static class AnimMontageAssetOpenHandler
+    {
+        [OnOpenAsset]
+        private static bool OnOpenAsset(EntityId entityId, int line)
+        {
+            Object asset = EditorUtility.EntityIdToObject(entityId);
+            switch (asset)
+            {
+                case AnimMontageSO montage:
+                    AnimMontageEditorWindow.Open(montage);
+                    return true;
+                case AnimMontageLibrarySO library:
+                    AnimMontageEditorWindow.Open(library);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+    }
     [CustomEditor(typeof(AnimMontageLibrarySO))]
     public sealed class AnimMontageLibrarySOEditor : UnityEditor.Editor
     {
