@@ -174,6 +174,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private bool suppressNextRootMotion;
         private bool suppressRootMotionForPoseRefresh;
         private bool mixerRebuiltThisSample;
+        private bool rootMotionDeltaAppliedThisFrame;
+        private bool rootMotionFallbackCaptured;
+        private Vector3 rootMotionFallbackWorldPosition;
+        private Quaternion rootMotionFallbackWorldRotation = Quaternion.identity;
+        private Vector3 rootMotionFallbackLocalPosition;
+        private Quaternion rootMotionFallbackLocalRotation = Quaternion.identity;
         private float animationSampleTime;
         private float montageBlendElapsedTime;
 
@@ -263,7 +269,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 if (mixerRebuiltThisSample)
                     SyncRootMotionGraphAfterRebuild();
 
+                BeginRootMotionFallbackCapture();
                 EvaluateGraph(animationDeltaTime);
+                ApplyTransformCurveRootMotionFallback();
                 animationSampleTime = Mathf.Min(animationSampleTime + animationDeltaTime * montage.RateScale,
                     montage.Length);
                 playback.Advance(deltaTime * timelineSpeed);
@@ -325,7 +333,13 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 return;
             }
 
-            ApplyRootMotionDelta(animator.deltaPosition, animator.deltaRotation);
+            Vector3 deltaPosition = animator.deltaPosition;
+            Quaternion deltaRotation = animator.deltaRotation;
+            if (HasRootMotionDelta(deltaPosition, deltaRotation))
+            {
+                rootMotionDeltaAppliedThisFrame = true;
+                ApplyRootMotionDelta(deltaPosition, deltaRotation);
+            }
         }
 
         private void OnDestroy()
@@ -671,6 +685,43 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             previousTimelineElementEvaluation = evaluation;
         }
 
+        private void BeginRootMotionFallbackCapture()
+        {
+            rootMotionDeltaAppliedThisFrame = false;
+            rootMotionFallbackCaptured = false;
+            if (animator == null)
+                return;
+
+            Transform animatorTransform = animator.transform;
+            rootMotionFallbackWorldPosition = animatorTransform.position;
+            rootMotionFallbackWorldRotation = animatorTransform.rotation;
+            rootMotionFallbackLocalPosition = animatorTransform.localPosition;
+            rootMotionFallbackLocalRotation = animatorTransform.localRotation;
+            rootMotionFallbackCaptured = true;
+        }
+
+        private void ApplyTransformCurveRootMotionFallback()
+        {
+            if (!rootMotionFallbackCaptured || rootMotionDeltaAppliedThisFrame || animator == null)
+                return;
+
+            Transform animatorTransform = animator.transform;
+            Vector3 worldDeltaPosition = animatorTransform.position - rootMotionFallbackWorldPosition;
+            Quaternion worldDeltaRotation = Quaternion.Inverse(rootMotionFallbackWorldRotation) * animatorTransform.rotation;
+            if (!HasRootMotionDelta(worldDeltaPosition, worldDeltaRotation))
+                return;
+
+            animatorTransform.localPosition = rootMotionFallbackLocalPosition;
+            animatorTransform.localRotation = rootMotionFallbackLocalRotation;
+            ApplyRootMotionDelta(worldDeltaPosition, worldDeltaRotation);
+            rootMotionDeltaAppliedThisFrame = true;
+        }
+
+        private static bool HasRootMotionDelta(Vector3 deltaPosition, Quaternion deltaRotation)
+        {
+            return deltaPosition.sqrMagnitude > 0.0000001f
+                   || Quaternion.Angle(Quaternion.identity, deltaRotation) > 0.0001f;
+        }
         private void ApplyRootMotionDelta(Vector3 deltaPosition, Quaternion deltaRotation)
         {
             switch (rootMotionMode)

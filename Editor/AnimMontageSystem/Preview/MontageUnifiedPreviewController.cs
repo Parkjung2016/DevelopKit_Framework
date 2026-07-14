@@ -977,20 +977,20 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (context?.Montage == null || previewInstance == null || !hasInitialPreviewTransform)
                 return;
 
-            bool evaluated = MontageRootMotionPreviewUtility.TryEvaluate(
+            bool evaluated = rootMotionSampler.TryEvaluate(
+                previewInstance,
                 context.Montage,
                 sampleTime,
+                initialPreviewPosition,
+                initialPreviewRotation,
                 out Vector3 rootPosition,
                 out Quaternion rootRotation);
 
             if (!evaluated)
             {
-                evaluated = rootMotionSampler.TryEvaluate(
-                    previewInstance,
+                evaluated = MontageRootMotionPreviewUtility.TryEvaluate(
                     context.Montage,
                     sampleTime,
-                    initialPreviewPosition,
-                    initialPreviewRotation,
                     out rootPosition,
                     out rootRotation);
             }
