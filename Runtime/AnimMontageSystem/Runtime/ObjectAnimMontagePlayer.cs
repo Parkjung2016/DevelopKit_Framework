@@ -32,11 +32,13 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     /// </summary>
     public sealed class MontageRuntimeInfo
     {
-        public MontageRuntimeInfo(string name, float length, float rateScale, bool applyRootMotion)
+        public MontageRuntimeInfo(string name, float length, float rateScale, float blendIn, float blendOut, bool applyRootMotion)
         {
             Name = name;
             Length = length;
             RateScale = rateScale;
+            BlendIn = blendIn;
+            BlendOut = blendOut;
             ApplyRootMotion = applyRootMotion;
         }
 
@@ -56,6 +58,16 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public float RateScale { get; }
 
         /// <summary>
+        /// 몽타주가 시작될 때 AnimatorController에서 넘어오는 시간입니다.
+        /// </summary>
+        public float BlendIn { get; }
+
+        /// <summary>
+        /// 몽타주가 끝날 때 AnimatorController로 돌아가는 시간입니다.
+        /// </summary>
+        public float BlendOut { get; }
+
+        /// <summary>
         /// 루트 모션 적용 여부입니다.
         /// </summary>
         public bool ApplyRootMotion { get; }
@@ -63,7 +75,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         internal static MontageRuntimeInfo FromMontage(AnimMontageSO montage)
         {
             return montage != null
-                ? new MontageRuntimeInfo(montage.name, montage.Length, montage.RateScale, montage.ApplyRootMotion)
+                ? new MontageRuntimeInfo(montage.name, montage.Length, montage.RateScale, montage.BlendIn, montage.BlendOut, montage.ApplyRootMotion)
                 : null;
         }
     }
@@ -167,6 +179,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private bool suppressRootMotionForPoseRefresh;
         private bool mixerRebuiltThisSample;
         private float animationSampleTime;
+        private float montageBlendElapsedTime;
 
         private MontageTimelineElementEvaluation previousTimelineElementEvaluation =
             MontageTimelineElementEvaluation.Default;
@@ -244,6 +257,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             float timelineSpeed = timelineEvaluation.SpeedMultiplier;
             float timeScale = timelineEvaluation.TimeScaleMultiplier;
             UpdateTimelineElementBehaviours(montage, currentTime, deltaTime);
+            montageBlendElapsedTime += deltaTime * timelineSpeed * montage.RateScale;
             float animationDeltaTime = deltaTime * timelineSpeed * timeScale;
             rootMotionActiveThisFrame = montage != null && montage.ApplyRootMotion;
 
@@ -264,7 +278,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                     montage.Length);
                 playback.Advance(deltaTime * timelineSpeed);
                 UpdateAnimationSample(false, animationSampleTime);
-                EvaluateGraph(0f);
+                EvaluateGraph(deltaTime);
             }
 
             ApplyTimelineElementTransform(timelineEvaluation);
@@ -356,6 +370,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             EnsureGraph();
             ApplyAnimatorRootMotion(montage.ApplyRootMotion);
             playback.Begin(montage, Mathf.Clamp(startTime, 0f, montage.Length));
+            montageBlendElapsedTime = 0f;
             animationSampleTime = playback.CurrentTime;
             suppressNextRootMotion = montage.ApplyRootMotion;
             dispatcher.Reset();
@@ -805,6 +820,30 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         }
 
 
+
+        private float ComputeMontageLayerWeight(AnimMontageSO montage, float montageTime)
+        {
+            if (montage == null)
+                return 0f;
+
+            float weight = 1f;
+            float blendIn = montage.BlendIn;
+            if (blendIn > 0f)
+                weight = Mathf.Min(weight, Mathf.Clamp01(montageBlendElapsedTime / blendIn));
+
+            float blendOut = montage.BlendOut;
+            float length = montage.Length;
+            if (blendOut > 0f && length > 0f)
+                weight = Mathf.Min(weight, Mathf.Clamp01((length - montageTime) / blendOut));
+
+            return Mathf.Clamp01(weight);
+        }
+
+        private void SetMontageLayerWeight(float weight)
+        {
+            if (rootMixer.IsValid())
+                rootMixer.SetInputWeight(1, Mathf.Clamp01(weight));
+        }
         private void EnsureMixer(int inputCount, bool force)
         {
             int required = Mathf.Max(1, inputCount);
@@ -828,7 +867,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (rootMixer.IsValid())
             {
                 graph.Connect(mixer, 0, rootMixer, 1);
-                rootMixer.SetInputWeight(1, 1f);
+                rootMixer.SetInputWeight(1, ComputeMontageLayerWeight(playback.Montage, playback.CurrentTime));
             }
             else
             {

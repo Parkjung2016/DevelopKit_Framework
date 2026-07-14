@@ -535,8 +535,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 }
             });
 
-            AddProperty(root, "rateScale");
-            AddProperty(root, "applyRootMotion");
+            AddMontageSettingsCard(root, "Playback", "rateScale");
+            AddMontageSettingsCard(root, "Blend", "blendIn", "blendOut");
+            AddMontageSettingsCard(root, "Root Motion", "applyRootMotion");
 
             root.Add(new Label(
                 $"Segments: {montage.Segments.Count} | Notifies: {montage.Notifies.Count} | States: {montage.NotifyStates.Count}")
@@ -553,6 +554,49 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return true;
         }
 
+
+        private void AddMontageSettingsCard(VisualElement root, string title, params string[] propertyNames)
+        {
+            var card = new VisualElement
+            {
+                style =
+                {
+                    paddingTop = 8,
+                    paddingBottom = 8,
+                    paddingLeft = 8,
+                    paddingRight = 8,
+                    marginBottom = 8,
+                    backgroundColor = new Color(0.16f, 0.16f, 0.18f, 0.82f),
+                    borderTopWidth = 1,
+                    borderBottomWidth = 1,
+                    borderLeftWidth = 1,
+                    borderRightWidth = 1,
+                    borderTopColor = new Color(1f, 1f, 1f, 0.08f),
+                    borderBottomColor = new Color(1f, 1f, 1f, 0.08f),
+                    borderLeftColor = new Color(1f, 1f, 1f, 0.08f),
+                    borderRightColor = new Color(1f, 1f, 1f, 0.08f),
+                    borderTopLeftRadius = 5,
+                    borderTopRightRadius = 5,
+                    borderBottomLeftRadius = 5,
+                    borderBottomRightRadius = 5
+                }
+            };
+
+            card.Add(new Label(title)
+            {
+                style =
+                {
+                    unityFontStyleAndWeight = FontStyle.Bold,
+                    marginBottom = 6,
+                    color = new Color(0.9f, 0.92f, 0.96f, 1f)
+                }
+            });
+
+            for (int i = 0; i < propertyNames.Length; i++)
+                AddProperty(card, propertyNames[i]);
+
+            root.Add(card);
+        }
         private void AddProperty(VisualElement root, string propertyName)
         {
             SerializedProperty property = boundObject.FindProperty(propertyName);
