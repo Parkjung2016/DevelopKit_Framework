@@ -16,7 +16,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
 
     /// <summary>
-    /// 몽타주 재생 상태 변경 타입입니다.
+    /// 몽타주 재생 상태가 바뀐 이유입니다.
     /// </summary>
     public enum MontagePlaybackEventType
     {
@@ -28,7 +28,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
 
     /// <summary>
-    /// 이벤트에서 사용할 몽타주 런타임 정보입니다.
+    /// 런타임에서 외부로 넘겨도 되는 몽타주 정보입니다.
     /// </summary>
     public sealed class MontageRuntimeInfo
     {
@@ -48,17 +48,17 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public string Name { get; }
 
         /// <summary>
-        /// 몽타주 전체 길이입니다.
+        /// 몽타주의 전체 길이입니다.
         /// </summary>
         public float Length { get; }
 
         /// <summary>
-        /// 몽타주 재생 배율입니다.
+        /// 몽타주 재생 배속입니다.
         /// </summary>
         public float RateScale { get; }
 
         /// <summary>
-        /// 몽타주가 시작될 때 AnimatorController에서 넘어오는 시간입니다.
+        /// 몽타주로 넘어올 때 AnimatorController에서 블렌드되는 시간입니다.
         /// </summary>
         public float BlendIn { get; }
 
@@ -81,7 +81,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     }
 
     /// <summary>
-    /// 몽타주 재생 이벤트에 함께 전달되는 정보입니다.
+    /// 몽타주 재생 이벤트와 함께 전달되는 정보입니다.
     /// </summary>
     public readonly struct MontagePlaybackEventContext
     {
@@ -120,12 +120,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public float PreviousTime { get; }
 
         /// <summary>
-        /// 이벤트가 발생한 재생 시간입니다.
+        /// 이벤트가 발생한 시점의 재생 시간입니다.
         /// </summary>
         public float CurrentTime { get; }
 
         /// <summary>
-        /// 몽타주 전체 길이입니다. 몽타주가 없으면 0입니다.
+        /// 몽타주의 전체 길이입니다. 몽타주 정보가 없으면 0입니다.
         /// </summary>
         public float Length => RuntimeInfo != null ? RuntimeInfo.Length : 0f;
 
@@ -258,6 +258,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             float timeScale = timelineEvaluation.TimeScaleMultiplier;
             UpdateTimelineElementBehaviours(montage, currentTime, deltaTime);
             montageBlendElapsedTime += deltaTime * timelineSpeed * montage.RateScale;
+            SetMontageLayerWeight(ComputeMontageLayerWeight(montage, currentTime));
             float animationDeltaTime = deltaTime * timelineSpeed * timeScale;
             rootMotionActiveThisFrame = montage != null && montage.ApplyRootMotion;
 
