@@ -176,7 +176,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private bool mixerRebuiltThisSample;
         private bool rootMotionDeltaAppliedThisFrame;
         private bool rootMotionFallbackCaptured;
-        private Vector3 rootMotionFallbackWorldPosition;
+        private bool isBlendingOut;
+        private AnimMontageSO blendOutMontage;
+        private float blendOutElapsedTime;
+        private float blendOutDuration;
+        private float blendOutStartWeight;
+        private float blendOutStartTime;        private Vector3 rootMotionFallbackWorldPosition;
         private Quaternion rootMotionFallbackWorldRotation = Quaternion.identity;
         private Vector3 rootMotionFallbackLocalPosition;
         private Quaternion rootMotionFallbackLocalRotation = Quaternion.identity;
@@ -247,7 +252,10 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         {
             rootMotionActiveThisFrame = false;
             if (!playback.IsPlaying || playback.IsPaused)
+            {
+                UpdateBlendOut(Time.unscaledDeltaTime);
                 return;
+            }
 
             float deltaTime = Time.unscaledDeltaTime;
             AnimMontageSO montage = playback.Montage;
@@ -291,13 +299,72 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             dispatcher.Dispatch(playback, gameObject, animator, this);
 
             if (wasPlayingBeforeAdvance && !playback.IsPlaying)
-            {
-                DestroyGraph();
-                EmitPlaybackEvent(MontagePlaybackEventType.Complete, montage, currentTime, playback.CurrentTime);
-            }
+                BeginBlendOut(montage, currentTime, playback.CurrentTime, ComputeMontageLayerWeight(montage, currentTime), MontagePlaybackEventType.Complete);
         }
 
 
+        private void BeginBlendOut(
+            AnimMontageSO montage,
+            float previousTime,
+            float currentTime,
+            float startWeight,
+            MontagePlaybackEventType completionEventType)
+        {
+            EndActiveTimelineElements(montage, currentTime);
+            dispatcher.Dispatch(playback, gameObject, animator, this);
+            if (montage == null || montage.BlendOut <= 0f || !graph.IsValid())
+            {
+                DestroyGraph();
+                EmitPlaybackEvent(completionEventType, montage, previousTime, currentTime);
+                return;
+            }
+
+            isBlendingOut = true;
+            blendOutMontage = montage;
+            blendOutElapsedTime = 0f;
+            blendOutDuration = montage.BlendOut;
+            blendOutStartWeight = Mathf.Clamp01(startWeight);
+            blendOutStartTime = currentTime;
+            SetMontageLayerWeight(blendOutStartWeight);
+        }
+
+        private void UpdateBlendOut(float deltaTime)
+        {
+            if (!isBlendingOut || blendOutMontage == null || playback.IsPaused)
+                return;
+
+            if (!graph.IsValid())
+            {
+                isBlendingOut = false;
+                blendOutMontage = null;
+                return;
+            }
+
+            float scaledDeltaTime = Mathf.Max(0f, deltaTime) * Mathf.Max(0f, blendOutMontage.RateScale);
+            blendOutElapsedTime += scaledDeltaTime;
+            float t = blendOutDuration > 0f ? Mathf.Clamp01(blendOutElapsedTime / blendOutDuration) : 1f;
+            SetMontageLayerWeight(Mathf.Lerp(blendOutStartWeight, 0f, t));
+
+            if (blendOutMontage.ApplyRootMotion)
+            {
+                rootMotionActiveThisFrame = true;
+                BeginRootMotionFallbackCapture();
+                EvaluateGraph(deltaTime);
+                ApplyTransformCurveRootMotionFallback();
+            }
+            else
+            {
+                EvaluateGraph(deltaTime);
+            }
+
+            if (t < 1f)
+                return;
+
+            AnimMontageSO completedMontage = blendOutMontage;
+            float completedTime = blendOutStartTime;
+            DestroyGraph();
+            EmitPlaybackEvent(MontagePlaybackEventType.Complete, completedMontage, completedTime, completedTime);
+        }
         private void LateUpdate()
         {
             if (!graph.IsValid() || playback.Montage == null || (!playback.IsPlaying && !playback.IsPaused))
@@ -367,15 +434,17 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (montage == null || animator == null)
                 return;
 
-            AnimMontageSO previousMontage = playback.Montage;
-            float previousTime = playback.CurrentTime;
-            bool wasPlaying = playback.IsPlaying;
-            if (wasPlaying)
+            AnimMontageSO previousMontage = isBlendingOut ? blendOutMontage : playback.Montage;
+            float previousTime = isBlendingOut ? blendOutStartTime : playback.CurrentTime;
+            bool wasPlaying = playback.IsPlaying || isBlendingOut;
+            if (wasPlaying && previousMontage != null)
             {
                 dispatcher.EndActiveStates(gameObject, animator, previousMontage, previousTime);
                 EmitPlaybackEvent(MontagePlaybackEventType.Interrupted, previousMontage, previousTime, previousTime);
             }
 
+            isBlendingOut = false;
+            blendOutMontage = null;
             EndActiveTimelineElements(previousMontage, previousTime);
             EnsureGraph();
             ApplyAnimatorRootMotion(montage.ApplyRootMotion);
@@ -395,7 +464,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         {
             AnimMontageSO montage = playback.Montage;
             float currentTime = playback.CurrentTime;
-            bool hadPlayback = montage != null && (playback.IsPlaying || playback.IsPaused);
+            bool hadPlayback = montage != null && (playback.IsPlaying || playback.IsPaused || isBlendingOut);
 
             dispatcher.EndActiveStates(gameObject, animator, montage, currentTime);
             EndActiveTimelineElements(montage, currentTime);
@@ -511,10 +580,28 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             }
 
             controllerPlayable = AnimatorControllerPlayable.Create(graph, controller);
+            SyncControllerPlayableStateFromAnimator();
             graph.Connect(controllerPlayable, 0, rootMixer, 0);
             rootMixer.SetInputWeight(0, 1f);
         }
 
+        private void SyncControllerPlayableStateFromAnimator()
+        {
+            if (!controllerPlayable.IsValid() || animator == null || animator.layerCount <= 0)
+                return;
+
+            int layerCount = Mathf.Min(animator.layerCount, controllerPlayable.GetLayerCount());
+            for (int i = 0; i < layerCount; i++)
+            {
+                controllerPlayable.SetLayerWeight(i, animator.GetLayerWeight(i));
+                AnimatorStateInfo stateInfo = animator.IsInTransition(i)
+                    ? animator.GetNextAnimatorStateInfo(i)
+                    : animator.GetCurrentAnimatorStateInfo(i);
+
+                if (stateInfo.fullPathHash != 0)
+                    controllerPlayable.Play(stateInfo.fullPathHash, i, stateInfo.normalizedTime);
+            }
+        }
         private void SyncControllerParameters()
         {
             if (!controllerPlayable.IsValid() || animator == null || controllerParameters == null)
@@ -546,7 +633,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
             EnsureControllerPlayable();
             SyncControllerParameters();
-            graph.Evaluate(playback.Montage != null && playback.Montage.ApplyRootMotion ? deltaTime : 0f);
+            graph.Evaluate(deltaTime);
         }
 
         private void SyncRootMotionGraphAfterRebuild()
@@ -564,6 +651,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (graph.IsValid())
                 graph.Destroy();
 
+            isBlendingOut = false;
+            blendOutMontage = null;
+            blendOutElapsedTime = 0f;
+            blendOutDuration = 0f;
+            blendOutStartWeight = 0f;
+            blendOutStartTime = 0f;
             samples.Clear();
             clipPlayables.Clear();
             mixer = default;
