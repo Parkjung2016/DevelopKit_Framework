@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Playables;
@@ -32,7 +33,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     /// </summary>
     public sealed class MontageRuntimeInfo
     {
-        public MontageRuntimeInfo(string name, float length, float rateScale, float blendIn, float blendOut, bool applyRootMotion)
+        public MontageRuntimeInfo(string name, float length, float rateScale, float blendIn, float blendOut,
+            bool applyRootMotion)
         {
             Name = name;
             Length = length;
@@ -75,7 +77,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         internal static MontageRuntimeInfo FromMontage(AnimMontageSO montage)
         {
             return montage != null
-                ? new MontageRuntimeInfo(montage.name, montage.Length, montage.RateScale, montage.BlendIn, montage.BlendOut, montage.ApplyRootMotion)
+                ? new MontageRuntimeInfo(montage.name, montage.Length, montage.RateScale, montage.BlendIn,
+                    montage.BlendOut, montage.ApplyRootMotion)
                 : null;
         }
     }
@@ -141,12 +144,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             Quaternion deltaRotation);
     }
 
-    public abstract class MontageRootMotionController : MonoBehaviour, IMontageRootMotionController
-    {
-        public abstract void ApplyMontageRootMotion(ObjectAnimMontagePlayer player, Animator animator,
-            Vector3 deltaPosition, Quaternion deltaRotation);
-    }
-
     [AddComponentMenu("PJDev/Framework/Object Anim Montage Player")]
     public sealed class ObjectAnimMontagePlayer : MonoBehaviour, IAnimNotifyHandler
     {
@@ -155,7 +152,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         [SerializeField] private Rigidbody rootMotionRigidbody;
         [SerializeField] private CharacterController rootMotionCharacterController;
-        [SerializeField] private MontageRootMotionController customRootMotionController;
+        [SerializeField] private InterfaceReference<IMontageRootMotionController> customRootMotionController;
         private readonly MontagePlaybackState playback = new();
         private readonly MontageNotifyDispatcher dispatcher = new();
         private readonly List<MontageSegmentSample> samples = new();
@@ -173,7 +170,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private int mixerInputCount;
         private bool cachedAnimatorRootMotion;
         private bool hasCachedAnimatorRootMotion;
-        private IMontageRootMotionController runtimeRootMotionController;
         private bool rootMotionActiveThisFrame;
         private bool suppressNextRootMotion;
         private bool suppressRootMotionForPoseRefresh;
@@ -200,8 +196,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public Rigidbody RootMotionRigidbody => rootMotionRigidbody;
         public CharacterController RootMotionCharacterController => rootMotionCharacterController;
 
-        public IMontageRootMotionController CustomRootMotionController =>
-            runtimeRootMotionController ?? customRootMotionController;
+        public IMontageRootMotionController CustomRootMotionController => customRootMotionController.Value;
 
         /// <summary>
         /// AnimNotify가 실행될 때 호출됩니다.
@@ -351,7 +346,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             rootMotionCharacterController = target;
 
         public void SetCustomRootMotionController(IMontageRootMotionController controller) =>
-            runtimeRootMotionController = controller;
+            customRootMotionController.Value = controller;
 
         public void Play(AnimMontageSO montage, float startTime = 0f)
         {
@@ -529,6 +524,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 }
             }
         }
+
         private void EvaluateGraph(float deltaTime)
         {
             if (!graph.IsValid())
@@ -707,7 +703,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
             if (rootMotionRigidbody == null)
             {
-                ApplyTransformRootMotion(deltaPosition, deltaRotation);
                 return;
             }
 
@@ -722,7 +717,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
             if (rootMotionCharacterController == null)
             {
-                ApplyTransformRootMotion(deltaPosition, deltaRotation);
                 return;
             }
 
@@ -735,12 +729,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             IMontageRootMotionController controller = CustomRootMotionController;
             if (controller == null)
             {
-                ApplyTransformRootMotion(deltaPosition, deltaRotation);
                 return;
             }
 
             controller.ApplyMontageRootMotion(this, animator, deltaPosition, deltaRotation);
         }
+
         private void ApplyAnimatorRootMotion(bool applyRootMotion)
         {
             if (animator == null)
@@ -821,7 +815,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         }
 
 
-
         private float ComputeMontageLayerWeight(AnimMontageSO montage, float montageTime)
         {
             if (montage == null)
@@ -845,6 +838,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (rootMixer.IsValid())
                 rootMixer.SetInputWeight(1, Mathf.Clamp01(weight));
         }
+
         private void EnsureMixer(int inputCount, bool force)
         {
             int required = Mathf.Max(1, inputCount);
@@ -874,6 +868,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             {
                 output.SetSourcePlayable(mixer);
             }
+
             clipPlayables.Clear();
             clipPlayableSegmentIndices.Clear();
             for (int i = 0; i < required; i++)
