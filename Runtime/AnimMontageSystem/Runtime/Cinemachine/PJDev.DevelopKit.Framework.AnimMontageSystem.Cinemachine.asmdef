@@ -1,0 +1,25 @@
+{
+    "name": "PJDev.DevelopKit.Framework.AnimMontageSystem.Cinemachine",
+    "rootNamespace": "PJDev.DevelopKit.Framework.AnimMontageSystem.Cinemachine",
+    "references": [
+        "GUID:d4e5f6a7b8c9402091ab23cd45ef6789",
+        "Unity.Cinemachine"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "PJDEV_CINEMACHINE_3"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.cinemachine",
+            "expression": "[3.1.0,4.0.0)",
+            "define": "PJDEV_CINEMACHINE_3"
+        }
+    ],
+    "noEngineReferences": false
+}

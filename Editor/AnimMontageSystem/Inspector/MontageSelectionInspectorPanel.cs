@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -19,7 +19,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Animation,
             Notify,
             NotifyState,
-            Custom
         }
 
         public MontageSelectionInspectorPanel(MontageEditorContext context)
@@ -112,17 +111,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             boundObject = new SerializedObject(montage);
             if (context.SelectedSegmentIndex >= 0)
-                return BuildArrayElementInspector(root,
-                    "Animation Segment",
-                    "segments",
-                    context.SelectedSegmentIndex,
-                    "sectionName",
-                    "clip",
-                    "startTime",
-                    "clipStartTime",
-                    "clipEndTime",
-                    "playRate",
-                    "customColor");
+                return BuildSegmentInspector(root, context.SelectedSegmentIndex);
 
             if (context.SelectedNotifyIndex >= 0)
                 return BuildArrayElementInspector(root,
@@ -143,16 +132,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     "endTime",
                     "customColor");
 
-            if (context.SelectedCustomElementIndex >= 0)
-                return BuildArrayElementInspector(root,
-                    GetManagedReferenceTitle("Custom Element", "customElements", context.SelectedCustomElementIndex, "element"),
-                    "customElements",
-                    context.SelectedCustomElementIndex,
-                    "element",
-                    "startTime",
-                    "endTime",
-                    "customColor");
-
             return false;
         }
 
@@ -161,9 +140,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             int segmentCount = context.SelectedSegmentIndices.Count;
             int notifyCount = context.SelectedNotifyIndices.Count;
             int stateCount = context.SelectedNotifyStateIndices.Count;
-            int customCount = context.SelectedCustomElementIndices.Count;
             int trackCount = context.SelectedTimelineTrackKeys.Count;
-            int totalCount = segmentCount + notifyCount + stateCount + customCount + trackCount;
+            int totalCount = segmentCount + notifyCount + stateCount + trackCount;
             if (totalCount <= 1)
                 return false;
 
@@ -189,7 +167,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             AddSelectionCountLabel(root, "Segments", segmentCount);
             AddSelectionCountLabel(root, "Notifies", notifyCount);
             AddSelectionCountLabel(root, "Notify States", stateCount);
-            AddSelectionCountLabel(root, "Custom Elements", customCount);
             AddSelectionCountLabel(root, "Tracks", trackCount);
             return true;
         }
@@ -332,18 +309,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (property == null)
                 return;
 
-            if (kind == EditableTrackKind.Custom)
-            {
-                for (int i = 0; i < property.arraySize; i++)
-                {
-                    SerializedProperty track = property.GetArrayElementAtIndex(i);
-                    SerializedProperty trackId = track.FindPropertyRelative("trackId");
-                    if (trackId != null && trackId.stringValue == oldTrackId)
-                        trackId.stringValue = newTrackId;
-                }
-                return;
-            }
-
             for (int i = 0; i < property.arraySize; i++)
             {
                 SerializedProperty item = property.GetArrayElementAtIndex(i);
@@ -407,9 +372,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 case "NotifyState":
                     kind = EditableTrackKind.NotifyState;
                     return true;
-                case "Custom":
-                    kind = EditableTrackKind.Custom;
-                    return true;
                 default:
                     return false;
             }
@@ -424,7 +386,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 EditableTrackKind.Animation => "Segment",
                 EditableTrackKind.Notify => "Notify",
                 EditableTrackKind.NotifyState => "NotifyState",
-                EditableTrackKind.Custom => "Custom",
                 _ => string.Empty
             };
 
@@ -434,7 +395,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 EditableTrackKind.Animation => "Animation",
                 EditableTrackKind.Notify => "Notify",
                 EditableTrackKind.NotifyState => "Notify State",
-                EditableTrackKind.Custom => "Custom",
                 _ => "Timeline"
             };
 
@@ -444,7 +404,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 EditableTrackKind.Animation => "animationTracks",
                 EditableTrackKind.Notify => "notifyTracks",
                 EditableTrackKind.NotifyState => "notifyStateTracks",
-                EditableTrackKind.Custom => "customTracks",
                 _ => string.Empty
             };
 
@@ -454,10 +413,42 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 EditableTrackKind.Animation => "segments",
                 EditableTrackKind.Notify => "notifies",
                 EditableTrackKind.NotifyState => "notifyStates",
-                EditableTrackKind.Custom => "customElements",
                 _ => string.Empty
             };
 
+        private bool BuildSegmentInspector(VisualElement root, int index)
+        {
+            AnimMontageSO montage = context.Montage;
+            if (montage == null || index < 0 || index >= montage.Segments.Count)
+                return false;
+
+            MontageSegment segment = montage.Segments[index];
+            if (segment?.IsEmptyState == true)
+            {
+                return BuildArrayElementInspector(
+                    root,
+                    "Empty State",
+                    "segments",
+                    index,
+                    "sectionName",
+                    "startTime",
+                    "emptyStateDuration",
+                    "customColor");
+            }
+
+            return BuildArrayElementInspector(
+                root,
+                "Animation Segment",
+                "segments",
+                index,
+                "sectionName",
+                "clip",
+                "startTime",
+                "clipStartTime",
+                "clipEndTime",
+                "playRate",
+                "customColor");
+        }
         private string GetManagedReferenceTitle(string fallback, string arrayPropertyName, int index, string managedReferenceName)
         {
             SerializedProperty array = boundObject.FindProperty(arrayPropertyName);
@@ -470,7 +461,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 AnimNotify notify => $"{fallback}: {notify.DisplayName}",
                 AnimNotifyState state => $"{fallback}: {state.DisplayName}",
-                MontageTimelineElement element => $"{fallback}: {element.DisplayName}",
                 _ => fallback
             };
         }

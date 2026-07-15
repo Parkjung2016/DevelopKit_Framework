@@ -24,16 +24,21 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         public bool TryEvaluate(
             GameObject instance,
             AnimMontageSO montage,
-            float montageTime,
+            float animationTime,
+            float timelineTime,
             Vector3 initialPosition,
             Quaternion initialRotation,
             out Vector3 position,
-            out Quaternion rotation)
+            out Quaternion rotation,
+            out bool includesTimelineTransform,
+            out bool sampledRootMotion)
         {
             position = Vector3.zero;
             rotation = Quaternion.identity;
+            includesTimelineTransform = false;
+            sampledRootMotion = false;
 
-            if (instance == null || montage == null || !montage.ApplyRootMotion || montageTime <= 0f)
+            if (instance == null || montage == null || !montage.ApplyRootMotion)
                 return false;
 
             Animator animator = instance.GetComponentInChildren<Animator>();
@@ -70,38 +75,94 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 Vector3 previousRootPosition = rootTransform.position;
                 Quaternion previousRootRotation = rootTransform.rotation;
                 Quaternion inverseInitialRotation = Quaternion.Inverse(initialRotation);
+                Quaternion baseAccumulatedRotation = Quaternion.identity;
+                bool hasTimelineTransformNotify = HasTimelineTransformNotify(montage);
 
-                float targetTime = Mathf.Max(0f, montageTime);
-                float previousTime = 0f;
-                while (previousTime < targetTime)
+                MontageNotifyEvaluation previousTimelineEvaluation = hasTimelineTransformNotify
+                    ? MontageNotifyEvaluator.Evaluate(montage, 0f)
+                    : MontageNotifyEvaluation.Default;
+                if (hasTimelineTransformNotify)
                 {
-                    float deltaTime = Mathf.Min(EvaluationStep, targetTime - previousTime);
-                    float currentTime = previousTime + deltaTime;
-                    UpdateAnimationSample(montage, previousTime, false);
-                    graph.Evaluate(deltaTime);
+                    ApplyTimelineTransformDelta(
+                        previousTimelineEvaluation.PositionOffset,
+                        previousTimelineEvaluation.RotationOffset,
+                        ref position,
+                        ref rotation,
+                        ref includesTimelineTransform);
+                }
+
+
+                float targetAnimationTime = Mathf.Max(0f, animationTime);
+                float targetTimelineTime = Mathf.Max(0f, timelineTime);
+                float traversalLength = Mathf.Max(targetAnimationTime, targetTimelineTime);
+                float previousTraversalTime = 0f;
+                float previousAnimationTime = 0f;
+                while (previousTraversalTime < traversalLength)
+                {
+                    float currentTraversalTime = Mathf.Min(
+                        traversalLength,
+                        previousTraversalTime + EvaluationStep);
+                    float traversalRatio = traversalLength > 0f
+                        ? currentTraversalTime / traversalLength
+                        : 1f;
+                    float currentAnimationTime = targetAnimationTime * traversalRatio;
+                    float currentTimelineTime = targetTimelineTime * traversalRatio;
+                    float animationDeltaTime = currentAnimationTime - previousAnimationTime;
+
+                    UpdateAnimationSample(montage, previousAnimationTime, false);
+                    graph.Evaluate(animationDeltaTime);
 
                     Vector3 currentRootPosition = rootTransform.position;
                     Quaternion currentRootRotation = rootTransform.rotation;
                     Vector3 worldDeltaPosition = animator.deltaPosition;
-                    Quaternion deltaRotation = animator.deltaRotation;
+                    Quaternion rawDeltaRotation = animator.deltaRotation;
 
                     if (worldDeltaPosition.sqrMagnitude <= 0.0000001f)
                         worldDeltaPosition = currentRootPosition - previousRootPosition;
 
-                    if (IsIdentity(deltaRotation))
-                        deltaRotation = Quaternion.Inverse(previousRootRotation) * currentRootRotation;
+                    if (IsIdentity(rawDeltaRotation))
+                        rawDeltaRotation = Quaternion.Inverse(previousRootRotation) * currentRootRotation;
 
-                    if (montage.ApplyRotationRootMotion)
-                        deltaRotation = MontageRootMotionUtility.ExtractYaw(deltaRotation);
+                    Quaternion baseDeltaRotation = MontageRootMotionUtility.ExtractYaw(rawDeltaRotation);
+                    Vector3 initialSpaceDelta = inverseInitialRotation * worldDeltaPosition;
+                    Vector3 localRootDelta = Quaternion.Inverse(baseAccumulatedRotation) * initialSpaceDelta;
+                    Quaternion filteredRootRotation = baseDeltaRotation;
+                    MontageRootMotionUtility.Filter(montage, ref localRootDelta, ref filteredRootRotation);
 
-                    position += inverseInitialRotation * worldDeltaPosition;
-                    rotation *= deltaRotation;
+                    if (MontageRootMotionUtility.HasDelta(localRootDelta, filteredRootRotation))
+                    {
+                        position += rotation * localRootDelta;
+                        rotation *= filteredRootRotation;
+                        sampledRootMotion = true;
+                    }
+
+                    baseAccumulatedRotation *= baseDeltaRotation;
+
+                    if (hasTimelineTransformNotify)
+                    {
+                        MontageNotifyEvaluation currentTimelineEvaluation =
+                            MontageNotifyEvaluator.Evaluate(montage, currentTimelineTime);
+                        Vector3 timelinePositionDelta = currentTimelineEvaluation.PositionOffset -
+                                                        previousTimelineEvaluation.PositionOffset;
+                        Quaternion timelineRotationDelta =
+                            Quaternion.Inverse(previousTimelineEvaluation.RotationOffset) *
+                            currentTimelineEvaluation.RotationOffset;
+                        ApplyTimelineTransformDelta(
+                            timelinePositionDelta,
+                            timelineRotationDelta,
+                            ref position,
+                            ref rotation,
+                            ref includesTimelineTransform);
+
+                        previousTimelineEvaluation = currentTimelineEvaluation;
+                    }
                     previousRootPosition = currentRootPosition;
                     previousRootRotation = currentRootRotation;
-                    previousTime = currentTime;
+                    previousAnimationTime = currentAnimationTime;
+                    previousTraversalTime = currentTraversalTime;
                 }
 
-                return position.sqrMagnitude > 0.0000001f || !IsIdentity(rotation);
+                return sampledRootMotion || includesTimelineTransform;
             }
             finally
             {
@@ -116,6 +177,38 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 instance.transform.localScale = cachedScale;
                 instance.transform.SetPositionAndRotation(cachedPosition, cachedRotation);
             }
+        }
+
+        private static bool HasTimelineTransformNotify(AnimMontageSO montage)
+        {
+            var notifies = montage.Notifies;
+            for (int i = 0; i < notifies.Count; i++)
+            {
+                if (notifies[i]?.Notify is IMontageTransformOffsetNotify)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static void ApplyTimelineTransformDelta(
+            Vector3 positionDelta,
+            Quaternion rotationDelta,
+            ref Vector3 position,
+            ref Quaternion rotation,
+            ref bool includesTimelineTransform)
+        {
+            if (positionDelta.sqrMagnitude > 0.0000001f)
+            {
+                position += rotation * positionDelta;
+                includesTimelineTransform = true;
+            }
+
+            if (Quaternion.Angle(Quaternion.identity, rotationDelta) <= 0.0001f)
+                return;
+
+            rotation *= rotationDelta;
+            includesTimelineTransform = true;
         }
 
         private static bool IsIdentity(Quaternion rotation) =>

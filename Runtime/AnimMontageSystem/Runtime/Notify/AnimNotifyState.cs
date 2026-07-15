@@ -3,13 +3,11 @@ using UnityEngine;
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
     [System.Serializable]
-    public abstract class AnimNotifyState
+    public abstract class AnimNotifyState : AnimNotifyBase
     {
-        [SerializeField] private bool triggerInEditorScrub;
-
         public virtual string DisplayName => GetType().Name;
         public virtual Color EditorColor => new(1f, 0.65f, 0.2f, 1f);
-        public bool TriggerInEditorScrub => triggerInEditorScrub;
+        public virtual float DefaultDuration => 0.2f;
 
         public virtual void OnBegin(AnimNotifyContext context)
         {

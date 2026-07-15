@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEngine;
 
@@ -22,6 +23,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private Vector2 scroll;
         private bool consumed;
         private string actionLabel = "Select";
+        private string alternateActionLabel;
+        private Action alternateAction;
         private UnityEngine.Object selectedAsset;
         private UnityEngine.Object previewAsset;
         private Editor previewEditor;
@@ -31,7 +34,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private bool isLoading;
         private bool filteredAssetsDirty = true;
 
-        public static void Show<T>(string title, Action<T> onPick, Predicate<T> filter = null)
+        public static void Show<T>(
+            string title,
+            Action<T> onPick,
+            Predicate<T> filter = null,
+            string alternateLabel = null,
+            Action onAlternateAction = null)
             where T : UnityEngine.Object
         {
             MontageObjectPickerWindow window = CreateInstance<MontageObjectPickerWindow>();
@@ -41,6 +49,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             window.actionLabel = title.StartsWith("Replace", StringComparison.OrdinalIgnoreCase)
                 ? "Replace"
                 : "Create";
+            window.alternateActionLabel = alternateLabel;
+            window.alternateAction = onAlternateAction;
             window.Initialize(typeof(T), picked =>
             {
                 if (picked is T typed)
@@ -285,6 +295,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             using (new EditorGUILayout.HorizontalScope())
             {
+                if (alternateAction != null && !string.IsNullOrEmpty(alternateActionLabel))
+                {
+                    using (new EditorGUI.DisabledScope(consumed))
+                    {
+                        if (GUILayout.Button(alternateActionLabel, GUILayout.MinWidth(96f), GUILayout.Height(24f)))
+                            PickAlternate();
+                    }
+                }
+
                 GUILayout.FlexibleSpace();
                 using (new EditorGUI.DisabledScope(selectedAsset == null || consumed))
                 {
@@ -294,6 +313,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
         }
 
+        private void PickAlternate()
+        {
+            if (consumed || alternateAction == null)
+                return;
+
+            consumed = true;
+            alternateAction.Invoke();
+            Close();
+        }
         private void Pick(UnityEngine.Object asset)
         {
             if (consumed)
@@ -355,8 +383,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             types.Clear();
             foreach (Type type in TypeCache.GetTypesDerivedFrom(baseType))
             {
-                if (type.IsAbstract || type.IsGenericType || type.GetConstructor(Type.EmptyTypes) == null)
+                if (type.IsAbstract
+                    || type.IsGenericType
+                    || type.GetConstructor(Type.EmptyTypes) == null)
+                {
                     continue;
+                }
+
                 if (typeFilter != null && !typeFilter(type))
                     continue;
 
@@ -376,7 +409,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 if (!MatchesSearch(type))
                     continue;
 
-                GUIContent content = new(type.Name, type.FullName);
+                GUIContent content = new(GetTypeDisplayName(type), type.FullName);
                 Rect rowRect = GUILayoutUtility.GetRect(content, EditorStyles.objectField, GUILayout.Height(20f));
                 bool selected = selectedType == type;
                 if (selected && Event.current.type == EventType.Repaint)
@@ -414,8 +447,32 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private bool MatchesSearch(Type type) =>
             string.IsNullOrWhiteSpace(searchText)
+            || GetTypeDisplayName(type).IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0
             || type.Name.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0
             || type.FullName.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+
+        private static string GetTypeDisplayName(Type type)
+        {
+            string displayName = ObjectNames.NicifyVariableName(type.Name);
+            string[] suffixes =
+            {
+                " Anim Notify State",
+                " Notify State",
+                " Anim Notify",
+                " Notify"
+            };
+
+            for (int i = 0; i < suffixes.Length; i++)
+            {
+                string suffix = suffixes[i];
+                if (!displayName.EndsWith(suffix, StringComparison.Ordinal))
+                    continue;
+
+                return displayName.Substring(0, displayName.Length - suffix.Length);
+            }
+
+            return displayName;
+        }
 
         private void Pick(Type type)
         {

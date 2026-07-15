@@ -1,15 +1,25 @@
+using System;
+using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
-    [System.Serializable]
-    public abstract class AnimNotify
+    [Serializable]
+    public abstract class AnimNotifyBase
     {
-        [SerializeField] private bool triggerInEditorScrub;
+        [SerializeField, ShowIf("CanEditTriggerOnManualPreview()")]
+        private bool triggerOnManualPreview;
 
+        public bool TriggerOnManualPreview => triggerOnManualPreview;
+
+        public virtual bool CanEditTriggerOnManualPreview() => true;
+    }
+
+    [Serializable]
+    public abstract class AnimNotify : AnimNotifyBase
+    {
         public virtual string DisplayName => GetType().Name;
         public virtual Color EditorColor => new(0.35f, 0.75f, 1f, 1f);
-        public bool TriggerInEditorScrub => triggerInEditorScrub;
 
         public abstract void OnNotify(AnimNotifyContext context);
     }

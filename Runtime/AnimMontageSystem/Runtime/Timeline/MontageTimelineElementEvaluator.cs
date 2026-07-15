@@ -1,10 +1,35 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
-    public readonly struct MontageTimelineElementEvaluation
+    public interface IMontageDurationNotify
     {
-        public MontageTimelineElementEvaluation(float speedMultiplier, float timeScaleMultiplier, Vector3 positionOffset,
+        float Duration { get; }
+    }
+
+    public interface IMontageTransformOffsetNotify
+    {
+        Vector3 PositionOffset { get; }
+        Vector3 RotationOffsetEuler { get; }
+        Vector3 ScaleOffset { get; }
+        MontageTimelineEasing PositionEasing { get; }
+        MontageTimelineEasing RotationEasing { get; }
+        MontageTimelineEasing ScaleEasing { get; }
+    }
+
+    public interface IMontagePlaybackSpeedNotifyState
+    {
+        float PlaybackSpeedMultiplier { get; }
+    }
+
+    public interface IMontageTimeScaleNotifyState
+    {
+        float TimeScaleMultiplier { get; }
+    }
+
+    public readonly struct MontageNotifyEvaluation
+    {
+        public MontageNotifyEvaluation(float speedMultiplier, float timeScaleMultiplier, Vector3 positionOffset,
             Quaternion rotationOffset, Vector3 scaleOffset)
         {
             SpeedMultiplier = speedMultiplier;
@@ -20,16 +45,16 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public Quaternion RotationOffset { get; }
         public Vector3 ScaleOffset { get; }
 
-        public static MontageTimelineElementEvaluation Default =>
+        public static MontageNotifyEvaluation Default =>
             new(1f, 1f, Vector3.zero, Quaternion.identity, Vector3.zero);
     }
 
-    public static class MontageTimelineElementEvaluator
+    public static class MontageNotifyEvaluator
     {
-        public static MontageTimelineElementEvaluation Evaluate(AnimMontageSO montage, float montageTime)
+        public static MontageNotifyEvaluation Evaluate(AnimMontageSO montage, float montageTime)
         {
             if (montage == null)
-                return MontageTimelineElementEvaluation.Default;
+                return MontageNotifyEvaluation.Default;
 
             float speed = 1f;
             float timeScale = 1f;
@@ -37,29 +62,47 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             Quaternion rotation = Quaternion.identity;
             Vector3 scale = Vector3.zero;
 
-            var elements = montage.CustomElements;
-            for (int i = 0; i < elements.Count; i++)
+            var notifies = montage.Notifies;
+            for (int i = 0; i < notifies.Count; i++)
             {
-                CustomMontageElementPlacement placement = elements[i];
-                MontageTimelineElement element = placement?.Element;
-                if (element == null || montageTime < placement.StartTime || montageTime > placement.EndTime)
-                    continue;
-
-                if (element is IMontagePlaybackSpeedElement speedElement)
-                    speed *= Mathf.Max(0f, speedElement.PlaybackSpeedMultiplier);
-
-                if (element is IMontageTimeScaleElement timeScaleElement)
-                    timeScale *= Mathf.Max(0f, timeScaleElement.TimeScaleMultiplier);
-
-                if (element is IMontageTransformOffsetElement transformElement)
+                AnimNotifyPlacement placement = notifies[i];
+                if (placement?.Notify is not IMontageTransformOffsetNotify transformNotify
+                    || montageTime < placement.Time)
                 {
-                    position += transformElement.PositionOffset;
-                    rotation *= Quaternion.Euler(transformElement.RotationOffsetEuler);
-                    scale += transformElement.ScaleOffset;
+                    continue;
                 }
+
+                float localTime = montageTime - placement.Time;
+                float positionWeight = transformNotify.PositionEasing.Evaluate(localTime, transformNotify.PositionEasing.Duration);
+                float rotationWeight = transformNotify.RotationEasing.Evaluate(localTime, transformNotify.RotationEasing.Duration);
+                float scaleWeight = transformNotify.ScaleEasing.Evaluate(localTime, transformNotify.ScaleEasing.Duration);
+
+                position += transformNotify.PositionOffset * positionWeight;
+                Quaternion targetRotation = Quaternion.Euler(transformNotify.RotationOffsetEuler);
+                rotation *= Quaternion.SlerpUnclamped(Quaternion.identity, targetRotation, rotationWeight);
+                scale += transformNotify.ScaleOffset * scaleWeight;
             }
 
-            return new MontageTimelineElementEvaluation(speed, timeScale, position, rotation, scale);
+            var states = montage.NotifyStates;
+            for (int i = 0; i < states.Count; i++)
+            {
+                AnimNotifyStatePlacement placement = states[i];
+                AnimNotifyState state = placement?.NotifyState;
+                if (state == null
+                    || montageTime < placement.StartTime
+                    || montageTime > placement.EndTime)
+                {
+                    continue;
+                }
+
+                if (state is IMontagePlaybackSpeedNotifyState speedState)
+                    speed *= Mathf.Max(0f, speedState.PlaybackSpeedMultiplier);
+
+                if (state is IMontageTimeScaleNotifyState timeScaleState)
+                    timeScale *= Mathf.Max(0f, timeScaleState.TimeScaleMultiplier);
+            }
+
+            return new MontageNotifyEvaluation(speed, timeScale, position, rotation, scale);
         }
     }
 }

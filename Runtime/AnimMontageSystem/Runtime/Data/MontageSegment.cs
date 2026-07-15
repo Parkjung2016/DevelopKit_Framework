@@ -3,13 +3,21 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
+    public enum MontageSegmentType
+    {
+        Animation,
+        EmptyState
+    }
+
     [Serializable]
     public sealed class MontageSegment
     {
         [SerializeField] private string sectionName = "Default";
         [SerializeField] private string trackId = "Default";
+        [SerializeField] private MontageSegmentType segmentType;
         [SerializeField] private AnimationClip clip;
         [SerializeField] private float startTime;
+        [SerializeField, Min(0.01f)] private float emptyStateDuration = 1f;
         [SerializeField] private float clipStartTime;
         [SerializeField] private float clipEndTime;
         [SerializeField] private float playRate = 1f;
@@ -23,7 +31,11 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             get => string.IsNullOrEmpty(trackId) ? "Default" : trackId;
             set => trackId = string.IsNullOrEmpty(value) ? "Default" : value;
         }
-        public AnimationClip Clip => clip;
+
+        public MontageSegmentType SegmentType => segmentType;
+        public bool IsEmptyState => segmentType == MontageSegmentType.EmptyState;
+        public AnimationClip Clip => IsEmptyState ? null : clip;
+        public float EmptyStateDuration => Mathf.Max(0.01f, emptyStateDuration);
         public float ClipStartTime => Clip != null ? Mathf.Clamp(clipStartTime, 0f, Clip.length) : 0f;
         public bool IsLoopingClip => Clip != null && (Clip.isLooping || Clip.wrapMode == WrapMode.Loop);
         public float ClipEndTime
@@ -39,11 +51,13 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                     : Mathf.Clamp(end, ClipStartTime, Clip.length);
             }
         }
+
         public float StartTime
         {
             get => startTime;
             set => startTime = Mathf.Max(0f, value);
         }
+
         public float PlayRate => playRate <= 0f ? 1f : playRate;
         public float BlendIn => Mathf.Max(0f, blendIn);
         public float BlendOut => Mathf.Max(0f, blendOut);
@@ -63,7 +77,11 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         }
 
         public float TrimmedClipDuration => Mathf.Max(0f, ClipEndTime - ClipStartTime);
-        public float Duration => Clip != null ? TrimmedClipDuration / PlayRate : 0f;
+        public float Duration => IsEmptyState
+            ? EmptyStateDuration
+            : Clip != null
+                ? TrimmedClipDuration / PlayRate
+                : 0f;
         public float EndTime => StartTime + Duration;
 
         public bool ContainsTime(float montageTime) =>

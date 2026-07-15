@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
 
@@ -17,8 +16,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private readonly MontagePlaybackState playback = new();
         private readonly MontageNotifyDispatcher dispatcher = new();
         private readonly MontageRootMotionRuntimeSampler rootMotionSampler = new();
-        private readonly HashSet<int> activeTimelineElementIndices = new();
-        private readonly List<int> timelineElementExitBuffer = new();
+
         private MontagePlayableGraph playableGraph;
         private bool notifyForwardingBound;
         private bool rootMotionActiveThisFrame;
@@ -31,8 +29,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private float animationSampleTime;
         private float montageBlendElapsedTime;
 
-        private MontageTimelineElementEvaluation previousTimelineElementEvaluation =
-            MontageTimelineElementEvaluation.Default;
+        private MontageNotifyEvaluation previousNotifyEvaluation =
+            MontageNotifyEvaluation.Default;
 
         public Animator Animator => animator;
         public AnimMontageSO CurrentMontage => playback.Montage;
@@ -132,11 +130,10 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             AnimMontageSO montage = playback.Montage;
             float currentTime = playback.CurrentTime;
             bool wasPlayingBeforeAdvance = playback.IsPlaying;
-            MontageTimelineElementEvaluation timelineEvaluation =
-                MontageTimelineElementEvaluator.Evaluate(montage, currentTime);
+            MontageNotifyEvaluation timelineEvaluation =
+                MontageNotifyEvaluator.Evaluate(montage, currentTime);
             float timelineSpeed = timelineEvaluation.SpeedMultiplier;
             float timeScale = timelineEvaluation.TimeScaleMultiplier;
-            UpdateTimelineElementBehaviours(montage, currentTime, deltaTime);
             montageBlendElapsedTime += Mathf.Max(0f, deltaTime);
             float montageLayerWeight = ComputeMontageLayerWeight(montage, currentTime);
             SetMontageLayerWeight(montageLayerWeight);
@@ -167,9 +164,13 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 EvaluateGraph(deltaTime);
             }
 
-            ApplyTimelineElementTransform(timelineEvaluation);
             if (!playback.IsPlaying)
-                EndActiveTimelineElements(montage, playback.CurrentTime);
+                timelineEvaluation = MontageNotifyEvaluator.Evaluate(montage, playback.CurrentTime);
+
+            ApplyNotifyTransform(timelineEvaluation);
+            if (!playback.IsPlaying)
+                previousNotifyEvaluation = MontageNotifyEvaluation.Default;
+
             dispatcher.Dispatch(playback, gameObject, animator, this);
 
             if (wasPlayingBeforeAdvance && !playback.IsPlaying)
@@ -186,7 +187,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             float startWeight,
             MontagePlaybackEventType completionEventType)
         {
-            EndActiveTimelineElements(montage, currentTime);
             dispatcher.Dispatch(playback, gameObject, animator, this);
             if (montage == null || montage.BlendOut <= 0f || playableGraph is not { IsValid: true })
             {
@@ -264,7 +264,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         private void OnDestroy()
         {
-            EndActiveTimelineElements(playback.Montage, playback.CurrentTime);
             DestroyGraph();
             rootMotionSampler.Dispose();
         }
@@ -293,7 +292,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
             isBlendingOut = false;
             blendOutMontage = null;
-            EndActiveTimelineElements(previousMontage, previousTime);
+            previousNotifyEvaluation = MontageNotifyEvaluation.Default;
             EnsureGraph();
             playback.Begin(montage, Mathf.Clamp(startTime, 0f, montage.Length));
             if (UsesRootMotion(montage))
@@ -302,9 +301,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             SetMontageLayerWeight(ComputeMontageLayerWeight(montage, playback.CurrentTime));
             animationSampleTime = playback.CurrentTime;
             dispatcher.Reset();
-            UpdateTimelineElementBehaviours(montage, playback.CurrentTime, 0f);
             UpdateAnimationSample(force: true);
             EvaluateGraph(0f);
+            ApplyNotifyTransform(MontageNotifyEvaluator.Evaluate(montage, playback.CurrentTime));
             EmitPlaybackEvent(MontagePlaybackEventType.Play, montage, previousTime, playback.CurrentTime);
             dispatcher.Dispatch(playback, gameObject, animator, this);
         }
@@ -316,8 +315,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             bool hadPlayback = montage != null && (playback.IsPlaying || playback.IsPaused || isBlendingOut);
 
             dispatcher.EndActiveStates(gameObject, animator, montage, currentTime);
-            EndActiveTimelineElements(montage, currentTime);
             playback.Stop();
+            previousNotifyEvaluation = MontageNotifyEvaluation.Default;
             FinishMontageLayer();
 
             if (hadPlayback)
@@ -334,7 +333,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (paused)
             {
                 dispatcher.EndActiveStates(gameObject, animator, montage, currentTime);
-                EndActiveTimelineElements(montage, currentTime);
             }
 
             playback.Pause(paused);
@@ -342,15 +340,13 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         public void SetTime(float montageTime)
         {
-            AnimMontageSO montage = playback.Montage;
-            float previousTime = playback.CurrentTime;
-            EndActiveTimelineElements(montage, previousTime);
             playback.SetTime(montageTime);
             if (UsesRootMotion(playback.Montage))
                 rootMotionSampler.Reset(animator);
-            UpdateTimelineElementBehaviours(playback.Montage, playback.CurrentTime, 0f);
             UpdateAnimationSample(force: true);
             EvaluateGraph(0f);
+            ApplyNotifyTransform(
+                MontageNotifyEvaluator.Evaluate(playback.Montage, playback.CurrentTime));
             dispatcher.ScrubTo(playback, gameObject, animator);
         }
 
@@ -429,94 +425,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 rootMotionCharacterController = GetComponentInParent<CharacterController>();
         }
 
-        private void UpdateTimelineElementBehaviours(AnimMontageSO montage, float montageTime, float deltaTime)
+        private void ApplyNotifyTransform(MontageNotifyEvaluation evaluation)
         {
-            if (montage == null)
-            {
-                EndActiveTimelineElements(null, montageTime);
-                return;
-            }
-
-            timelineElementExitBuffer.Clear();
-            foreach (int activeIndex in activeTimelineElementIndices)
-            {
-                if (!IsTimelineElementActive(montage, activeIndex, montageTime))
-                    timelineElementExitBuffer.Add(activeIndex);
-            }
-
-            for (int i = 0; i < timelineElementExitBuffer.Count; i++)
-                ExitTimelineElement(montage, timelineElementExitBuffer[i], montageTime, deltaTime);
-
-            var elements = montage.CustomElements;
-            for (int i = 0; i < elements.Count; i++)
-            {
-                CustomMontageElementPlacement placement = elements[i];
-                MontageTimelineElement element = placement?.Element;
-                if (element is not IMontageTimelineElementBehaviour behaviour
-                    || !IsTimelineElementActive(placement, montageTime))
-                {
-                    continue;
-                }
-
-                var context = new MontageTimelineElementContext(this, montage, placement, i, montageTime, deltaTime);
-                if (activeTimelineElementIndices.Add(i))
-                    behaviour.OnElementEnter(context);
-
-                behaviour.OnElementUpdate(context);
-            }
-        }
-
-        private void EndActiveTimelineElements(AnimMontageSO montage, float montageTime)
-        {
-            if (activeTimelineElementIndices.Count == 0)
-                return;
-
-            timelineElementExitBuffer.Clear();
-            foreach (int activeIndex in activeTimelineElementIndices)
-                timelineElementExitBuffer.Add(activeIndex);
-
-            for (int i = 0; i < timelineElementExitBuffer.Count; i++)
-                ExitTimelineElement(montage, timelineElementExitBuffer[i], montageTime, 0f);
-        }
-
-        private void ExitTimelineElement(AnimMontageSO montage, int index, float montageTime, float deltaTime)
-        {
-            if (!activeTimelineElementIndices.Remove(index))
-                return;
-
-            if (montage == null || index < 0 || index >= montage.CustomElements.Count)
-                return;
-
-            CustomMontageElementPlacement placement = montage.CustomElements[index];
-            if (placement?.Element is not IMontageTimelineElementBehaviour behaviour)
-                return;
-
-            behaviour.OnElementExit(
-                new MontageTimelineElementContext(this, montage, placement, index, montageTime, deltaTime));
-        }
-
-        private static bool IsTimelineElementActive(AnimMontageSO montage, int index, float montageTime)
-        {
-            return montage != null
-                   && index >= 0
-                   && index < montage.CustomElements.Count
-                   && IsTimelineElementActive(montage.CustomElements[index], montageTime);
-        }
-
-        private static bool IsTimelineElementActive(CustomMontageElementPlacement placement, float montageTime)
-        {
-            return placement != null
-                   && placement.Element != null
-                   && montageTime >= placement.StartTime
-                   && montageTime <= placement.EndTime;
-        }
-
-        private void ApplyTimelineElementTransform(MontageTimelineElementEvaluation evaluation)
-        {
-            Vector3 positionDelta = evaluation.PositionOffset - previousTimelineElementEvaluation.PositionOffset;
-            Quaternion rotationDelta = Quaternion.Inverse(previousTimelineElementEvaluation.RotationOffset) *
+            Vector3 positionDelta = evaluation.PositionOffset - previousNotifyEvaluation.PositionOffset;
+            Quaternion rotationDelta = Quaternion.Inverse(previousNotifyEvaluation.RotationOffset) *
                                        evaluation.RotationOffset;
-            Vector3 scaleDelta = evaluation.ScaleOffset - previousTimelineElementEvaluation.ScaleOffset;
+            Vector3 scaleDelta = evaluation.ScaleOffset - previousNotifyEvaluation.ScaleOffset;
 
             if (positionDelta.sqrMagnitude > 0.0000001f)
                 transform.position += transform.rotation * positionDelta;
@@ -527,7 +441,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (scaleDelta.sqrMagnitude > 0.0000001f)
                 transform.localScale += scaleDelta;
 
-            previousTimelineElementEvaluation = evaluation;
+            previousNotifyEvaluation = evaluation;
         }
 
         private static bool UsesRootMotion(AnimMontageSO montage) =>

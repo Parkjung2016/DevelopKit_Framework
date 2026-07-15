@@ -81,12 +81,32 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 if (segment?.Clip == null)
                     continue;
 
-                float weight = MontageBlendUtility.Evaluate(
-                    ComputeWeight(montageTime, segment, i, segments));
+                float weight;
+                float playableClipTime;
+                if (TryGetActiveEmptyStateOnTrack(
+                        montageTime,
+                        segment.TrackId,
+                        segments,
+                        out MontageSegment emptyState,
+                        out int emptyStateIndex))
+                {
+                    int transitionIndex = FindEmptyStateTransitionSegment(emptyState, emptyStateIndex, segments);
+                    if (transitionIndex != i)
+                        continue;
+
+                    weight = GetEmptyStateTransitionWeight(montageTime, emptyState, segment);
+                    playableClipTime = segment.ToPlayableClipTime(montageTime);
+                }
+                else
+                {
+                    weight = MontageBlendUtility.Evaluate(
+                        ComputeWeight(montageTime, segment, i, segments));
+                    playableClipTime = ComputePlayableClipTime(montageTime, segment, i, segments);
+                }
+
                 if (weight <= 0.0001f)
                     continue;
 
-                float playableClipTime = ComputePlayableClipTime(montageTime, segment, i, segments);
                 results.Add(new MontageSegmentSample(
                     segment,
                     i,
@@ -96,10 +116,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 totalWeight += weight;
             }
 
+            totalWeight += AddActiveEmptyStateHoldSamples(montageTime, segments, results);
             if (totalWeight <= 0.0001f)
             {
                 results.Clear();
-                TryAddGapPoseSample(montageTime, segments, results);
+                if (!HasActiveEmptyState(montageTime, segments))
+                    TryAddGapPoseSample(montageTime, segments, results);
                 return;
             }
 
@@ -114,8 +136,187 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                     sample.SegmentIndex,
                     sample.ClipTime,
                     sample.PlayableClipTime,
-                    sample.Weight / totalWeight);
+                    sample.Weight / totalWeight,
+                    sample.IsHeldPose);
             }
+        }
+
+        private static float AddActiveEmptyStateHoldSamples(
+            float montageTime,
+            IReadOnlyList<MontageSegment> segments,
+            List<MontageSegmentSample> results)
+        {
+            float addedWeight = 0f;
+            for (int i = 0; i < segments.Count; i++)
+            {
+                MontageSegment emptyState = segments[i];
+                if (emptyState == null
+                    || !emptyState.IsEmptyState
+                    || !emptyState.ContainsTime(montageTime)
+                    || !IsPrimaryActiveEmptyState(i, montageTime, segments))
+                    continue;
+
+                int transitionIndex = FindEmptyStateTransitionSegment(emptyState, i, segments);
+                MontageSegment transition = transitionIndex >= 0 ? segments[transitionIndex] : null;
+                float transitionWeight = transition != null
+                    ? GetEmptyStateTransitionWeight(montageTime, emptyState, transition)
+                    : 0f;
+                float holdWeight = 1f - transitionWeight;
+                if (holdWeight <= 0.0001f)
+                    continue;
+
+                int sourceIndex = FindEmptyStateHoldSource(emptyState, segments);
+                if (sourceIndex < 0)
+                    continue;
+
+                MontageSegment source = segments[sourceIndex];
+                float poseTime = Mathf.Max(
+                    source.StartTime,
+                    Mathf.Min(emptyState.StartTime - 0.0001f, source.EndTime - 0.0001f));
+                float playableClipTime = source.ToPlayableClipTime(poseTime);
+                results.Add(new MontageSegmentSample(
+                    source,
+                    sourceIndex,
+                    source.NormalizeClipTime(playableClipTime),
+                    playableClipTime,
+                    holdWeight,
+                    true));
+                addedWeight += holdWeight;
+            }
+
+            return addedWeight;
+        }
+
+        private static bool TryGetActiveEmptyStateOnTrack(
+            float montageTime,
+            string trackId,
+            IReadOnlyList<MontageSegment> segments,
+            out MontageSegment emptyState,
+            out int emptyStateIndex)
+        {
+            emptyState = null;
+            emptyStateIndex = -1;
+            for (int i = 0; i < segments.Count; i++)
+            {
+                MontageSegment candidate = segments[i];
+                if (candidate == null
+                    || !candidate.IsEmptyState
+                    || candidate.TrackId != trackId
+                    || !candidate.ContainsTime(montageTime))
+                    continue;
+
+                if (emptyState != null && candidate.StartTime < emptyState.StartTime)
+                    continue;
+
+                emptyState = candidate;
+                emptyStateIndex = i;
+            }
+
+            return emptyState != null;
+        }
+
+        private static bool IsPrimaryActiveEmptyState(
+            int emptyStateIndex,
+            float montageTime,
+            IReadOnlyList<MontageSegment> segments)
+        {
+            MontageSegment current = segments[emptyStateIndex];
+            for (int i = 0; i < segments.Count; i++)
+            {
+                if (i == emptyStateIndex)
+                    continue;
+
+                MontageSegment candidate = segments[i];
+                if (candidate == null
+                    || !candidate.IsEmptyState
+                    || candidate.TrackId != current.TrackId
+                    || !candidate.ContainsTime(montageTime))
+                    continue;
+
+                if (candidate.StartTime > current.StartTime
+                    || Mathf.Approximately(candidate.StartTime, current.StartTime) && i > emptyStateIndex)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static int FindEmptyStateTransitionSegment(
+            MontageSegment emptyState,
+            int emptyStateIndex,
+            IReadOnlyList<MontageSegment> segments)
+        {
+            int result = -1;
+            float earliestStartTime = float.MaxValue;
+            for (int i = 0; i < segments.Count; i++)
+            {
+                if (i == emptyStateIndex)
+                    continue;
+
+                MontageSegment candidate = segments[i];
+                if (candidate?.Clip == null
+                    || candidate.TrackId != emptyState.TrackId
+                    || candidate.StartTime < emptyState.StartTime
+                    || candidate.StartTime >= emptyState.EndTime
+                    || candidate.StartTime >= earliestStartTime)
+                    continue;
+
+                earliestStartTime = candidate.StartTime;
+                result = i;
+            }
+
+            return result;
+        }
+
+        private static int FindEmptyStateHoldSource(
+            MontageSegment emptyState,
+            IReadOnlyList<MontageSegment> segments)
+        {
+            int result = -1;
+            float latestStartTime = float.MinValue;
+            for (int i = 0; i < segments.Count; i++)
+            {
+                MontageSegment candidate = segments[i];
+                if (candidate?.Clip == null
+                    || candidate.TrackId != emptyState.TrackId
+                    || candidate.StartTime >= emptyState.StartTime
+                    || candidate.StartTime <= latestStartTime)
+                    continue;
+
+                latestStartTime = candidate.StartTime;
+                result = i;
+            }
+
+            return result;
+        }
+
+        private static float GetEmptyStateTransitionWeight(
+            float montageTime,
+            MontageSegment emptyState,
+            MontageSegment transition)
+        {
+            float blendEndTime = Mathf.Min(emptyState.EndTime, transition.EndTime);
+            if (blendEndTime <= transition.StartTime + 0.0001f)
+                return montageTime >= transition.StartTime ? 1f : 0f;
+
+            float normalizedTime = Mathf.InverseLerp(transition.StartTime, blendEndTime, montageTime);
+            return MontageBlendUtility.Evaluate(normalizedTime);
+        }
+        public static bool HasActiveEmptyState(
+            float montageTime,
+            IReadOnlyList<MontageSegment> segments)
+        {
+            if (segments == null)
+                return false;
+
+            for (int i = 0; i < segments.Count; i++)
+            {
+                MontageSegment segment = segments[i];
+                if (segment != null && segment.IsEmptyState && segment.ContainsTime(montageTime))
+                    return true;
+            }
+
+            return false;
         }
 
         private static bool TryAddGapPoseSample(

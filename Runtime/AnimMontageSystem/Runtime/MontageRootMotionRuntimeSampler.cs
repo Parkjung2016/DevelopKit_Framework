@@ -19,6 +19,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private AnimationMixerPlayable mixer;
         private int mixerInputCount;
         private Avatar boundAvatar;
+        private bool requiresTimeSync;
 
         public void Dispose()
         {
@@ -61,13 +62,18 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
             MontageSegmentBlending.Evaluate(montageTime, montage.Segments, samples);
             if (samples.Count == 0)
+            {
+                requiresTimeSync = true;
+                deltaReceiver.Clear();
                 return false;
+            }
 
             bool graphRebuilt = EnsureGraph(Mathf.Max(samples.Count, montage.Segments.Count));
             if (!graph.IsValid() || !mixer.IsValid())
                 return false;
 
-            bool sampleRebuilt = UpdateAnimationSample(montage, forceTime: graphRebuilt);
+            bool sampleRebuilt = UpdateAnimationSample(montage, forceTime: graphRebuilt || requiresTimeSync);
+            requiresTimeSync = false;
             if (graphRebuilt || sampleRebuilt)
             {
                 deltaReceiver.Clear();

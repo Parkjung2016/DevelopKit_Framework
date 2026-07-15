@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -624,8 +624,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             float delta = (float)(now - lastEditorTime);
             lastEditorTime = now;
 
-            MontageTimelineElementEvaluation timelineEvaluation =
-                MontageTimelineElementEvaluator.Evaluate(context.Montage, context.PlayheadTime);
+            MontageNotifyEvaluation timelineEvaluation =
+                MontageNotifyEvaluator.Evaluate(context.Montage, context.PlayheadTime);
             float length = context.Montage.Length;
             float nextTime = context.PlayheadTime
                 + delta * context.EffectivePlaybackSpeed * timelineEvaluation.SpeedMultiplier;
@@ -839,7 +839,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 AnimNotifyPlacement placement = editorScrubNotifyBuffer[i];
                 AnimNotify notify = placement.Notify;
-                if (notify == null || !notify.TriggerInEditorScrub)
+                if (notify == null || !notify.TriggerOnManualPreview)
                     continue;
 
                 var notifyContext = new AnimNotifyContext(owner, animator, montage, placement.Time, deltaTime);
@@ -858,7 +858,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 AnimNotifyStatePlacement placement = editorScrubEndBuffer[i];
                 AnimNotifyState state = placement.NotifyState;
-                if (state == null || !state.TriggerInEditorScrub)
+                if (state == null || !state.TriggerOnManualPreview)
                     continue;
 
                 var endContext = new AnimNotifyContext(owner, animator, montage, placement.EndTime, deltaTime);
@@ -869,7 +869,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 AnimNotifyStatePlacement placement = editorScrubBeginBuffer[i];
                 AnimNotifyState state = placement.NotifyState;
-                if (state == null || !state.TriggerInEditorScrub)
+                if (state == null || !state.TriggerOnManualPreview)
                     continue;
 
                 var beginContext = new AnimNotifyContext(owner, animator, montage, placement.StartTime, deltaTime);
@@ -880,7 +880,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 AnimNotifyStatePlacement placement = editorScrubTickBuffer[i];
                 AnimNotifyState state = placement.NotifyState;
-                if (state == null || !state.TriggerInEditorScrub)
+                if (state == null || !state.TriggerOnManualPreview)
                     continue;
 
                 var tickContext = new AnimNotifyContext(owner, animator, montage, currentTime, deltaTime);

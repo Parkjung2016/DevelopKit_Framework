@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -444,7 +444,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 trackId => BuildNotifySummary(montage, trackId, currentTime), "Notify");
             AddTrackSection("Notify State Tracks", montage.NotifyStateTracks, trackId => CountNotifyStates(montage, trackId),
                 trackId => BuildNotifyStateSummary(montage, trackId, currentTime), "State");
-            AddCustomTrackSection(montage, currentTime);
         }
 
         private void AddTrackSection(string title, IReadOnlyList<string> tracks, System.Func<string, int> count,
@@ -457,27 +456,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 {
                     string trackId = string.IsNullOrEmpty(tracks[i]) ? "Default" : tracks[i];
                     AddTrackCard(section, trackId, kind, count(trackId), detail(trackId));
-                }
-            }
-            trackContent.Add(section);
-        }
-
-        private void AddCustomTrackSection(AnimMontageSO montage, float currentTime)
-        {
-            IReadOnlyList<CustomMontageTrack> tracks = montage.CustomTracks;
-            VisualElement section = CreateTrackSection("Custom Tracks", tracks.Count, "Custom Tracks", out bool expanded);
-            if (expanded)
-            {
-                for (int i = 0; i < tracks.Count; i++)
-                {
-                    CustomMontageTrack track = tracks[i];
-                    if (track == null)
-                        continue;
-
-                    string typeName = track.TrackType != null ? track.TrackType.DisplayName : "Custom";
-                    int count = CountCustomElements(montage, track.TrackId);
-                    string detail = BuildCustomElementSummary(montage, track.TrackId, currentTime);
-                    AddTrackCard(section, track.TrackId, typeName, count, detail);
                 }
             }
             trackContent.Add(section);
@@ -653,17 +631,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return count;
         }
 
-        private static int CountCustomElements(AnimMontageSO montage, string trackId)
-        {
-            int count = 0;
-            foreach (CustomMontageElementPlacement element in montage.CustomElements)
-            {
-                if (element != null && element.TrackId == trackId)
-                    count++;
-            }
-            return count;
-        }
-
         private static string BuildSegmentSummary(AnimMontageSO montage, string trackId, float currentTime)
         {
             foreach (MontageSegment segment in montage.Segments)
@@ -703,25 +670,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return "No active state";
         }
 
-        private static string BuildCustomElementSummary(AnimMontageSO montage, string trackId, float currentTime)
-        {
-            foreach (CustomMontageElementPlacement element in montage.CustomElements)
-            {
-                if (element == null || element.TrackId != trackId || currentTime < element.StartTime || currentTime > element.EndTime)
-                    continue;
-                return $"Active: {GetElementName(element)}  {element.StartTime:0.###}-{element.EndTime:0.###}";
-            }
-            return "No active element";
-        }
-
         private static string GetNotifyName(AnimNotifyPlacement placement) =>
             placement.Notify != null ? placement.Notify.DisplayName : "Missing Notify";
 
         private static string GetNotifyStateName(AnimNotifyStatePlacement placement) =>
             placement.NotifyState != null ? placement.NotifyState.DisplayName : "Missing State";
-
-        private static string GetElementName(CustomMontageElementPlacement placement) =>
-            placement.Element != null ? placement.Element.DisplayName : "Missing Element";
 
         private void SelectCurrentPlayer()
         {

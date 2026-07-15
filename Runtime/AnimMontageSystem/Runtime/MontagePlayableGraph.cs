@@ -34,6 +34,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private int montageMixerInputCount;
         private float montageWeight;
         private bool hasMontagePose;
+        private bool requiresMontageTimeSync;
 
         public MontagePlayableGraph(Animator animator)
         {
@@ -82,12 +83,25 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             MontageSegmentBlending.Evaluate(sampleTime, montage.Segments, samples);
             if (samples.Count == 0)
             {
+                if (MontageSegmentBlending.HasActiveEmptyState(sampleTime, montage.Segments)
+                    && hasMontagePose
+                    && montageMixer.IsValid())
+                {
+                    FreezeMontagePose();
+                    requiresMontageTimeSync = true;
+                    ApplyLayerWeights();
+                    return false;
+                }
+
                 hasMontagePose = false;
+                requiresMontageTimeSync = false;
                 ClearMontageWeights();
                 ApplyLayerWeights();
                 return false;
             }
 
+            force |= requiresMontageTimeSync;
+            requiresMontageTimeSync = false;
             hasMontagePose = true;
             bool mixerRebuilt = EnsureMontageMixer(Mathf.Max(samples.Count, montage.Segments.Count), false);
 
@@ -130,6 +144,16 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 montageMixer.SetInputWeight(i, 0f);
 
             return mixerRebuilt;
+        }
+
+        private void FreezeMontagePose()
+        {
+            for (int i = 0; i < clipPlayables.Count; i++)
+            {
+                AnimationClipPlayable playable = clipPlayables[i];
+                if (playable.IsValid())
+                    playable.SetSpeed(0f);
+            }
         }
 
         public void SetMontageWeight(float weight)
@@ -177,6 +201,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             montageMixerInputCount = 0;
             montageWeight = 0f;
             hasMontagePose = false;
+            requiresMontageTimeSync = false;
             samples.Clear();
             clipPlayables.Clear();
             clipPlayableSegmentIndices.Clear();

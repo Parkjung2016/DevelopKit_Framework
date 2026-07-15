@@ -1,6 +1,6 @@
 # AnimMontageSystem
 
-Unity에서 Unreal Montage와 비슷한 방식으로 애니메이션 세그먼트, Notify, Notify State, 커스텀 트랙/요소를 편집하고 재생하기 위한 시스템입니다.
+Unity에서 Unreal Montage와 비슷한 방식으로 애니메이션 세그먼트, Notify, Notify State를 편집하고 재생하기 위한 시스템입니다.
 
 ## 구성
 
@@ -117,36 +117,20 @@ Notify와 Notify State에는 `Trigger In Editor Scrub` 옵션이 있습니다.
 
 Montage Editor의 재생 중에는 런타임과 같은 Dispatcher 흐름으로 Notify가 실행됩니다.
 
-## 커스텀 트랙 / 커스텀 요소
+## 기본 Notify / Notify State
 
-기본 Animation Segment, Notify, Notify State 외에 별도 목적의 트랙과 요소를 만들 수 있습니다.
+Montage 타임라인의 확장 요소는 AnimNotify 또는 AnimNotifyState로 작성합니다.
 
-```csharp
-[System.Serializable]
-public sealed class MyTrack : MontageTimelineTrack
-{
-    public override string DisplayName => "My Track";
-    public override Color EditorColor => Color.cyan;
+- AnimNotify: 특정 시점에 한 번 실행되는 동작
+- AnimNotifyState: 시작, 갱신, 종료가 필요한 구간 동작
+- TransformNotify: 지정된 시점부터 위치, 회전, 크기를 채널별 Duration과 Easing Curve로 적용
+- PlaybackSpeedAnimNotifyState: 지정된 구간의 Montage 재생 속도 조절
+- TimeControlAnimNotifyState: 지정된 구간의 TimeScale 레이어 조절
+- CameraShakeAnimNotifyState: 지정된 구간에 Cinemachine 카메라 흔들림 적용
 
-    public float Strength = 1f;
-}
-```
+Camera Shake는 Montage Editor 재생 중에는 항상 표시됩니다. 타임라인 바를 직접 움직일 때는 해당 State의 Trigger On Manual Preview가 켜져 있어야 프리뷰에 표시됩니다. 런타임에서는 활성 Cinemachine Camera의 Basic Multi Channel Perlin을 사용하며, State가 끝나면 기존 Noise 설정을 복원합니다.
 
-```csharp
-[System.Serializable]
-public sealed class MyElement : MontageTimelineElement
-{
-    public override string DisplayName => "My Element";
-    public override float DefaultDuration => 0.5f;
-
-    public string MarkerName = "Hit";
-}
-```
-
-Montage Editor에서 타임라인을 우클릭한 뒤 `Track/Add Custom Track...`으로 커스텀 트랙 타입을 고르고, 해당 트랙 위에서 `Create/Custom Element...`로 요소 타입을 골라 배치할 수 있습니다.
-
-커스텀 트랙과 커스텀 요소는 ScriptableObject 에셋을 만들지 않습니다. Notify와 Notify State처럼 `[System.Serializable]` 클래스 타입을 선택하면 Montage 데이터 안에 `[SerializeReference]` 인스턴스로 저장되며, 배치별로 속성을 다르게 편집할 수 있습니다.
-
+타임라인 확장 동작은 일반 클래스인 AnimNotify 또는 AnimNotifyState를 상속해 만들고, Notify Track 또는 Notify State Track에 배치합니다.
 ## Montage Editor
 
 메뉴 경로:
@@ -160,7 +144,7 @@ PJDev/Animation/Montage Editor
 - Montage SO 선택 및 편집
 - Preview Mesh 기반 애니메이션 미리보기
 - Animation Segment, Notify, Notify State 배치
-- 커스텀 트랙/요소 배치
+
 - 타임라인 재생, 정지, 루프, 속도 조절
 - Inspector에서 선택한 타임라인 요소의 필드 편집
 - Log Viewer에서 Notify 실행 로그 확인

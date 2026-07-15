@@ -60,7 +60,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Bind(instance);
             MontageSegmentBlending.Evaluate(montageTime, montage.Segments, samples);
             if (samples.Count == 0)
-                return false;
+            {
+                if (!MontageSegmentBlending.HasActiveEmptyState(montageTime, montage.Segments))
+                    return false;
+
+                if (!TryEvaluateEmptyStateHoldPose(montage, montageTime))
+                {
+                    SampleInitialEmptyStatePose();
+                    return true;
+                }
+            }
 
             bool requiresMixer = samples.Count > 1
                                  || MontageSegmentBlending.MontageHasBlends(montage.Segments)
@@ -112,6 +121,40 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
 
 
+        private bool TryEvaluateEmptyStateHoldPose(AnimMontageSO montage, float montageTime)
+        {
+            float holdStartTime = -1f;
+            for (int i = 0; i < montage.Segments.Count; i++)
+            {
+                MontageSegment segment = montage.Segments[i];
+                if (segment == null
+                    || !segment.IsEmptyState
+                    || !segment.ContainsTime(montageTime))
+                    continue;
+
+                holdStartTime = Mathf.Max(holdStartTime, segment.StartTime);
+            }
+
+            if (holdStartTime <= 0f)
+                return false;
+
+            MontageSegmentBlending.Evaluate(
+                Mathf.Max(0f, holdStartTime - 0.0001f),
+                montage.Segments,
+                samples);
+            return samples.Count > 0;
+        }
+
+        private void SampleInitialEmptyStatePose()
+        {
+            Reset();
+            if (boundAnimator == null)
+                return;
+
+            boundAnimator.Rebind();
+            if (boundAnimator.isActiveAndEnabled)
+                boundAnimator.Update(0f);
+        }
         private GameObject GetAnimationSampleTarget(GameObject fallback) =>
             boundAnimator != null ? boundAnimator.gameObject : fallback;
 

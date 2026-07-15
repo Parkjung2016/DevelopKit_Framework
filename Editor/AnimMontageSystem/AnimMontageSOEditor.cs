@@ -1,4 +1,4 @@
-﻿using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
+using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEngine;
@@ -18,7 +18,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 ("Notifies", montage.Notifies.Count.ToString()),
                 ("States", montage.NotifyStates.Count.ToString()));
             DrawMetricRow(
-                ("Custom", montage.CustomElements.Count.ToString()),
                 ("Rate", montage.RateScale.ToString("0.###")),
                 ("Root", montage.ApplyRootMotion ? "On" : "Off"),
                 ("Tracks", GetTrackCount(montage).ToString()));
@@ -43,7 +42,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         }
 
         private static int GetTrackCount(AnimMontageSO montage) =>
-            montage.AnimationTracks.Count + montage.NotifyTracks.Count + montage.NotifyStateTracks.Count + montage.CustomTracks.Count;
+            montage.AnimationTracks.Count + montage.NotifyTracks.Count + montage.NotifyStateTracks.Count;
 
         internal static void DrawHeader(string title, string assetName)
         {

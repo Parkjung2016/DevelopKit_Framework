@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -19,8 +19,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         [SerializeField] private MontageSegment[] segments = Array.Empty<MontageSegment>();
         [SerializeField] private AnimNotifyPlacement[] notifies = Array.Empty<AnimNotifyPlacement>();
         [SerializeField] private AnimNotifyStatePlacement[] notifyStates = Array.Empty<AnimNotifyStatePlacement>();
-        [SerializeField] private CustomMontageTrack[] customTracks = Array.Empty<CustomMontageTrack>();
-        [SerializeField] private CustomMontageElementPlacement[] customElements = Array.Empty<CustomMontageElementPlacement>();
         [SerializeField] private MontageSlotDefinition[] slots = Array.Empty<MontageSlotDefinition>();
         [SerializeField] private string[] animationTracks = { "Default" };
         [SerializeField] private string[] notifyTracks = { "Default" };
@@ -37,8 +35,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public IReadOnlyList<MontageSegment> Segments => segments ?? Array.Empty<MontageSegment>();
         public IReadOnlyList<AnimNotifyPlacement> Notifies => notifies ?? Array.Empty<AnimNotifyPlacement>();
         public IReadOnlyList<AnimNotifyStatePlacement> NotifyStates => notifyStates ?? Array.Empty<AnimNotifyStatePlacement>();
-        public IReadOnlyList<CustomMontageTrack> CustomTracks => customTracks ?? Array.Empty<CustomMontageTrack>();
-        public IReadOnlyList<CustomMontageElementPlacement> CustomElements => customElements ?? Array.Empty<CustomMontageElementPlacement>();
         public IReadOnlyList<MontageSlotDefinition> Slots => slots ?? Array.Empty<MontageSlotDefinition>();
         public IReadOnlyList<string> AnimationTracks => animationTracks ?? Array.Empty<string>();
         public IReadOnlyList<string> NotifyTracks => notifyTracks ?? Array.Empty<string>();
@@ -60,8 +56,14 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 for (int i = 0; notifies != null && i < notifies.Length; i++)
                 {
                     AnimNotifyPlacement notify = notifies[i];
-                    if (notify != null)
-                        max = Mathf.Max(max, notify.Time);
+                    if (notify == null)
+                        continue;
+
+                    float notifyEndTime = notify.Time;
+                    if (notify.Notify is IMontageDurationNotify durationNotify)
+                        notifyEndTime += Mathf.Max(0f, durationNotify.Duration);
+
+                    max = Mathf.Max(max, notifyEndTime);
                 }
 
                 for (int i = 0; notifyStates != null && i < notifyStates.Length; i++)
@@ -71,12 +73,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                         max = Mathf.Max(max, state.EndTime);
                 }
 
-                for (int i = 0; customElements != null && i < customElements.Length; i++)
-                {
-                    CustomMontageElementPlacement element = customElements[i];
-                    if (element != null)
-                        max = Mathf.Max(max, element.EndTime);
-                }
 
                 return max;
             }
@@ -131,8 +127,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             notifyStateTracks = SanitizeTracks(notifyStateTracks);
             timelineTrackOrder = SanitizeTrackOrder(timelineTrackOrder);
 
-            if (segments == null)
-                return;
 
             for (int i = 0; i < notifies?.Length; i++)
             {
@@ -150,26 +144,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 state.StartTime = Mathf.Max(0f, state.StartTime);
                 state.EndTime = Mathf.Max(state.StartTime, state.EndTime);
             }
-
-            for (int i = 0; i < customTracks?.Length; i++)
-            {
-                CustomMontageTrack track = customTracks[i];
-                if (track != null)
-                    track.TrackId = track.TrackId;
-            }
-
-            for (int i = 0; i < customElements?.Length; i++)
-            {
-                CustomMontageElementPlacement element = customElements[i];
-                if (element == null)
-                    continue;
-
-                element.TrackId = element.TrackId;
-                element.StartTime = Mathf.Max(0f, element.StartTime);
-                element.EndTime = Mathf.Max(element.StartTime, element.EndTime);
-            }
         }
-
+        
         private static string[] SanitizeTracks(string[] tracks)
         {
             if (tracks == null || tracks.Length == 0)

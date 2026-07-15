@@ -22,17 +22,14 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         public int SelectedNotifyIndex { get; private set; } = -1;
         public int SelectedNotifyStateIndex { get; private set; } = -1;
         public int SelectedSegmentIndex { get; private set; } = -1;
-        public int SelectedCustomElementIndex { get; private set; } = -1;
         public IReadOnlyCollection<int> SelectedSegmentIndices => selectedSegmentIndices;
         public IReadOnlyCollection<int> SelectedNotifyIndices => selectedNotifyIndices;
         public IReadOnlyCollection<int> SelectedNotifyStateIndices => selectedNotifyStateIndices;
-        public IReadOnlyCollection<int> SelectedCustomElementIndices => selectedCustomElementIndices;
         public IReadOnlyCollection<string> SelectedTimelineTrackKeys => selectedTimelineTrackKeys;
 
         private readonly HashSet<int> selectedSegmentIndices = new();
         private readonly HashSet<int> selectedNotifyIndices = new();
         private readonly HashSet<int> selectedNotifyStateIndices = new();
-        private readonly HashSet<int> selectedCustomElementIndices = new();
         private readonly HashSet<string> selectedTimelineTrackKeys = new();
 
         public event Action Changed;
@@ -124,10 +121,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             SetTimelineIndexSelection(selectedSegmentIndices, segmentIndex, additive, toggle);
             selectedNotifyIndices.Clear();
             selectedNotifyStateIndices.Clear();
-            selectedCustomElementIndices.Clear();
             selectedTimelineTrackKeys.Clear();
             SelectedObject = Montage;
-            SyncLegacySelection();
+            SyncSingleSelection();
             RaiseSelectionChanged();
         }
 
@@ -141,9 +137,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             selectedNotifyIndices.Clear();
             selectedNotifyStateIndices.Clear();
-            selectedCustomElementIndices.Clear();
             SelectedObject = Montage;
-            SyncLegacySelection();
+            SyncSingleSelection();
             RaiseSelectionChanged();
         }
 
@@ -152,10 +147,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             SetTimelineIndexSelection(selectedNotifyIndices, notifyIndex, additive, toggle);
             selectedSegmentIndices.Clear();
             selectedNotifyStateIndices.Clear();
-            selectedCustomElementIndices.Clear();
             selectedTimelineTrackKeys.Clear();
             SelectedObject = Montage;
-            SyncLegacySelection();
+            SyncSingleSelection();
             RaiseSelectionChanged();
         }
 
@@ -169,9 +163,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             selectedSegmentIndices.Clear();
             selectedNotifyStateIndices.Clear();
-            selectedCustomElementIndices.Clear();
             SelectedObject = Montage;
-            SyncLegacySelection();
+            SyncSingleSelection();
             RaiseSelectionChanged();
         }
 
@@ -180,10 +173,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             SetTimelineIndexSelection(selectedNotifyStateIndices, notifyStateIndex, additive, toggle);
             selectedSegmentIndices.Clear();
             selectedNotifyIndices.Clear();
-            selectedCustomElementIndices.Clear();
             selectedTimelineTrackKeys.Clear();
             SelectedObject = Montage;
-            SyncLegacySelection();
+            SyncSingleSelection();
             RaiseSelectionChanged();
         }
 
@@ -197,37 +189,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             selectedSegmentIndices.Clear();
             selectedNotifyIndices.Clear();
-            selectedCustomElementIndices.Clear();
             SelectedObject = Montage;
-            SyncLegacySelection();
-            RaiseSelectionChanged();
-        }
-
-        public void SetSelectedCustomElement(int customElementIndex, bool additive = false, bool toggle = false)
-        {
-            SetTimelineIndexSelection(selectedCustomElementIndices, customElementIndex, additive, toggle);
-            selectedSegmentIndices.Clear();
-            selectedNotifyIndices.Clear();
-            selectedNotifyStateIndices.Clear();
-            selectedTimelineTrackKeys.Clear();
-            SelectedObject = Montage;
-            SyncLegacySelection();
-            RaiseSelectionChanged();
-        }
-
-        public void SetSelectedCustomElements(IEnumerable<int> customElementIndices, bool additive = false)
-        {
-            if (!additive)
-                ClearTimelineSelection();
-
-            foreach (int index in customElementIndices)
-                selectedCustomElementIndices.Add(index);
-
-            selectedSegmentIndices.Clear();
-            selectedNotifyIndices.Clear();
-            selectedNotifyStateIndices.Clear();
-            SelectedObject = Montage;
-            SyncLegacySelection();
+            SyncSingleSelection();
             RaiseSelectionChanged();
         }
 
@@ -244,9 +207,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             selectedSegmentIndices.Clear();
             selectedNotifyIndices.Clear();
             selectedNotifyStateIndices.Clear();
-            selectedCustomElementIndices.Clear();
             SelectedObject = Montage;
-            SyncLegacySelection();
+            SyncSingleSelection();
             RaiseSelectionChanged();
         }
 
@@ -261,9 +223,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             selectedSegmentIndices.Clear();
             selectedNotifyIndices.Clear();
             selectedNotifyStateIndices.Clear();
-            selectedCustomElementIndices.Clear();
             SelectedObject = Montage;
-            SyncLegacySelection();
+            SyncSingleSelection();
             RaiseSelectionChanged();
         }
 
@@ -271,7 +232,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             IEnumerable<int> segmentIndices,
             IEnumerable<int> notifyIndices,
             IEnumerable<int> notifyStateIndices,
-            IEnumerable<int> customElementIndices,
             IEnumerable<string> trackKeys,
             bool additive = false)
         {
@@ -287,21 +247,18 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             foreach (int index in notifyStateIndices)
                 selectedNotifyStateIndices.Add(index);
 
-            foreach (int index in customElementIndices)
-                selectedCustomElementIndices.Add(index);
 
             foreach (string key in trackKeys)
                 selectedTimelineTrackKeys.Add(key);
 
             SelectedObject = Montage;
-            SyncLegacySelection();
+            SyncSingleSelection();
             RaiseSelectionChanged();
         }
 
         public bool IsSegmentSelected(int index) => selectedSegmentIndices.Contains(index);
         public bool IsNotifySelected(int index) => selectedNotifyIndices.Contains(index);
         public bool IsNotifyStateSelected(int index) => selectedNotifyStateIndices.Contains(index);
-        public bool IsCustomElementSelected(int index) => selectedCustomElementIndices.Contains(index);
         public bool IsTimelineTrackSelected(string trackKey) => selectedTimelineTrackKeys.Contains(trackKey);
 
         public void SetPlaying(bool playing)
@@ -362,9 +319,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             selectedSegmentIndices.Clear();
             selectedNotifyIndices.Clear();
             selectedNotifyStateIndices.Clear();
-            selectedCustomElementIndices.Clear();
             selectedTimelineTrackKeys.Clear();
-            SyncLegacySelection();
+            SyncSingleSelection();
         }
 
         private void ClampTimelineSelection()
@@ -372,8 +328,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             RemoveInvalidIndices(selectedSegmentIndices, Montage.Segments.Count);
             RemoveInvalidIndices(selectedNotifyIndices, Montage.Notifies.Count);
             RemoveInvalidIndices(selectedNotifyStateIndices, Montage.NotifyStates.Count);
-            RemoveInvalidIndices(selectedCustomElementIndices, Montage.CustomElements.Count);
-            SyncLegacySelection();
+            SyncSingleSelection();
         }
 
         private static void RemoveInvalidIndices(HashSet<int> selection, int count)
@@ -381,12 +336,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             selection.RemoveWhere(index => index < 0 || index >= count);
         }
 
-        private void SyncLegacySelection()
+        private void SyncSingleSelection()
         {
             SelectedSegmentIndex = FirstOrMinusOne(selectedSegmentIndices);
             SelectedNotifyIndex = FirstOrMinusOne(selectedNotifyIndices);
             SelectedNotifyStateIndex = FirstOrMinusOne(selectedNotifyStateIndices);
-            SelectedCustomElementIndex = FirstOrMinusOne(selectedCustomElementIndices);
         }
 
         private static int FirstOrMinusOne(HashSet<int> values)

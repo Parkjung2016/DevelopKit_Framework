@@ -13,32 +13,118 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private static readonly List<MontageSegmentSample> CurrentSamples = new();
         private static readonly List<MontageSegmentSample> PreviousSamples = new();
 
-        public static bool TryEvaluate(AnimMontageSO montage, float montageTime, out Vector3 position, out Quaternion rotation)
+        public static bool TryEvaluate(
+            AnimMontageSO montage,
+            float animationTime,
+            float timelineTime,
+            out Vector3 position,
+            out Quaternion rotation,
+            out bool includesTimelineTransform)
         {
             position = Vector3.zero;
             rotation = Quaternion.identity;
+            includesTimelineTransform = false;
             if (montage == null || !montage.ApplyRootMotion)
                 return false;
 
-            bool hasRootMotion = false;
-            float targetTime = Mathf.Max(0f, montageTime);
-            if (targetTime <= 0f)
-                return HasAnyRootMotionCurve(montage.Segments);
-
-            float previousTime = 0f;
-            while (previousTime < targetTime)
+            bool hasRootMotion = HasAnyRootMotionCurve(montage.Segments);
+            bool hasTimelineTransformNotify = HasTimelineTransformNotify(montage);
+            MontageNotifyEvaluation previousTimelineEvaluation = hasTimelineTransformNotify
+                ? MontageNotifyEvaluator.Evaluate(montage, 0f)
+                : MontageNotifyEvaluation.Default;
+            if (hasTimelineTransformNotify)
             {
-                float currentTime = Mathf.Min(targetTime, previousTime + EvaluationStep);
-                MontageSegmentBlending.Evaluate(previousTime, montage.Segments, PreviousSamples);
-                MontageSegmentBlending.Evaluate(currentTime, montage.Segments, CurrentSamples);
-
-                EvaluateBlendedStepDelta(PreviousSamples, CurrentSamples, out Vector3 deltaPosition, out Quaternion deltaRotation, ref hasRootMotion);
-                position += rotation * deltaPosition;
-                rotation = rotation * deltaRotation;
-                previousTime = currentTime;
+                ApplyTimelineTransformDelta(
+                    previousTimelineEvaluation.PositionOffset,
+                    previousTimelineEvaluation.RotationOffset,
+                    ref position,
+                    ref rotation,
+                    ref includesTimelineTransform);
             }
 
-            return hasRootMotion;
+            float targetAnimationTime = Mathf.Max(0f, animationTime);
+            float targetTimelineTime = Mathf.Max(0f, timelineTime);
+            float traversalLength = Mathf.Max(targetAnimationTime, targetTimelineTime);
+            float previousTraversalTime = 0f;
+            float previousAnimationTime = 0f;
+            while (previousTraversalTime < traversalLength)
+            {
+                float currentTraversalTime = Mathf.Min(
+                    traversalLength,
+                    previousTraversalTime + EvaluationStep);
+                float traversalRatio = traversalLength > 0f
+                    ? currentTraversalTime / traversalLength
+                    : 1f;
+                float currentAnimationTime = targetAnimationTime * traversalRatio;
+                float currentTimelineTime = targetTimelineTime * traversalRatio;
+
+                MontageSegmentBlending.Evaluate(previousAnimationTime, montage.Segments, PreviousSamples);
+                MontageSegmentBlending.Evaluate(currentAnimationTime, montage.Segments, CurrentSamples);
+                EvaluateBlendedStepDelta(
+                    PreviousSamples,
+                    CurrentSamples,
+                    out Vector3 deltaPosition,
+                    out Quaternion deltaRotation,
+                    ref hasRootMotion);
+                MontageRootMotionUtility.Filter(montage, ref deltaPosition, ref deltaRotation);
+                position += rotation * deltaPosition;
+                rotation *= deltaRotation;
+
+                if (hasTimelineTransformNotify)
+                {
+                    MontageNotifyEvaluation currentTimelineEvaluation =
+                        MontageNotifyEvaluator.Evaluate(montage, currentTimelineTime);
+                    Vector3 timelinePositionDelta = currentTimelineEvaluation.PositionOffset -
+                                                    previousTimelineEvaluation.PositionOffset;
+                    Quaternion timelineRotationDelta =
+                        Quaternion.Inverse(previousTimelineEvaluation.RotationOffset) *
+                        currentTimelineEvaluation.RotationOffset;
+                    ApplyTimelineTransformDelta(
+                        timelinePositionDelta,
+                        timelineRotationDelta,
+                        ref position,
+                        ref rotation,
+                        ref includesTimelineTransform);
+                    previousTimelineEvaluation = currentTimelineEvaluation;
+                }
+
+                previousAnimationTime = currentAnimationTime;
+                previousTraversalTime = currentTraversalTime;
+            }
+
+            return hasRootMotion || includesTimelineTransform;
+        }
+
+        private static bool HasTimelineTransformNotify(AnimMontageSO montage)
+        {
+            var notifies = montage.Notifies;
+            for (int i = 0; i < notifies.Count; i++)
+            {
+                if (notifies[i]?.Notify is IMontageTransformOffsetNotify)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static void ApplyTimelineTransformDelta(
+            Vector3 positionDelta,
+            Quaternion rotationDelta,
+            ref Vector3 position,
+            ref Quaternion rotation,
+            ref bool includesTimelineTransform)
+        {
+            if (positionDelta.sqrMagnitude > 0.0000001f)
+            {
+                position += rotation * positionDelta;
+                includesTimelineTransform = true;
+            }
+
+            if (Quaternion.Angle(Quaternion.identity, rotationDelta) <= 0.0001f)
+                return;
+
+            rotation *= rotationDelta;
+            includesTimelineTransform = true;
         }
 
         private static bool HasAnyRootMotionCurve(IReadOnlyList<MontageSegment> segments)

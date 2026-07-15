@@ -37,8 +37,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private float previewAnimationSampleTime;
         private float lastPreviewPlayheadTime;
 
-        private MontageTimelineElementEvaluation previousPreviewTimelineElementEvaluation =
-            MontageTimelineElementEvaluation.Default;
+        private MontageNotifyEvaluation previousPreviewNotifyEvaluation =
+            MontageNotifyEvaluation.Default;
 
         private Vector3 initialMotionRootLocalPosition;
         private Quaternion initialMotionRootLocalRotation;
@@ -141,9 +141,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             RevertTimelineElementPreviewTransform();
             float sampleTime = GetPreviewAnimationSampleTime(context);
             MontagePreviewSampling.TrySample(previewInstance, context, sampleTime);
-            ApplyRootMotionPreviewTransform(context, sampleTime);
+            bool timelineTransformComposedWithRootMotion =
+                ApplyRootMotionPreviewTransform(context, sampleTime);
             StabilizePreviewTransform();
-            ApplyTimelineElementPreviewTransform(context);
+            ApplyTimelineElementPreviewTransform(context, !timelineTransformComposedWithRootMotion);
         }
 
         private float GetPreviewAnimationSampleTime(MontageEditorContext context)
@@ -170,8 +171,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return previewAnimationSampleTime;
             }
 
-            MontageTimelineElementEvaluation evaluation =
-                MontageTimelineElementEvaluator.Evaluate(context.Montage, lastPreviewPlayheadTime);
+            MontageNotifyEvaluation evaluation =
+                MontageNotifyEvaluator.Evaluate(context.Montage, lastPreviewPlayheadTime);
             previewAnimationSampleTime = Mathf.Clamp(
                 previewAnimationSampleTime + playheadDelta * evaluation.TimeScaleMultiplier,
                 0f,
@@ -187,7 +188,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             MontagePreviewSampling.Reset();
             previewAnimationSampleTime = 0f;
-            previousPreviewTimelineElementEvaluation = MontageTimelineElementEvaluation.Default;
+            previousPreviewNotifyEvaluation = MontageNotifyEvaluation.Default;
             previewInstance.transform.SetPositionAndRotation(initialPreviewPosition, initialPreviewRotation);
             previewInstance.transform.localScale = initialPreviewScale;
 
@@ -258,6 +259,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
                 preview.BeginPreview(localRect, GUIStyle.none);
                 viewportCamera.ApplyToPreviewCamera(preview.camera, modeTransitionActive);
+                Vector3 previewCameraPosition = preview.camera.transform.position;
+                Quaternion previewCameraRotation = preview.camera.transform.rotation;
+                ApplyCameraShakePreview(preview.camera, boundContext);
                 preview.camera.cameraType = CameraType.SceneView;
                 preview.camera.backgroundColor = new Color(0.16f, 0.16f, 0.16f, 1f);
                 ApplyPreviewSkybox();
@@ -281,6 +285,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     MontageSceneViewNavigation.GridHalfSize,
                     MontageSceneViewNavigation.GridStep);
                 previewTexture = preview.EndPreview();
+                preview.camera.transform.SetPositionAndRotation(previewCameraPosition, previewCameraRotation);
             }
 
             if (previewTexture != null && Event.current.type == EventType.Repaint)
@@ -310,6 +315,60 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
 
             GUI.EndGroup();
+        }
+
+        private static void ApplyCameraShakePreview(Camera camera, MontageEditorContext context)
+        {
+            if (camera == null || context?.Montage == null)
+                return;
+
+            Vector3 positionOffset = Vector3.zero;
+            Quaternion rotationOffset = Quaternion.identity;
+            float montageTime = context.PlayheadTime;
+            IReadOnlyList<AnimNotifyPlacement> notifies = context.Montage.Notifies;
+            for (int i = 0; i < notifies.Count; i++)
+            {
+                AnimNotifyPlacement placement = notifies[i];
+                if (placement?.Notify is not CameraShakeAnimNotify impulse
+                    || montageTime < placement.Time
+                    || montageTime > placement.Time + impulse.Duration
+                    || (!context.IsPlaying && !impulse.TriggerOnManualPreview))
+                {
+                    continue;
+                }
+
+                positionOffset += MontageCameraShakeSampler.EvaluateImpulse(
+                    montageTime - placement.Time,
+                    new MontageCameraImpulseSettings(
+                        impulse.Strength,
+                        impulse.Duration,
+                        impulse.Direction,
+                        impulse.Shape));
+            }
+
+            IReadOnlyList<AnimNotifyStatePlacement> states = context.Montage.NotifyStates;
+            for (int i = 0; i < states.Count; i++)
+            {
+                AnimNotifyStatePlacement placement = states[i];
+                if (placement?.NotifyState is not CameraShakeAnimNotifyState shake
+                    || montageTime < placement.StartTime
+                    || montageTime > placement.EndTime
+                    || (!context.IsPlaying && !shake.TriggerOnManualPreview))
+                {
+                    continue;
+                }
+
+                MontageCameraShakeSampler.Evaluate(
+                    montageTime - placement.StartTime,
+                    new MontageCameraShakeSettings(shake.Amplitude, shake.Frequency),
+                    out Vector3 statePosition,
+                    out Quaternion stateRotation);
+                positionOffset += statePosition;
+                rotationOffset *= stateRotation;
+            }
+
+            camera.transform.position += camera.transform.rotation * positionOffset;
+            camera.transform.rotation *= rotationOffset;
         }
 
         private bool TryFrameModelOnKey(System.Action requestRepaint)
@@ -479,7 +538,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         {
             rootMotionSampler.Dispose();
             MontagePreviewSampling.Dispose();
-            previousPreviewTimelineElementEvaluation = MontageTimelineElementEvaluation.Default;
+            previousPreviewNotifyEvaluation = MontageNotifyEvaluation.Default;
             previewAnimationSampleTime = 0f;
             previewParticleSystems.Clear();
             previewVisualEffects.Clear();
@@ -974,33 +1033,44 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             || (boundContext?.Montage?.ApplyVerticalRootMotion ?? false)
             || (boundContext?.Montage?.ApplyRotationRootMotion ?? false);
 
-        private void ApplyRootMotionPreviewTransform(MontageEditorContext context, float sampleTime)
+        private bool ApplyRootMotionPreviewTransform(MontageEditorContext context, float sampleTime)
         {
             if (context?.Montage == null || previewInstance == null || !hasInitialPreviewTransform)
-                return;
+                return false;
 
             bool evaluated = rootMotionSampler.TryEvaluate(
                 previewInstance,
                 context.Montage,
                 sampleTime,
+                context.PlayheadTime,
                 initialPreviewPosition,
                 initialPreviewRotation,
                 out Vector3 rootPosition,
-                out Quaternion rootRotation);
+                out Quaternion rootRotation,
+                out bool includesTimelineTransform,
+                out bool sampledRootMotion);
 
-            if (!evaluated)
+            if (!sampledRootMotion)
             {
-                evaluated = MontageRootMotionPreviewUtility.TryEvaluate(
+                bool fallbackEvaluated = MontageRootMotionPreviewUtility.TryEvaluate(
                     context.Montage,
                     sampleTime,
-                    out rootPosition,
-                    out rootRotation);
+                    context.PlayheadTime,
+                    out Vector3 fallbackPosition,
+                    out Quaternion fallbackRotation,
+                    out bool fallbackIncludesTimelineTransform);
+                if (fallbackEvaluated)
+                {
+                    rootPosition = fallbackPosition;
+                    rootRotation = fallbackRotation;
+                    includesTimelineTransform = fallbackIncludesTimelineTransform;
+                    evaluated = true;
+                }
             }
 
             if (!evaluated)
-                return;
+                return false;
 
-            FilterRootMotionPreview(context.Montage, ref rootPosition, ref rootRotation);
             MontagePreviewSampling.TrySample(previewInstance, context, sampleTime);
 
             if (previewMotionRoot != null && previewMotionRoot != previewInstance.transform)
@@ -1013,71 +1083,61 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             previewInstance.transform.SetPositionAndRotation(
                 initialPreviewPosition + initialPreviewRotation * rootPosition,
                 initialPreviewRotation * rootRotation);
+            return includesTimelineTransform;
         }
 
-        private static void FilterRootMotionPreview(
-            AnimMontageSO montage,
-            ref Vector3 position,
-            ref Quaternion rotation)
-        {
-            if (montage == null || !montage.ApplyRootMotion)
-            {
-                position = Vector3.zero;
-                rotation = Quaternion.identity;
-                return;
-            }
 
-            if (!montage.ApplyHorizontalRootMotion)
-            {
-                position.x = 0f;
-                position.z = 0f;
-            }
-
-            if (!montage.ApplyVerticalRootMotion)
-                position.y = 0f;
-
-            if (!montage.ApplyRotationRootMotion)
-                rotation = Quaternion.identity;
-            else
-                rotation = MontageRootMotionUtility.ExtractYaw(rotation);
-        }
         private void RevertTimelineElementPreviewTransform()
         {
-            if (previewInstance == null || !HasTimelineElementTransform(previousPreviewTimelineElementEvaluation))
+            if (previewInstance == null || !HasNotifyTransform(previousPreviewNotifyEvaluation))
             {
-                previousPreviewTimelineElementEvaluation = MontageTimelineElementEvaluation.Default;
+                previousPreviewNotifyEvaluation = MontageNotifyEvaluation.Default;
                 return;
             }
 
             Quaternion baseRotation = previewInstance.transform.rotation *
-                                      Quaternion.Inverse(previousPreviewTimelineElementEvaluation.RotationOffset);
+                                      Quaternion.Inverse(previousPreviewNotifyEvaluation.RotationOffset);
             previewInstance.transform.position -=
-                baseRotation * previousPreviewTimelineElementEvaluation.PositionOffset;
+                baseRotation * previousPreviewNotifyEvaluation.PositionOffset;
             previewInstance.transform.rotation = baseRotation;
-            previewInstance.transform.localScale -= previousPreviewTimelineElementEvaluation.ScaleOffset;
-            previousPreviewTimelineElementEvaluation = MontageTimelineElementEvaluation.Default;
+            previewInstance.transform.localScale -= previousPreviewNotifyEvaluation.ScaleOffset;
+            previousPreviewNotifyEvaluation = MontageNotifyEvaluation.Default;
         }
 
-        private void ApplyTimelineElementPreviewTransform(MontageEditorContext context)
+        private void ApplyTimelineElementPreviewTransform(
+            MontageEditorContext context,
+            bool applyPositionAndRotation)
         {
             if (context?.Montage == null || previewInstance == null)
                 return;
 
-            MontageTimelineElementEvaluation evaluation =
-                MontageTimelineElementEvaluator.Evaluate(context.Montage, context.PlayheadTime);
-            if (!HasTimelineElementTransform(evaluation))
+            MontageNotifyEvaluation evaluation =
+                MontageNotifyEvaluator.Evaluate(context.Montage, context.PlayheadTime);
+            if (!HasNotifyTransform(evaluation))
             {
-                previousPreviewTimelineElementEvaluation = MontageTimelineElementEvaluation.Default;
+                previousPreviewNotifyEvaluation = MontageNotifyEvaluation.Default;
                 return;
             }
 
-            previewInstance.transform.position += previewInstance.transform.rotation * evaluation.PositionOffset;
-            previewInstance.transform.rotation *= evaluation.RotationOffset;
+            Vector3 appliedPositionOffset = applyPositionAndRotation
+                ? evaluation.PositionOffset
+                : Vector3.zero;
+            Quaternion appliedRotationOffset = applyPositionAndRotation
+                ? evaluation.RotationOffset
+                : Quaternion.identity;
+
+            previewInstance.transform.position += previewInstance.transform.rotation * appliedPositionOffset;
+            previewInstance.transform.rotation *= appliedRotationOffset;
             previewInstance.transform.localScale += evaluation.ScaleOffset;
-            previousPreviewTimelineElementEvaluation = evaluation;
+            previousPreviewNotifyEvaluation = new MontageNotifyEvaluation(
+                evaluation.SpeedMultiplier,
+                evaluation.TimeScaleMultiplier,
+                appliedPositionOffset,
+                appliedRotationOffset,
+                evaluation.ScaleOffset);
         }
 
-        private static bool HasTimelineElementTransform(MontageTimelineElementEvaluation evaluation) =>
+        private static bool HasNotifyTransform(MontageNotifyEvaluation evaluation) =>
             evaluation.PositionOffset.sqrMagnitude > 0.0000001f
             || Quaternion.Angle(Quaternion.identity, evaluation.RotationOffset) > 0.0001f
             || evaluation.ScaleOffset.sqrMagnitude > 0.0000001f;
@@ -1118,7 +1178,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             previewInstance = null;
             previewMotionRoot = null;
             previewAnimationSampleTime = 0f;
-            previousPreviewTimelineElementEvaluation = MontageTimelineElementEvaluation.Default;
+            previousPreviewNotifyEvaluation = MontageNotifyEvaluation.Default;
             previewParticleSystems.Clear();
             previewVisualEffects.Clear();
             particleCacheBuffer.Clear();
