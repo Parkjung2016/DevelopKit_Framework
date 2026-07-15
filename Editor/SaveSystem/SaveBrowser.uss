@@ -1,0 +1,151 @@
+.save-browser {
+    flex-grow: 1;
+    background-color: rgb(31, 31, 31);
+    color: rgb(210, 210, 210);
+}
+
+.save-header {
+    min-height: 44px;
+    padding: 8px 12px;
+    flex-direction: row;
+    align-items: center;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(61, 61, 61);
+}
+
+.save-title {
+    font-size: 15px;
+    -unity-font-style: bold;
+    flex-grow: 1;
+}
+
+.save-status {
+    color: rgb(155, 155, 155);
+    -unity-text-align: middle-right;
+}
+
+.save-config {
+    padding: 8px 10px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(61, 61, 61);
+}
+
+.save-config-row {
+    min-height: 28px;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.save-settings-field {
+    min-width: 240px;
+    flex-grow: 1;
+    margin-right: 6px;
+}
+
+.save-path-field {
+    min-width: 260px;
+    flex-grow: 1;
+    margin-right: 6px;
+}
+
+.save-extension-field {
+    width: 110px;
+    margin-right: 6px;
+}
+
+.save-button {
+    min-width: 72px;
+    height: 22px;
+    margin-left: 3px;
+    margin-right: 0;
+}
+
+.save-search-row {
+    min-height: 34px;
+    padding: 5px 10px;
+    flex-direction: row;
+    align-items: center;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(52, 52, 52);
+}
+
+.save-search {
+    min-width: 180px;
+    max-width: 360px;
+    flex-grow: 1;
+}
+
+.save-count {
+    margin-left: 10px;
+    color: rgb(150, 150, 150);
+}
+
+.save-list-header {
+    height: 25px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: rgb(40, 40, 40);
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(64, 64, 64);
+    -unity-font-style: bold;
+}
+
+.save-row {
+    height: 26px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.save-cell-status {
+    width: 72px;
+}
+
+.save-cell-slot {
+    min-width: 120px;
+    flex-grow: 1;
+}
+
+.save-cell-encryption {
+    width: 86px;
+}
+
+.save-cell-size {
+    width: 86px;
+    -unity-text-align: middle-right;
+}
+
+.save-cell-date {
+    width: 145px;
+    -unity-text-align: middle-right;
+}
+
+.save-valid {
+    color: rgb(104, 190, 126);
+}
+
+.save-invalid {
+    color: rgb(224, 101, 91);
+}
+
+.save-details {
+    min-height: 76px;
+    padding: 8px 12px;
+    border-top-width: 1px;
+    border-top-color: rgb(61, 61, 61);
+    background-color: rgb(36, 36, 36);
+}
+
+.save-details-title {
+    -unity-font-style: bold;
+    margin-bottom: 4px;
+}
+
+.save-details-line {
+    color: rgb(170, 170, 170);
+    white-space: normal;
+}

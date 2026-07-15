@@ -4,6 +4,6 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
     {
         byte[] Serialize<T>(T value);
 
-        bool TryDeserialize<T>(byte[] data, out T value);
+        T Deserialize<T>(byte[] data);
     }
 }

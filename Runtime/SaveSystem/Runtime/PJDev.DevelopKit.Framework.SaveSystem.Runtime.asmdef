@@ -1,9 +1,7 @@
 {
     "name": "PJDev.DevelopKit.Framework.SaveSystem.Runtime",
     "rootNamespace": "PJDev.DevelopKit.Framework.SaveSystem.Runtime",
-    "references": [
-        "GUID:406d82ec2f4cd104699d60414ec8fcdb"
-    ],
+    "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

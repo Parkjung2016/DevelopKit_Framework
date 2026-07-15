@@ -2,39 +2,51 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
 {
     public readonly struct SaveResult
     {
-        public bool Success => Reason == SaveFailReason.None;
-        public SaveFailReason Reason { get; }
-        public string SlotId { get; }
-
-        public SaveResult(SaveFailReason reason, string slotId = null)
+        private SaveResult(SaveError error, string slotId, string message)
         {
-            Reason = reason;
+            Error = error;
             SlotId = slotId;
+            Message = message;
         }
 
-        public static SaveResult Succeed(string slotId) => new(SaveFailReason.None, slotId);
+        public bool IsSuccess => Error == SaveError.None;
+        public SaveError Error { get; }
+        public string SlotId { get; }
+        public string Message { get; }
 
-        public static SaveResult Fail(SaveFailReason reason, string slotId = null) => new(reason, slotId);
+        public static SaveResult Success(string slotId) =>
+            new(SaveError.None, slotId, null);
+
+        public static SaveResult Failure(
+            SaveError error,
+            string slotId = null,
+            string message = null) =>
+            new(error, slotId, message);
     }
 
-    public readonly struct SaveLoadResult<T>
+    public readonly struct LoadResult<T>
     {
-        public bool Success => Reason == SaveFailReason.None;
-        public SaveFailReason Reason { get; }
-        public string SlotId { get; }
-        public T Value { get; }
-
-        public SaveLoadResult(SaveFailReason reason, string slotId = null, T value = default)
+        private LoadResult(SaveError error, string slotId, T value, string message)
         {
-            Reason = reason;
+            Error = error;
             SlotId = slotId;
             Value = value;
+            Message = message;
         }
 
-        public static SaveLoadResult<T> Succeed(string slotId, T value) =>
-            new(SaveFailReason.None, slotId, value);
+        public bool IsSuccess => Error == SaveError.None;
+        public SaveError Error { get; }
+        public string SlotId { get; }
+        public T Value { get; }
+        public string Message { get; }
 
-        public static SaveLoadResult<T> Fail(SaveFailReason reason, string slotId = null) =>
-            new(reason, slotId);
+        public static LoadResult<T> Success(string slotId, T value) =>
+            new(SaveError.None, slotId, value, null);
+
+        public static LoadResult<T> Failure(
+            SaveError error,
+            string slotId = null,
+            string message = null) =>
+            new(error, slotId, default, message);
     }
 }

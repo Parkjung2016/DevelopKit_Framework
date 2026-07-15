@@ -4,36 +4,33 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
 {
-    /// <summary>Unity <see cref="JsonUtility"/> 기반 직렬화. 대상 타입에 [Serializable]이 필요합니다.</summary>
+    /// <summary>Unity JsonUtility를 사용하는 기본 세이브 직렬화 구현입니다.</summary>
     public sealed class JsonSaveSerializer : ISaveSerializer
     {
         public static readonly JsonSaveSerializer Instance = new();
+
+        private JsonSaveSerializer()
+        {
+        }
 
         public byte[] Serialize<T>(T value)
         {
             if (value == null)
                 throw new ArgumentNullException(nameof(value));
 
-            string json = JsonUtility.ToJson(value, false);
-            return Encoding.UTF8.GetBytes(json);
+            return Encoding.UTF8.GetBytes(JsonUtility.ToJson(value, false));
         }
 
-        public bool TryDeserialize<T>(byte[] data, out T value)
+        public T Deserialize<T>(byte[] data)
         {
-            value = default;
             if (data == null || data.Length == 0)
-                return false;
+                throw new ArgumentException("Save data is empty.", nameof(data));
 
-            try
-            {
-                string json = Encoding.UTF8.GetString(data);
-                value = JsonUtility.FromJson<T>(json);
-                return true;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
+            T value = JsonUtility.FromJson<T>(Encoding.UTF8.GetString(data));
+            if (value == null)
+                throw new InvalidOperationException($"Could not deserialize {typeof(T).Name}.");
+
+            return value;
         }
     }
 }
