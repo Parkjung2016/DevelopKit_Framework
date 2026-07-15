@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -13,7 +13,14 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private readonly List<AnimNotifyPlacement> notifyBuffer = new();
         private readonly Dictionary<AnimNotifyPlacement, float> lastNotifyTimes = new();
 
-        public event Action<AnimNotify, AnimNotifyContext> NotifyFired;
+        public event Action<AnimNotify, AnimNotifyContext> OnNotify;
+
+        // 이전 API와의 호환을 위해 유지합니다.
+        public event Action<AnimNotify, AnimNotifyContext> NotifyFired
+        {
+            add => OnNotify += value;
+            remove => OnNotify -= value;
+        }
 
         public void Reset()
         {
@@ -74,7 +81,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                     continue;
 
                 notify.OnNotify(notifyContext);
-                NotifyFired?.Invoke(notify, notifyContext);
+                OnNotify?.Invoke(notify, notifyContext);
             }
 
             MontageEvaluator.CollectNotifyStateTransitions(

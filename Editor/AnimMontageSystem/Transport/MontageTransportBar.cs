@@ -29,6 +29,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private readonly ToolbarButton resetSegmentTrimButton;
         private readonly Label timeLabel;
         private readonly Func<bool> hasSelectedSegment;
+        private readonly Func<bool> canReplaceSelectedSegment;
         private readonly Func<bool> canSplitSelectedSegment;
 
         public MontageTransportBar(
@@ -39,10 +40,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Action onReplaceSegmentClip,
             Action onResetSegmentTrim,
             Func<bool> hasSelectedSegment,
+            Func<bool> canReplaceSelectedSegment,
             Func<bool> canSplitSelectedSegment)
         {
             this.context = context;
             this.hasSelectedSegment = hasSelectedSegment;
+            this.canReplaceSelectedSegment = canReplaceSelectedSegment;
             this.canSplitSelectedSegment = canSplitSelectedSegment;
             AddToClassList(AnimMontageEditorStyles.TransportBarClass);
             style.flexDirection = FlexDirection.Row;
@@ -202,7 +205,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             segmentGroup.style.display = display;
             bool locked = EditorApplication.isPlaying;
             splitSegmentButton.SetEnabled(!locked && hasSegment && canSplitSelectedSegment?.Invoke() == true);
-            replaceSegmentButton.SetEnabled(!locked && hasSegment);
+            replaceSegmentButton.SetEnabled(!locked && hasSegment && canReplaceSelectedSegment?.Invoke() == true);
             resetSegmentTrimButton.SetEnabled(!locked && hasSegment);
         }
 

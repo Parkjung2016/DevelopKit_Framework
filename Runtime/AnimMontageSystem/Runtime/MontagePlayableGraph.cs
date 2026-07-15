@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Animations;
@@ -6,9 +6,7 @@ using UnityEngine.Playables;
 
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
-    /// <summary>
-    /// AnimatorController와 몽타주 포즈를 하나의 PlayableGraph에서 섞습니다.
-    /// </summary>
+    /// <summary>Animator Controller와 Montage Clip을 하나의 Playable Graph에서 합성합니다.</summary>
     internal sealed class MontagePlayableGraph : IDisposable
     {
         private struct ControllerLayerState
@@ -74,7 +72,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             graph.Play();
         }
 
-        /// <returns>몽타주 Mixer를 새로 만들었으면 true입니다.</returns>
+        /// <returns>Montage Mixer를 다시 만들었으면 true를 반환합니다.</returns>
         public bool Sample(AnimMontageSO montage, float sampleTime, bool force)
         {
             if (!graph.IsValid() || montage == null)

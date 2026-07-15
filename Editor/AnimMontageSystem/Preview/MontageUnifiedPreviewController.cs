@@ -1,9 +1,8 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
-using UnityEngine.VFX;
 
 namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 {
@@ -48,11 +47,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private float lockedMotionRootLocalY;
         private float previewGroundPlaneY;
         private bool hasPreviewHeightLock;
-        private double lastEffectCacheTime;
-        private readonly List<ParticlePreviewEffect> previewParticleSystems = new();
-        private readonly List<VisualEffectPreviewEffect> previewVisualEffects = new();
-        private readonly List<ParticleSystem> particleCacheBuffer = new();
-        private readonly List<VisualEffect> visualEffectCacheBuffer = new();
+        private readonly MontagePreviewEffectSimulator previewEffects = new();
 
         public GameObject NotifyOwner => previewInstance;
 
@@ -75,7 +70,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             previewInstance.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             ConfigureShadowCasting(previewInstance);
             preview.AddSingleGO(previewInstance);
-            RefreshPreviewEffectCache(true);
+            previewEffects.Bind(previewInstance);
             MontagePreviewSampling.BindInstance(previewInstance);
             previewMotionRoot = previewInstance.GetComponentInChildren<Animator>()?.transform ??
                                 previewInstance.transform;
@@ -213,7 +208,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (IsPlayModePreviewBlocked())
             {
-                DrawEmptyState(rect, "Play Mode 중에는 Montage Preview를 사용할 수 없습니다.");
+                DrawEmptyState(rect, "플레이 모드에서는 Montage Preview를 사용할 수 없습니다.");
                 return;
             }
 
@@ -249,7 +244,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (evt.type == EventType.Repaint)
             {
                 Sample(boundContext);
-                SimulatePreviewEffects();
+                previewEffects.Simulate(previewInstance);
                 CacheBounds();
 
                 if (previewInstance != null)
@@ -391,123 +386,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return true;
         }
 
-        private void SimulatePreviewEffects()
-        {
-            if (previewInstance == null)
-                return;
-
-            RefreshPreviewEffectCache(false);
-            double now = EditorApplication.timeSinceStartup;
-            SimulateParticleSystems(now);
-            SimulateVisualEffects(now);
-        }
-
-        private void RefreshPreviewEffectCache(bool force)
-        {
-            if (previewInstance == null)
-                return;
-
-            double now = EditorApplication.timeSinceStartup;
-            if (!force && now - lastEffectCacheTime < 0.05)
-                return;
-
-            lastEffectCacheTime = now;
-            particleCacheBuffer.Clear();
-            visualEffectCacheBuffer.Clear();
-            previewInstance.GetComponentsInChildren(true, particleCacheBuffer);
-            previewInstance.GetComponentsInChildren(true, visualEffectCacheBuffer);
-
-            for (int i = previewParticleSystems.Count - 1; i >= 0; i--)
-            {
-                if (previewParticleSystems[i].ParticleSystem == null
-                    || !particleCacheBuffer.Contains(previewParticleSystems[i].ParticleSystem))
-                {
-                    previewParticleSystems.RemoveAt(i);
-                }
-            }
-
-            for (int i = previewVisualEffects.Count - 1; i >= 0; i--)
-            {
-                if (previewVisualEffects[i].VisualEffect == null
-                    || !visualEffectCacheBuffer.Contains(previewVisualEffects[i].VisualEffect))
-                {
-                    previewVisualEffects.RemoveAt(i);
-                }
-            }
-
-            for (int i = 0; i < particleCacheBuffer.Count; i++)
-            {
-                ParticleSystem particleSystem = particleCacheBuffer[i];
-                if (particleSystem != null && !ContainsParticleSystem(particleSystem))
-                    previewParticleSystems.Add(new ParticlePreviewEffect(particleSystem, now));
-            }
-
-            for (int i = 0; i < visualEffectCacheBuffer.Count; i++)
-            {
-                VisualEffect visualEffect = visualEffectCacheBuffer[i];
-                if (visualEffect != null && !ContainsVisualEffect(visualEffect))
-                    previewVisualEffects.Add(new VisualEffectPreviewEffect(visualEffect, now));
-            }
-        }
-
-        private bool ContainsParticleSystem(ParticleSystem particleSystem)
-        {
-            for (int i = 0; i < previewParticleSystems.Count; i++)
-            {
-                if (previewParticleSystems[i].ParticleSystem == particleSystem)
-                    return true;
-            }
-
-            return false;
-        }
-
-        private bool ContainsVisualEffect(VisualEffect visualEffect)
-        {
-            for (int i = 0; i < previewVisualEffects.Count; i++)
-            {
-                if (previewVisualEffects[i].VisualEffect == visualEffect)
-                    return true;
-            }
-
-            return false;
-        }
-
-        private void SimulateParticleSystems(double now)
-        {
-            for (int i = previewParticleSystems.Count - 1; i >= 0; i--)
-            {
-                ParticlePreviewEffect effect = previewParticleSystems[i];
-                if (effect.ParticleSystem == null)
-                {
-                    previewParticleSystems.RemoveAt(i);
-                    continue;
-                }
-
-                float deltaTime = Mathf.Clamp((float)(now - effect.LastUpdateTime), 0f, 0.05f);
-                effect.LastUpdateTime = now;
-                if (deltaTime > 0f)
-                    effect.ParticleSystem.Simulate(deltaTime, true, false, false);
-            }
-        }
-
-        private void SimulateVisualEffects(double now)
-        {
-            for (int i = previewVisualEffects.Count - 1; i >= 0; i--)
-            {
-                VisualEffectPreviewEffect effect = previewVisualEffects[i];
-                if (effect.VisualEffect == null)
-                {
-                    previewVisualEffects.RemoveAt(i);
-                    continue;
-                }
-
-                float deltaTime = Mathf.Clamp((float)(now - effect.LastUpdateTime), 0f, 0.05f);
-                effect.LastUpdateTime = now;
-                if (deltaTime > 0f)
-                    effect.VisualEffect.Simulate(deltaTime);
-            }
-        }
-
         public void HandlePlayModeStateChanged(PlayModeStateChange state)
         {
             if (state is PlayModeStateChange.ExitingEditMode
@@ -528,7 +406,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             SetPreviewModel(boundContext.PreviewModel);
             ResetRootMotionPreviewPose();
-            RefreshPreviewEffectCache(true);
             CacheBounds();
         }
         private static bool IsPlayModePreviewBlocked() =>
@@ -540,10 +417,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             MontagePreviewSampling.Dispose();
             previousPreviewNotifyEvaluation = MontageNotifyEvaluation.Default;
             previewAnimationSampleTime = 0f;
-            previewParticleSystems.Clear();
-            previewVisualEffects.Clear();
-            particleCacheBuffer.Clear();
-            visualEffectCacheBuffer.Clear();
+            previewEffects.Reset();
             hasBounds = false;
             hasPreviewHeightLock = false;
             hasInitialPreviewTransform = false;
@@ -1179,10 +1053,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             previewMotionRoot = null;
             previewAnimationSampleTime = 0f;
             previousPreviewNotifyEvaluation = MontageNotifyEvaluation.Default;
-            previewParticleSystems.Clear();
-            previewVisualEffects.Clear();
-            particleCacheBuffer.Clear();
-            visualEffectCacheBuffer.Clear();
+            previewEffects.Reset();
             hasBounds = false;
             hasPreviewHeightLock = false;
             hasInitialPreviewTransform = false;
@@ -1265,28 +1136,5 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             previewSkyboxMaterial = null;
         }
 
-        private sealed class ParticlePreviewEffect
-        {
-            public ParticlePreviewEffect(ParticleSystem particleSystem, double lastUpdateTime)
-            {
-                ParticleSystem = particleSystem;
-                LastUpdateTime = lastUpdateTime;
-            }
-
-            public ParticleSystem ParticleSystem { get; }
-            public double LastUpdateTime { get; set; }
-        }
-
-        private sealed class VisualEffectPreviewEffect
-        {
-            public VisualEffectPreviewEffect(VisualEffect visualEffect, double lastUpdateTime)
-            {
-                VisualEffect = visualEffect;
-                LastUpdateTime = lastUpdateTime;
-            }
-
-            public VisualEffect VisualEffect { get; }
-            public double LastUpdateTime { get; set; }
-        }
     }
 }

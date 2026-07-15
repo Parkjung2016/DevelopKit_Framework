@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -215,6 +215,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 () => timelineView?.ReplaceSelectedSegmentClip(),
                 () => timelineView?.ResetSelectedSegmentTrim(),
                 () => timelineView?.HasSelectedSegment() == true,
+                () => timelineView?.CanReplaceSelectedSegmentClip() == true,
                 () => timelineView?.CanSplitSelectedSegmentAtPlayhead() == true);
             RegisterPlaybackShortcutHandler(transportBar);
             RegisterPreviewFocusRelease(transportBar);

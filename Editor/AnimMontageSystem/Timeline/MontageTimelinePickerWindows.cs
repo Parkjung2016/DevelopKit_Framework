@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
+using UnityEditor.Search;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
@@ -10,7 +11,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
     {
         private const float RowHeight = 22f;
         private const double LoadBudgetSeconds = 0.006d;
-        private const int MinPathsPerUpdate = 4;
+        private const int MinItemsPerUpdate = 4;
 
         private readonly List<UnityEngine.Object> assets = new();
         private readonly List<UnityEngine.Object> filteredAssets = new();
@@ -28,9 +29,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private UnityEngine.Object selectedAsset;
         private UnityEngine.Object previewAsset;
         private Editor previewEditor;
-        private string[] pendingGuids = Array.Empty<string>();
-        private int pendingGuidIndex;
-        private bool assetSearchQueued;
+        private readonly Queue<SearchItem> pendingSearchItems = new();
+        private SearchContext searchContext;
+        private bool searchCompleted;
         private bool isLoading;
         private bool filteredAssetsDirty = true;
 
@@ -71,13 +72,35 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             assets.Clear();
             filteredAssets.Clear();
             seenAssets.Clear();
-            pendingGuids = Array.Empty<string>();
-            pendingGuidIndex = 0;
-            assetSearchQueued = true;
+            pendingSearchItems.Clear();
+            searchCompleted = false;
             isLoading = true;
             filteredAssetsDirty = true;
+
+            DisposeSearchContext();
+            SearchFlags flags = SearchFlags.Default | SearchFlags.FirstBatchAsync;
+            searchContext = SearchService.CreateContext("asset", $"t:{objectType.Name}", flags);
             EditorApplication.update -= LoadAssetBatch;
             EditorApplication.update += LoadAssetBatch;
+            SearchService.Request(searchContext, QueueSearchItems, CompleteSearch, flags);
+        }
+
+        private void QueueSearchItems(SearchContext _, IEnumerable<SearchItem> items)
+        {
+            if (items == null)
+                return;
+
+            foreach (SearchItem item in items)
+                pendingSearchItems.Enqueue(item);
+
+            Repaint();
+        }
+
+        private void CompleteSearch(SearchContext _)
+        {
+            searchCompleted = true;
+            TryFinishLoading();
+            Repaint();
         }
 
         private void LoadAssetBatch()
@@ -88,55 +111,43 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return;
             }
 
-            if (assetSearchQueued)
-            {
-                pendingGuids = AssetDatabase.FindAssets($"t:{objectType.Name}");
-                pendingGuidIndex = 0;
-                assetSearchQueued = false;
-            }
-
             double startTime = EditorApplication.timeSinceStartup;
-            int processedPathCount = 0;
-            while (pendingGuidIndex < pendingGuids.Length
-                   && (processedPathCount < MinPathsPerUpdate
+            int processedItemCount = 0;
+            while (pendingSearchItems.Count > 0
+                   && (processedItemCount < MinItemsPerUpdate
                        || EditorApplication.timeSinceStartup - startTime < LoadBudgetSeconds))
             {
-                LoadAssetsFromGuid(pendingGuids[pendingGuidIndex]);
-                pendingGuidIndex++;
-                processedPathCount++;
+                LoadSearchItem(pendingSearchItems.Dequeue());
+                processedItemCount++;
             }
 
-            if (pendingGuidIndex >= pendingGuids.Length)
-            {
-                EditorApplication.update -= LoadAssetBatch;
-                isLoading = false;
-                assets.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase));
-                filteredAssetsDirty = true;
-            }
-
+            TryFinishLoading();
             Repaint();
         }
 
-        private void LoadAssetsFromGuid(string guid)
+        private void LoadSearchItem(SearchItem item)
         {
-            string path = AssetDatabase.GUIDToAssetPath(guid);
-            if (string.IsNullOrEmpty(path))
+            UnityEngine.Object asset = item?.ToObject(objectType);
+            if (asset == null || !objectType.IsInstanceOfType(asset) || IsInternalPreviewAsset(asset))
+                return;
+            if (!seenAssets.Add(asset))
+                return;
+            if (assetFilter != null && !assetFilter(asset))
                 return;
 
-            UnityEngine.Object[] loadedAssets = AssetDatabase.LoadAllAssetsAtPath(path);
-            for (int i = 0; i < loadedAssets.Length; i++)
-            {
-                UnityEngine.Object asset = loadedAssets[i];
-                if (asset == null || !objectType.IsInstanceOfType(asset) || IsInternalPreviewAsset(asset))
-                    continue;
-                if (!seenAssets.Add(asset))
-                    continue;
-                if (assetFilter != null && !assetFilter(asset))
-                    continue;
+            assets.Add(asset);
+            filteredAssetsDirty = true;
+        }
 
-                assets.Add(asset);
-                filteredAssetsDirty = true;
-            }
+        private void TryFinishLoading()
+        {
+            if (!searchCompleted || pendingSearchItems.Count > 0 || !isLoading)
+                return;
+
+            EditorApplication.update -= LoadAssetBatch;
+            isLoading = false;
+            assets.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase));
+            filteredAssetsDirty = true;
         }
 
         private void OnGUI()
@@ -221,7 +232,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void DrawLoadingStatus()
         {
             string label = isLoading
-                ? $"Loading clips... {Mathf.Min(pendingGuidIndex, pendingGuids.Length)}/{pendingGuids.Length}"
+                ? $"Loading clips... {assets.Count}"
                 : $"{filteredAssets.Count}/{assets.Count} clips";
             EditorGUILayout.LabelField(label, EditorStyles.miniLabel);
         }
@@ -335,7 +346,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void OnDisable()
         {
             EditorApplication.update -= LoadAssetBatch;
+            DisposeSearchContext();
             DestroyPreviewEditor();
+        }
+
+        private void DisposeSearchContext()
+        {
+            searchContext?.Dispose();
+            searchContext = null;
+            pendingSearchItems.Clear();
         }
 
         private void DestroyPreviewEditor()

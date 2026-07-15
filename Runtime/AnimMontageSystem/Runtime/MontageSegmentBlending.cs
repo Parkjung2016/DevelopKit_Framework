@@ -74,6 +74,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (segments == null || segments.Count == 0)
                 return;
 
+            bool hasActiveEmptyState = HasActiveEmptyState(montageTime, segments);
             float totalWeight = 0f;
             for (int i = 0; i < segments.Count; i++)
             {
@@ -83,7 +84,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
                 float weight;
                 float playableClipTime;
-                if (TryGetActiveEmptyStateOnTrack(
+                if (hasActiveEmptyState
+                    && TryGetActiveEmptyStateOnTrack(
                         montageTime,
                         segment.TrackId,
                         segments,
@@ -99,9 +101,11 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 }
                 else
                 {
+                    MontageSegment previous = FindPreviousOnTrack(i, segments);
+                    MontageSegment next = FindNextOnTrack(i, segments);
                     weight = MontageBlendUtility.Evaluate(
-                        ComputeWeight(montageTime, segment, i, segments));
-                    playableClipTime = ComputePlayableClipTime(montageTime, segment, i, segments);
+                        ComputeWeight(montageTime, segment, previous, next));
+                    playableClipTime = ComputePlayableClipTime(montageTime, segment, previous);
                 }
 
                 if (weight <= 0.0001f)
@@ -116,11 +120,12 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 totalWeight += weight;
             }
 
-            totalWeight += AddActiveEmptyStateHoldSamples(montageTime, segments, results);
+            if (hasActiveEmptyState)
+                totalWeight += AddActiveEmptyStateHoldSamples(montageTime, segments, results);
             if (totalWeight <= 0.0001f)
             {
                 results.Clear();
-                if (!HasActiveEmptyState(montageTime, segments))
+                if (!hasActiveEmptyState)
                     TryAddGapPoseSample(montageTime, segments, results);
                 return;
             }
@@ -372,8 +377,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private static float ComputeWeight(
             float montageTime,
             MontageSegment segment,
-            int segmentIndex,
-            IReadOnlyList<MontageSegment> segments)
+            MontageSegment previous,
+            MontageSegment next)
         {
             float duration = segment.Duration;
             if (duration <= 0f)
@@ -381,9 +386,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
             float start = segment.StartTime;
             float end = segment.EndTime;
-            MontageSegment previous = FindPreviousOnTrack(segmentIndex, segments);
-            MontageSegment next = FindNextOnTrack(segmentIndex, segments);
-
             float crossfadeIn = previous != null && previous.Clip != null
                 ? GetCrossfadeDuration(previous, segment)
                 : 0f;
@@ -427,11 +429,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private static float ComputePlayableClipTime(
             float montageTime,
             MontageSegment segment,
-            int segmentIndex,
-            IReadOnlyList<MontageSegment> segments)
+            MontageSegment previous)
         {
             float start = segment.StartTime;
-            MontageSegment previous = FindPreviousOnTrack(segmentIndex, segments);
             float crossfadeIn = previous != null && previous.Clip != null
                 ? GetCrossfadeDuration(previous, segment)
                 : 0f;
