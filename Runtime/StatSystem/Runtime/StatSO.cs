@@ -1,36 +1,49 @@
-using System.Collections.Generic;
-using PJDev.DevelopKit.BasicTemplate.Runtime;
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
-    [CreateAssetMenu(fileName = "SO_Stat", menuName = "PJDev/SO/StatSystem/Stat")]
-    public class StatSO : ScriptableObject
+    [CreateAssetMenu(fileName = "SO_Stat", menuName = "PJDev/Stat System/Stat")]
+    public sealed class StatSO : ScriptableObject
     {
-        [field: SerializeField, Delayed] public string StatName { get; set; }
-        [field: SerializeField] public string DisplayName { get; set; }
-        [field: SerializeField] public float MinValue { get; set; }
-        [field: SerializeField] public float MaxValue { get; set; }
-        [field: SerializeField] public float BaseValue { get; set; }
+        [SerializeField, Delayed]
+        private string statName = null;
 
-        public StatDefinition ToDefinition() =>
-            new(StatName, DisplayName, MinValue, MaxValue, BaseValue);
+        [SerializeField]
+        private string displayName = null;
 
-        public Stat CreateRuntime() => Stat.CreateFrom(ToDefinition());
+        [SerializeField]
+        private float minValue = 0f;
+
+        [SerializeField]
+        private float maxValue = 100f;
+
+        [SerializeField]
+        private float baseValue = 0f;
+
+        [SerializeField]
+        private Sprite statIcon = null;
+
+        public string StatName => statName;
+        public string DisplayName => displayName;
+        public float MinValue => minValue;
+        public float MaxValue => maxValue;
+        public float BaseValue => baseValue;
+        public Sprite StatIcon => statIcon;
+
+        public StatDefinition CreateDefinition() =>
+            new(statName, displayName, minValue, maxValue, baseValue, statIcon);
+
+        public Stat CreateStat() => new(CreateDefinition());
 
 #if UNITY_EDITOR
         private void OnValidate()
         {
-            UnityEditor.EditorApplication.delayCall += RenameAsset;
-        }
+            statName = statName?.Trim();
 
-        private void RenameAsset()
-        {
-            if (this == null)
-                return;
+            if (maxValue < minValue)
+                maxValue = minValue;
 
-            string assetName = $"SO_{StatName}_Stat";
-            UnityEditor.AssetDatabase.RenameAsset(UnityEditor.AssetDatabase.GetAssetPath(this), assetName);
+            baseValue = Mathf.Clamp(baseValue, minValue, maxValue);
         }
 #endif
     }

@@ -1,30 +1,23 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.StatSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.StatSystem.Tests
 {
     internal static class StatTestFixtures
     {
-        public static StatCollection CreateCollection() => new();
-
         public static StatCollection CreateCollectionFromSharedDatabase() =>
             CreateCollection(StatTestDatabase.Shared);
 
-        public static StatCollection CreateCollection(IStatCatalog statDatabase, IReadOnlyList<StatOverrideEntry> overrides = null)
+        public static StatCollection CreateCollection(
+            IStatCatalog catalog,
+            IReadOnlyList<StatOverrideEntry> overrides = null)
         {
             var collection = new StatCollection();
-            collection.Init(statDatabase, overrides);
-            return collection;
-        }
-
-        public static StatCollection CreateCollection(IReadOnlyList<StatOverrideEntry> overrides)
-        {
-            var collection = new StatCollection();
-            collection.Init(overrides);
+            collection.Initialize(catalog, overrides);
             return collection;
         }
 
         public static Stat CreateHpStat(float baseValue = 50f) =>
-            Stat.CreateFrom(new StatDefinition(StatTestDatabase.HpStatName, "Health", 0f, 100f, baseValue));
+            new(new StatDefinition(StatTestDatabase.HpStatName, "Health", 0f, 100f, baseValue));
     }
 }

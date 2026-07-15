@@ -1,4 +1,4 @@
-using PJDev.DevelopKit.Framework.StatSystem.Runtime;
+﻿using PJDev.DevelopKit.Framework.StatSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.StatSystem.Tests
 {

@@ -1,37 +1,36 @@
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
-    public sealed class StatCollection
+    /// <summary>
+    /// 한 객체가 소유한 런타임 스탯을 관리합니다.
+    /// </summary>
+    public sealed class StatCollection : IReadOnlyCollection<Stat>
     {
-        private Dictionary<string, Stat> statDic = new();
+        private readonly Dictionary<string, Stat> stats = new(StringComparer.Ordinal);
 
-        public void Init(IStatDataProvider dataProvider, IReadOnlyList<StatOverrideEntry> overrides = null) =>
-            Init(dataProvider?.StatDatabase, overrides);
+        public int Count => stats.Count;
 
-        public void Init(IStatCatalog statDatabase, IReadOnlyList<StatOverrideEntry> overrides = null)
+        public void Initialize(IStatCatalog catalog, IReadOnlyList<StatOverrideEntry> overrides = null)
         {
-            statDic = new Dictionary<string, Stat>();
+            stats.Clear();
 
-            if (statDatabase != null)
+            if (catalog != null)
             {
-                foreach (string statName in statDatabase.StatNames)
-                {
-                    if (statDatabase.TryGetDefinition(statName, out StatDefinition definition))
-                        statDic[statName] = Stat.CreateFrom(definition);
-                }
+                IReadOnlyList<StatDefinition> definitions = catalog.Definitions;
+                for (int i = 0; i < definitions.Count; i++)
+                    AddOrReplace(definitions[i]);
             }
 
             ApplyOverrides(overrides);
         }
 
-        public void Init(IReadOnlyList<StatOverrideEntry> overrides)
+        public void Initialize(IReadOnlyList<StatOverrideEntry> overrides)
         {
-            statDic = overrides
-                .Where(entry => !string.IsNullOrEmpty(entry.StatName))
-                .Select(entry => entry.CreateStat())
-                .ToDictionary(stat => stat.StatName, stat => stat);
+            stats.Clear();
+            ApplyOverrides(overrides);
         }
 
         public void ApplyOverrides(IReadOnlyList<StatOverrideEntry> overrides)
@@ -39,62 +38,108 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             if (overrides == null)
                 return;
 
-            foreach (StatOverrideEntry entry in overrides)
+            for (int i = 0; i < overrides.Count; i++)
             {
-                if (string.IsNullOrEmpty(entry.StatName))
-                    continue;
-
-                statDic[entry.StatName] = entry.CreateStat();
+                StatOverrideEntry entry = overrides[i];
+                if (entry.IsValid)
+                    stats[entry.StatName] = entry.CreateStat();
             }
         }
 
-        public Stat GetStat(string statName) => statDic[statName];
+        public Stat GetStat(string statName)
+        {
+            if (TryGetStat(statName, out Stat stat))
+                return stat;
 
-        public Stat GetStat(in StatDefinition definition) => GetStat(definition.StatName);
+            throw new KeyNotFoundException($"Stat '{statName}' was not found.");
+        }
 
-        public bool HasStat(string statName) => statDic.ContainsKey(statName);
+        public bool TryGetStat(string statName, out Stat stat)
+        {
+            if (!string.IsNullOrEmpty(statName))
+                return stats.TryGetValue(statName, out stat);
 
-        public bool HasStat(in StatDefinition definition) => HasStat(definition.StatName);
+            stat = null;
+            return false;
+        }
 
-        public void SetBaseValue(string statName, float value) => GetStat(statName).BaseValue = value;
+        public bool HasStat(string statName) => TryGetStat(statName, out _);
 
         public float GetBaseValue(string statName) => GetStat(statName).BaseValue;
 
-        public void IncreaseBaseValuePercent(string statName, float percent) =>
-            GetStat(statName).IncreaseBaseValuePercent(percent);
+        public void SetBaseValue(string statName, float value) =>
+            GetStat(statName).BaseValue = value;
 
-        public float IncreaseBaseValue(string statName, float value) => GetStat(statName).BaseValue += value;
-
-        public float DecreaseBaseValue(string statName, float value) => GetStat(statName).BaseValue -= value;
-
-        public void AddValueModifier(string statName, object key, float value) =>
-            GetStat(statName).AddModifyValue(key, value);
-
-        public void RemoveValueModifier(string statName, object key) =>
-            GetStat(statName).RemoveModifyValue(key);
-
-        public void AddValuePercentModifier(string statName, object key, float value) =>
-            GetStat(statName).AddModifyValuePercent(key, value);
-
-        public void RemoveValuePercentModifier(string statName, object key) =>
-            GetStat(statName).RemoveModifyValuePercent(key);
-
-        public void ClearAllStatModifier()
+        public float AddBaseValue(string statName, float amount)
         {
-            foreach (Stat stat in statDic.Values)
-                stat.ClearModifier();
+            Stat stat = GetStat(statName);
+            stat.AddBaseValue(amount);
+            return stat.BaseValue;
         }
 
-        public void ClearAllStatValueModifier()
+        public void SetModifier(string statName, object key, in StatModifier modifier) =>
+            GetStat(statName).SetModifier(key, modifier);
+
+        public void SetFlatModifier(string statName, object key, float amount) =>
+            GetStat(statName).SetFlatModifier(key, amount);
+
+        public void SetPercentModifier(string statName, object key, float percent) =>
+            GetStat(statName).SetPercentModifier(key, percent);
+
+        public bool RemoveFlatModifier(string statName, object key) =>
+            GetStat(statName).RemoveFlatModifier(key);
+
+        public bool RemovePercentModifier(string statName, object key) =>
+            GetStat(statName).RemovePercentModifier(key);
+
+        public bool RemoveModifiers(string statName, object key) =>
+            GetStat(statName).RemoveModifiers(key);
+
+        public void ClearModifiers()
         {
-            foreach (Stat stat in statDic.Values)
-                stat.ClearModifyValue();
+            foreach (Stat stat in stats.Values)
+                stat.ClearModifiers();
         }
 
-        public void ClearAllStatValuePercentModifier()
+        public StatCollectionSnapshot CaptureSnapshot(StatCollectionSnapshot destination = null)
         {
-            foreach (Stat stat in statDic.Values)
-                stat.ClearModifyValuePercent();
+            destination ??= new StatCollectionSnapshot();
+            destination.Capture(this);
+            return destination;
+        }
+
+        public int RestoreSnapshot(StatCollectionSnapshot snapshot, bool ignoreMissingStats = true)
+        {
+            if (snapshot == null)
+                throw new ArgumentNullException(nameof(snapshot));
+
+            int restoredCount = 0;
+            IReadOnlyList<StatValueSnapshot> values = snapshot.Stats;
+            for (int i = 0; i < values.Count; i++)
+            {
+                StatValueSnapshot savedStat = values[i];
+                if (TryGetStat(savedStat.StatName, out Stat stat))
+                {
+                    stat.BaseValue = savedStat.BaseValue;
+                    restoredCount++;
+                    continue;
+                }
+
+                if (!ignoreMissingStats)
+                    throw new KeyNotFoundException($"Stat '{savedStat.StatName}' was not found.");
+            }
+
+            return restoredCount;
+        }
+
+        public IEnumerator<Stat> GetEnumerator() => stats.Values.GetEnumerator();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        private void AddOrReplace(in StatDefinition definition)
+        {
+            if (definition.IsValid)
+                stats[definition.StatName] = new Stat(definition);
         }
     }
 }

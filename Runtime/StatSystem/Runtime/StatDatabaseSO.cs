@@ -1,59 +1,66 @@
+﻿using System;
 using System.Collections.Generic;
-using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
-    [CreateAssetMenu(fileName = "SO_StatDatabase", menuName = "PJDev/SO/StatSystem/StatDatabase")]
-    public class StatDatabaseSO : ScriptableObject, IStatCatalog
+    [CreateAssetMenu(fileName = "SO_StatDatabase", menuName = "PJDev/Stat System/Stat Database")]
+    public sealed class StatDatabaseSO : ScriptableObject, IStatCatalog
     {
-        [field: SerializeField] public StatSO[] Stats { get; set; } = System.Array.Empty<StatSO>();
+        [SerializeField]
+        private StatSO[] stats = Array.Empty<StatSO>();
 
-        private readonly Dictionary<string, StatDefinition> definitionCache = new();
-        private readonly Dictionary<string, StatSO> statCache = new();
-        private readonly Dictionary<string, StatCatalogEntry> entryCache = new();
+        private readonly List<StatDefinition> definitions = new();
+        private readonly Dictionary<string, StatDefinition> definitionsByName = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, StatSO> assetsByName = new(StringComparer.Ordinal);
 
-        public IReadOnlyCollection<string> StatNames => statCache.Keys;
+        public StatSO[] Stats => stats;
+        public IReadOnlyList<StatDefinition> Definitions => definitions;
 
         private void OnEnable() => RebuildCache();
 
+#if UNITY_EDITOR
         private void OnValidate() => RebuildCache();
+#endif
 
         public void RebuildCache()
         {
-            definitionCache.Clear();
-            statCache.Clear();
-            entryCache.Clear();
+            definitions.Clear();
+            definitionsByName.Clear();
+            assetsByName.Clear();
 
-            if (Stats == null)
-                return;
-
-            for (int i = 0; i < Stats.Length; i++)
+            for (int i = 0; i < stats.Length; i++)
             {
-                StatSO stat = Stats[i];
-                if (stat == null || string.IsNullOrEmpty(stat.StatName))
+                StatSO statAsset = stats[i];
+                if (statAsset == null)
                     continue;
 
-                if (statCache.ContainsKey(stat.StatName))
-                {
-                    CDebug.LogWarning($"StatDatabaseSO : duplicate stat name {stat.StatName} in {name}.");
+                StatDefinition definition = statAsset.CreateDefinition();
+                if (!definition.IsValid || definitionsByName.ContainsKey(definition.StatName))
                     continue;
-                }
 
-                StatDefinition definition = stat.ToDefinition();
-                statCache.Add(stat.StatName, stat);
-                definitionCache.Add(stat.StatName, definition);
-                entryCache.Add(stat.StatName, StatCatalogEntry.FromDefinition(definition));
+                definitions.Add(definition);
+                definitionsByName.Add(definition.StatName, definition);
+                assetsByName.Add(definition.StatName, statAsset);
             }
         }
 
-        public bool TryGetDefinition(string statName, out StatDefinition definition) =>
-            definitionCache.TryGetValue(statName, out definition);
+        public bool TryGetDefinition(string statName, out StatDefinition definition)
+        {
+            if (!string.IsNullOrEmpty(statName))
+                return definitionsByName.TryGetValue(statName, out definition);
 
-        public bool TryGetEntry(string statName, out StatCatalogEntry entry) =>
-            entryCache.TryGetValue(statName, out entry);
+            definition = default;
+            return false;
+        }
 
-        public bool TryGetStat(string statName, out StatSO stat) =>
-            statCache.TryGetValue(statName, out stat);
+        public bool TryGetAsset(string statName, out StatSO statAsset)
+        {
+            if (!string.IsNullOrEmpty(statName))
+                return assetsByName.TryGetValue(statName, out statAsset);
+
+            statAsset = null;
+            return false;
+        }
     }
 }

@@ -1,143 +1,111 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using PJDev.DevelopKit.BasicTemplate.Runtime;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
     [AddComponentMenu("PJDev/Framework/Object Stat System")]
-    public class ObjectStatSystem : MonoBehaviour
+    public sealed class ObjectStatSystem : MonoBehaviour
     {
-        [SerializeField] private StatSetupSO statSetup;
-        [SerializeField] private StatOverrideListSO statOverrideListSO;
+        [Header("Data")]
+        [SerializeField] private StatDatabaseSO statDatabase = null;
+        [SerializeField] private StatOverrideListSO overrides = null;
+        [SerializeField] private bool initializeOnAwake = true;
 
-        private readonly StatCollection collection = new();
+        private readonly StatCollection stats = new();
+        private readonly List<StatOverrideEntry> overrideBuffer = new();
 
-        public void Init()
+        public StatCollection Stats => stats;
+        public bool IsInitialized { get; private set; }
+
+        private void Awake()
         {
-            if (statSetup != null)
-                Init(statSetup.CreateDataProvider(), statOverrideListSO);
-            else if (statOverrideListSO != null)
-                Init(statOverrideListSO);
-            else
-                CDebug.LogWarning("ObjectStatSystem : StatSetupSO or StatOverrideListSO is not assigned.");
+            if (initializeOnAwake)
+                Initialize();
         }
 
-        public void Init(StatSetupSO setup, StatOverrideListSO overrideList = null)
+        public void Initialize()
         {
-            if (setup == null)
-            {
-                CDebug.LogWarning("ObjectStatSystem : StatSetupSO is null.");
-                return;
-            }
+            IStatCatalog catalog = statDatabase != null ? statDatabase : StatCatalog.Current;
+            overrides?.CopyEntriesTo(overrideBuffer);
+            if (overrides == null)
+                overrideBuffer.Clear();
 
-            Init(setup.CreateDataProvider(), overrideList);
+            stats.Initialize(catalog, overrideBuffer);
+            IsInitialized = true;
         }
 
-        public void Init(IStatDataProvider dataProvider, StatOverrideListSO overrideList = null) =>
-            collection.Init(dataProvider ?? CreateDefaultProvider(), ToOverrideEntries(overrideList));
-
-        public void Init(IStatCatalog statDatabase, StatOverrideListSO overrideList = null) =>
-            collection.Init(ResolveCatalog(statDatabase), ToOverrideEntries(overrideList));
-
-        public void Init(StatOverrideListSO overrideList) =>
-            collection.Init(ToOverrideEntries(overrideList));
-
-        public void Init(IStatCatalog statDatabase, IReadOnlyList<StatOverrideEntry> overrides) =>
-            collection.Init(ResolveCatalog(statDatabase), overrides);
-
-        public void Init(IReadOnlyList<StatOverrideEntry> overrides) =>
-            collection.Init(overrides);
-
-        public Stat GetStat(string statName) => collection.GetStat(statName);
-
-        public Stat GetStat(StatSO stat)
+        public void Initialize(IStatCatalog catalog, IReadOnlyList<StatOverrideEntry> statOverrides = null)
         {
-            CDebug.Assert(stat != null, "Stats : GetStat - stat cannot be null");
-            return collection.GetStat(stat.StatName);
+            stats.Initialize(catalog, statOverrides);
+            IsInitialized = true;
         }
 
-        public Stat GetStat(in StatDefinition definition) => collection.GetStat(definition);
-
-        public bool HasStat(string statName) => collection.HasStat(statName);
-
-        public bool HasStat(StatSO stat)
+        public void Initialize(IReadOnlyList<StatOverrideEntry> statOverrides)
         {
-            CDebug.Assert(stat != null, "Stats : GetStat - stat cannot be null");
-            return collection.HasStat(stat.StatName);
+            stats.Initialize(statOverrides);
+            IsInitialized = true;
         }
 
-        public bool HasStat(in StatDefinition definition) => collection.HasStat(definition);
+        public Stat GetStat(string statName) => stats.GetStat(statName);
 
-        public void SetBaseValue(StatSO stat, float value) => collection.SetBaseValue(stat.StatName, value);
+        public Stat GetStat(StatSO stat) =>
+            stats.GetStat(GetStatName(stat));
 
-        public float GetBaseValue(string statName) => collection.GetBaseValue(statName);
+        public bool TryGetStat(string statName, out Stat stat) =>
+            stats.TryGetStat(statName, out stat);
 
-        public float GetBaseValue(StatSO stat) => collection.GetBaseValue(stat.StatName);
-
-        public void IncreaseBaseValuePercent(StatSO statSO, float percent) =>
-            collection.IncreaseBaseValuePercent(statSO.StatName, percent);
-
-        public float IncreaseBaseValue(string statName, float value) => collection.IncreaseBaseValue(statName, value);
-
-        public float IncreaseBaseValue(StatSO stat, float value) => collection.IncreaseBaseValue(stat.StatName, value);
-
-        public float DecreaseBaseValue(string statName, float value) => collection.DecreaseBaseValue(statName, value);
-
-        public float DecreaseBaseValue(StatSO stat, float value) => collection.DecreaseBaseValue(stat.StatName, value);
-
-        public void AddValueModifier(string statName, object key, float value) =>
-            collection.AddValueModifier(statName, key, value);
-
-        public void AddValueModifier(StatSO stat, object key, float value) =>
-            collection.AddValueModifier(stat.StatName, key, value);
-
-        public void RemoveValueModifier(string statName, object key) =>
-            collection.RemoveValueModifier(statName, key);
-
-        public void RemoveValueModifier(StatSO stat, object key) =>
-            collection.RemoveValueModifier(stat.StatName, key);
-
-        public void AddValuePercentModifier(string statName, object key, float value) =>
-            collection.AddValuePercentModifier(statName, key, value);
-
-        public void AddValuePercentModifier(StatSO stat, object key, float value) =>
-            collection.AddValuePercentModifier(stat.StatName, key, value);
-
-        public void RemoveValuePercentModifier(string statName, object key) =>
-            collection.RemoveValuePercentModifier(statName, key);
-
-        public void RemoveValuePercentModifier(StatSO stat, object key) =>
-            collection.RemoveValuePercentModifier(stat.StatName, key);
-
-        public void ClearAllStatModifier() => collection.ClearAllStatModifier();
-
-        public void ClearAllStatValueModifier() => collection.ClearAllStatValueModifier();
-
-        public void ClearAllStatValuePercentModifier() => collection.ClearAllStatValuePercentModifier();
-
-        public StatCollection Collection => collection;
-
-        private static IStatCatalog ResolveCatalog(IStatCatalog statDatabase) =>
-            statDatabase ?? (StatCatalog.IsReady ? StatCatalog.Current : null);
-
-        private static IStatDataProvider CreateDefaultProvider()
+        public bool TryGetStat(StatSO statAsset, out Stat stat)
         {
-            if (StatCatalog.IsReady)
-                return new StatDataProvider(StatCatalog.Current);
-
-            return null;
+            stat = null;
+            return statAsset != null && stats.TryGetStat(statAsset.StatName, out stat);
         }
 
-        private static IReadOnlyList<StatOverrideEntry> ToOverrideEntries(StatOverrideListSO overrideList)
-        {
-            if (overrideList?.statOverrides == null)
-                return null;
+        public bool HasStat(string statName) => stats.HasStat(statName);
 
-            return overrideList.statOverrides
-                .Where(entry => entry != null)
-                .Select(entry => entry.ToEntry())
-                .ToList();
+        public bool HasStat(StatSO stat) =>
+            stat != null && stats.HasStat(stat.StatName);
+
+        public float GetBaseValue(string statName) => stats.GetBaseValue(statName);
+
+        public void SetBaseValue(string statName, float value) =>
+            stats.SetBaseValue(statName, value);
+
+        public float AddBaseValue(string statName, float amount) =>
+            stats.AddBaseValue(statName, amount);
+
+        public void SetModifier(string statName, object key, in StatModifier modifier) =>
+            stats.SetModifier(statName, key, modifier);
+
+        public void SetFlatModifier(string statName, object key, float amount) =>
+            stats.SetFlatModifier(statName, key, amount);
+
+        public void SetPercentModifier(string statName, object key, float percent) =>
+            stats.SetPercentModifier(statName, key, percent);
+
+        public bool RemoveFlatModifier(string statName, object key) =>
+            stats.RemoveFlatModifier(statName, key);
+
+        public bool RemovePercentModifier(string statName, object key) =>
+            stats.RemovePercentModifier(statName, key);
+
+        public bool RemoveModifiers(string statName, object key) =>
+            stats.RemoveModifiers(statName, key);
+
+        public void ClearModifiers() => stats.ClearModifiers();
+
+        public StatCollectionSnapshot CaptureSnapshot(StatCollectionSnapshot destination = null) =>
+            stats.CaptureSnapshot(destination);
+
+        public int RestoreSnapshot(StatCollectionSnapshot snapshot, bool ignoreMissingStats = true) =>
+            stats.RestoreSnapshot(snapshot, ignoreMissingStats);
+
+        private static string GetStatName(StatSO stat)
+        {
+            if (stat == null)
+                throw new ArgumentNullException(nameof(stat));
+
+            return stat.StatName;
         }
     }
 }

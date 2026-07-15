@@ -1,24 +1,38 @@
+﻿using System;
 using System.Collections.Generic;
 
 namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
+    /// <summary>
+    /// 서버 데이터나 테스트 데이터처럼 런타임에 구성하는 스탯 카탈로그입니다.
+    /// </summary>
     public class InMemoryStatDatabase : IStatCatalog
     {
-        private readonly Dictionary<string, StatCatalogEntry> entries = new();
+        private readonly List<StatDefinition> definitions = new();
+        private readonly Dictionary<string, int> indices = new(StringComparer.Ordinal);
 
-        public IReadOnlyCollection<string> StatNames => entries.Keys;
+        public IReadOnlyList<StatDefinition> Definitions => definitions;
 
-        public void Clear() => entries.Clear();
-
-        public void Register(in StatDefinition definition) =>
-            Register(StatCatalogEntry.FromDefinition(definition));
-
-        public void Register(in StatCatalogEntry entry)
+        public void Clear()
         {
-            if (string.IsNullOrEmpty(entry.StatName))
-                return;
+            definitions.Clear();
+            indices.Clear();
+        }
 
-            entries[entry.StatName] = entry;
+        public bool Register(in StatDefinition definition)
+        {
+            if (!definition.IsValid)
+                return false;
+
+            if (indices.TryGetValue(definition.StatName, out int index))
+            {
+                definitions[index] = definition;
+                return false;
+            }
+
+            indices.Add(definition.StatName, definitions.Count);
+            definitions.Add(definition);
+            return true;
         }
 
         public void RegisterRange(IEnumerable<StatDefinition> source)
@@ -30,28 +44,16 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
                 Register(definition);
         }
 
-        public void RegisterRange(IEnumerable<StatCatalogEntry> source)
-        {
-            if (source == null)
-                return;
-
-            foreach (StatCatalogEntry entry in source)
-                Register(entry);
-        }
-
         public bool TryGetDefinition(string statName, out StatDefinition definition)
         {
-            if (entries.TryGetValue(statName, out StatCatalogEntry entry))
+            if (!string.IsNullOrEmpty(statName) && indices.TryGetValue(statName, out int index))
             {
-                definition = entry.Definition;
+                definition = definitions[index];
                 return true;
             }
 
             definition = default;
             return false;
         }
-
-        public bool TryGetEntry(string statName, out StatCatalogEntry entry) =>
-            entries.TryGetValue(statName, out entry);
     }
 }

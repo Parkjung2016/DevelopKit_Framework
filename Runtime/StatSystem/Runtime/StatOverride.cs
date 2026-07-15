@@ -1,32 +1,23 @@
-using System;
+﻿using System;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
     [Serializable]
-    public class StatOverride
+    public sealed class StatOverride
     {
-        [SerializeField] private StatSO stat;
-        [SerializeField] private bool isUseOverride;
-        [SerializeField] private float overrideValue;
+        [SerializeField] private StatSO stat = null;
+        [SerializeField] private bool isUseOverride = false;
+        [SerializeField] private float overrideValue = 0f;
 
-        public StatOverride(StatSO stat) => this.stat = stat;
+        public StatSO Stat => stat;
+        public bool OverrideBaseValue => isUseOverride;
+        public float BaseValue => overrideValue;
+        public bool IsValid => stat != null;
 
-        public Stat CreateStat()
-        {
-            if (stat == null)
-                return null;
-
-            Stat newStat = stat.CreateRuntime();
-            if (isUseOverride)
-                newStat.BaseValue = overrideValue;
-
-            return newStat;
-        }
-
-        public StatOverrideEntry ToEntry() =>
-            stat == null
-                ? default
-                : new StatOverrideEntry(stat.ToDefinition(), isUseOverride, overrideValue);
+        public StatOverrideEntry CreateEntry() =>
+            IsValid
+                ? new StatOverrideEntry(stat.CreateDefinition(), isUseOverride, overrideValue)
+                : default;
     }
 }

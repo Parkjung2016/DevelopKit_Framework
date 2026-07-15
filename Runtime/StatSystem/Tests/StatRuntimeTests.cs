@@ -1,3 +1,4 @@
+﻿using System;
 using NUnit.Framework;
 using PJDev.DevelopKit.Framework.StatSystem.Runtime;
 
@@ -12,15 +13,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Tests
         public void SetUp() => hp = StatTestFixtures.CreateHpStat();
 
         [Test]
-        public void Value_ReturnsClampedBaseValue()
-        {
-            Assert.AreEqual(50f, hp.Value);
-            Assert.IsFalse(hp.IsMax);
-            Assert.IsFalse(hp.IsMin);
-        }
-
-        [Test]
-        public void BaseValue_ClampsToMinMax()
+        public void BaseValue_IsClamped()
         {
             hp.BaseValue = 150f;
             Assert.AreEqual(100f, hp.BaseValue);
@@ -32,94 +25,99 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Tests
         }
 
         [Test]
-        public void AddModifyValue_UpdatesValueAndCanBeRemoved()
+        public void SetFlatModifier_ReplacesSameKey()
         {
-            hp.AddModifyValue("buff", 10f);
+            hp.SetFlatModifier("equipment", 5f);
+            hp.SetFlatModifier("equipment", 12f);
 
-            Assert.AreEqual(60f, hp.Value);
-            Assert.IsTrue(hp.HasModifier());
-            Assert.AreEqual(10f, hp.GetTotalModifyValue());
-
-            hp.RemoveModifyValue("buff");
-
-            Assert.AreEqual(50f, hp.Value);
-            Assert.IsFalse(hp.HasModifier());
+            Assert.AreEqual(62f, hp.Value);
+            Assert.AreEqual(12f, hp.FlatModifierTotal);
+            Assert.AreEqual(1, hp.ModifierCount);
         }
 
         [Test]
-        public void AddModifyValue_StacksByKey()
+        public void FlatAndPercentModifiers_AreCombinedAndClamped()
         {
-            hp.AddModifyValue("buff", 5f);
-            hp.AddModifyValue("buff", 3f);
-
-            Assert.AreEqual(58f, hp.Value);
-
-            hp.RemoveModifyValue("buff");
-            Assert.AreEqual(55f, hp.Value);
-
-            hp.RemoveModifyValue("buff");
-            Assert.AreEqual(50f, hp.Value);
-        }
-
-        [Test]
-        public void AddModifyValuePercent_AppliesAfterFlatModifier()
-        {
-            hp.AddModifyValue("flat", 10f);
-            hp.AddModifyValuePercent("percent", 50f);
+            hp.SetFlatModifier("flat", 10f);
+            hp.SetPercentModifier("percent", 50f);
 
             Assert.AreEqual(90f, hp.Value);
-            Assert.AreEqual(50f, hp.GetTotalModifyValuePercent());
+
+            hp.SetPercentModifier("percent", 200f);
+            Assert.AreEqual(100f, hp.Value);
         }
 
         [Test]
-        public void AddModifyValuePercent_IgnoresDuplicateKey()
+        public void SetModifier_StoresFlatAndPercentUnderOneSource()
         {
-            hp.AddModifyValuePercent("percent", 10f);
-            hp.AddModifyValuePercent("percent", 20f);
+            hp.SetModifier("equipment", new StatModifier(flat: 10f, percent: 20f));
 
-            Assert.AreEqual(55f, hp.Value);
+            Assert.AreEqual(72f, hp.Value);
+            Assert.AreEqual(1, hp.ModifierCount);
+            Assert.IsTrue(hp.TryGetModifier("equipment", out StatModifier modifier));
+            Assert.AreEqual(10f, modifier.Flat);
+            Assert.AreEqual(20f, modifier.Percent);
         }
 
         [Test]
-        public void ClearModifier_RemovesAllModifiers()
+        public void SettingEmptyModifier_RemovesSource()
         {
-            hp.AddModifyValue("flat", 5f);
-            hp.AddModifyValuePercent("percent", 10f);
+            hp.SetFlatModifier("equipment", 10f);
+            hp.SetModifier("equipment", default);
 
-            hp.ClearModifier();
-
+            Assert.AreEqual(0, hp.ModifierCount);
             Assert.AreEqual(50f, hp.Value);
-            Assert.IsFalse(hp.HasModifier());
+        }
+        [Test]
+        public void RemoveModifiers_RemovesBothTypesForKey()
+        {
+            hp.SetFlatModifier("buff", 10f);
+            hp.SetPercentModifier("buff", 20f);
+
+            Assert.IsTrue(hp.RemoveModifiers("buff"));
+            Assert.AreEqual(50f, hp.Value);
+            Assert.IsFalse(hp.HasModifiers);
         }
 
         [Test]
-        public void OnValueChanged_FiresWhenValueChanges()
+        public void ModifierKey_CannotBeNull()
         {
-            int invokeCount = 0;
+            Assert.Throws<ArgumentNullException>(() => hp.SetFlatModifier(null, 10f));
+            Assert.Throws<ArgumentNullException>(() => hp.RemovePercentModifier(null));
+        }
+
+        [Test]
+        public void OnValueChanged_FiresOnlyWhenFinalValueChanges()
+        {
+            int callCount = 0;
             float current = 0f;
             float previous = 0f;
-
-            hp.OnValueChanged += (stat, value, prev) =>
+            hp.OnValueChanged += (_, value, oldValue) =>
             {
-                invokeCount++;
+                callCount++;
                 current = value;
-                previous = prev;
+                previous = oldValue;
             };
 
-            hp.BaseValue = 60f;
+            hp.BaseValue = 50f;
+            hp.SetFlatModifier("buff", 10f);
+            hp.SetFlatModifier("buff", 10f);
 
-            Assert.AreEqual(1, invokeCount);
+            Assert.AreEqual(1, callCount);
             Assert.AreEqual(60f, current);
             Assert.AreEqual(50f, previous);
         }
 
         [Test]
-        public void IncreaseBaseValuePercent_UpdatesBaseValue()
+        public void ClearModifiers_RestoresBaseValue()
         {
-            hp.IncreaseBaseValuePercent(10f);
+            hp.SetFlatModifier("flat", 5f);
+            hp.SetPercentModifier("percent", 10f);
 
-            Assert.AreEqual(55f, hp.BaseValue);
-            Assert.AreEqual(55f, hp.Value);
+            hp.ClearModifiers();
+
+            Assert.AreEqual(50f, hp.Value);
+            Assert.AreEqual(0, hp.ModifierCount);
         }
     }
 }

@@ -1,25 +1,29 @@
-namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
+﻿namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
     public readonly struct StatOverrideEntry
     {
         public StatDefinition Definition { get; }
-        public bool UseOverride { get; }
-        public float OverrideValue { get; }
+        public bool OverrideBaseValue { get; }
+        public float BaseValue { get; }
 
         public string StatName => Definition.StatName;
+        public bool IsValid => Definition.IsValid;
 
-        public StatOverrideEntry(in StatDefinition definition, bool useOverride = false, float overrideValue = 0f)
+        public StatOverrideEntry(
+            in StatDefinition definition,
+            bool overrideBaseValue = false,
+            float baseValue = 0f)
         {
             Definition = definition;
-            UseOverride = useOverride;
-            OverrideValue = overrideValue;
+            OverrideBaseValue = overrideBaseValue;
+            BaseValue = baseValue;
         }
 
         public Stat CreateStat()
         {
-            Stat stat = Stat.CreateFrom(Definition);
-            if (UseOverride)
-                stat.BaseValue = OverrideValue;
+            Stat stat = new(Definition);
+            if (OverrideBaseValue)
+                stat.BaseValue = BaseValue;
 
             return stat;
         }

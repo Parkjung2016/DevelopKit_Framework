@@ -1,151 +1,167 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
-    public class Stat
+    /// <summary>
+    /// 기본값과 수정자를 조합해 최종값을 계산하는 런타임 스탯입니다.
+    /// </summary>
+    public sealed class Stat
     {
-        public delegate void ValueChangeHandler(Stat stat, float current, float prev);
+        private readonly Dictionary<object, StatModifier> modifiers = new();
 
-        public event ValueChangeHandler OnValueChanged;
+        private float baseValue;
+        private float flatModifierTotal;
+        private float percentModifierTotal;
+        private float value;
 
-        private readonly Dictionary<object, Stack<float>> modifyValueByKeys = new();
-        private readonly Dictionary<object, float> modifyValuePercentByKeys = new();
+        public event Action<Stat, float, float> OnValueChanged;
 
         public string StatName { get; }
         public string DisplayName { get; }
+        public Sprite StatIcon { get; }
         public float MinValue { get; }
         public float MaxValue { get; }
 
-        private float baseValue;
-        private float _modifiedValue;
-        private float _modifiedValuePercent;
-
-        public float Value
-        {
-            get
-            {
-                float value = Mathf.Clamp(baseValue + _modifiedValue, MinValue, MaxValue);
-                if (_modifiedValuePercent != 0)
-                    value *= 1 + _modifiedValuePercent * .01f;
-
-                return MathF.Round(value, 1);
-            }
-        }
-
-        public bool IsMax => Mathf.Approximately(Value, MaxValue);
-        public bool IsMin => Mathf.Approximately(Value, MinValue);
-
         public float BaseValue
         {
-            get
-            {
-                if (baseValue == 0)
-                    return 0;
-
-                return (float)Math.Round(baseValue, 1);
-            }
+            get => baseValue;
             set
             {
-                float prevValue = Value;
-                baseValue = Mathf.Clamp(value, MinValue, MaxValue);
-                TryInvokeValueChangeEvent(Value, prevValue);
+                float clamped = Mathf.Clamp(value, MinValue, MaxValue);
+                if (Mathf.Approximately(baseValue, clamped))
+                    return;
+
+                baseValue = clamped;
+                Recalculate();
             }
         }
+
+        public float Value => value;
+        public float FlatModifierTotal => flatModifierTotal;
+        public float PercentModifierTotal => percentModifierTotal;
+        public int ModifierCount => modifiers.Count;
+        public bool HasModifiers => modifiers.Count > 0;
+        public bool IsMax => Mathf.Approximately(value, MaxValue);
+        public bool IsMin => Mathf.Approximately(value, MinValue);
 
         public Stat(in StatDefinition definition)
         {
+            if (!definition.IsValid)
+                throw new ArgumentException("A stat name is required.", nameof(definition));
+
             StatName = definition.StatName;
             DisplayName = definition.DisplayName;
+            StatIcon = definition.StatIcon;
             MinValue = definition.MinValue;
             MaxValue = definition.MaxValue;
-            baseValue = definition.BaseValue;
+            baseValue = Mathf.Clamp(definition.BaseValue, MinValue, MaxValue);
+            value = baseValue;
         }
 
-        public static Stat CreateFrom(in StatDefinition definition) => new(definition);
+        public void AddBaseValue(float amount) => BaseValue += amount;
 
-        public bool HasModifier() => modifyValueByKeys.Count > 0 || modifyValuePercentByKeys.Count > 0;
+        public void AddBasePercent(float percent) => BaseValue *= 1f + percent * 0.01f;
 
-        public float GetTotalModifyValue() => MathF.Round(_modifiedValue, 1);
-
-        public float GetTotalModifyValuePercent() => MathF.Round(_modifiedValuePercent, 1);
-
-        public void IncreaseBaseValuePercent(float percent) => BaseValue *= 1 + percent * .01f;
-
-        public void AddModifyValue(object key, float value)
+        public void SetModifier(object key, in StatModifier modifier)
         {
-            float prevValue = Value;
-            _modifiedValue += value;
+            ValidateKey(key);
+            modifiers.TryGetValue(key, out StatModifier previous);
 
-            if (!modifyValueByKeys.TryGetValue(key, out Stack<float> stack))
-                modifyValueByKeys.Add(key, new Stack<float>(new[] { value }));
+            if (Mathf.Approximately(previous.Flat, modifier.Flat) &&
+                Mathf.Approximately(previous.Percent, modifier.Percent))
+                return;
+
+            if (modifier.IsEmpty)
+                modifiers.Remove(key);
             else
-                stack.Push(value);
+                modifiers[key] = modifier;
 
-            TryInvokeValueChangeEvent(Value, prevValue);
+            flatModifierTotal += modifier.Flat - previous.Flat;
+            percentModifierTotal += modifier.Percent - previous.Percent;
+            Recalculate();
         }
 
-        public void RemoveModifyValue(object key)
+        public void SetFlatModifier(object key, float amount)
         {
-            if (!modifyValueByKeys.TryGetValue(key, out Stack<float> stack) || stack.Count <= 0)
+            ValidateKey(key);
+            modifiers.TryGetValue(key, out StatModifier modifier);
+            SetModifier(key, modifier.WithFlat(amount));
+        }
+
+        public void SetPercentModifier(object key, float percent)
+        {
+            ValidateKey(key);
+            modifiers.TryGetValue(key, out StatModifier modifier);
+            SetModifier(key, modifier.WithPercent(percent));
+        }
+
+        public bool TryGetModifier(object key, out StatModifier modifier)
+        {
+            ValidateKey(key);
+            return modifiers.TryGetValue(key, out modifier);
+        }
+
+        public bool RemoveFlatModifier(object key)
+        {
+            ValidateKey(key);
+            if (!modifiers.TryGetValue(key, out StatModifier modifier) ||
+                Mathf.Approximately(modifier.Flat, 0f))
+                return false;
+
+            SetModifier(key, modifier.WithFlat(0f));
+            return true;
+        }
+
+        public bool RemovePercentModifier(object key)
+        {
+            ValidateKey(key);
+            if (!modifiers.TryGetValue(key, out StatModifier modifier) ||
+                Mathf.Approximately(modifier.Percent, 0f))
+                return false;
+
+            SetModifier(key, modifier.WithPercent(0f));
+            return true;
+        }
+
+        public bool RemoveModifiers(object key)
+        {
+            ValidateKey(key);
+            if (!modifiers.Remove(key, out StatModifier modifier))
+                return false;
+
+            flatModifierTotal -= modifier.Flat;
+            percentModifierTotal -= modifier.Percent;
+            Recalculate();
+            return true;
+        }
+
+        public void ClearModifiers()
+        {
+            if (modifiers.Count == 0)
                 return;
 
-            float prevValue = Value;
-            _modifiedValue -= stack.Pop();
-            if (stack.Count <= 0)
-                modifyValueByKeys.Remove(key);
-
-            TryInvokeValueChangeEvent(Value, prevValue);
+            modifiers.Clear();
+            flatModifierTotal = 0f;
+            percentModifierTotal = 0f;
+            Recalculate();
         }
 
-        public void AddModifyValuePercent(object key, float value)
+        private void Recalculate()
         {
-            if (modifyValuePercentByKeys.ContainsKey(key))
-                return;
+            float previous = value;
+            float multiplier = 1f + percentModifierTotal * 0.01f;
+            value = Mathf.Clamp((baseValue + flatModifierTotal) * multiplier, MinValue, MaxValue);
 
-            float prevValue = Value;
-            _modifiedValuePercent += value;
-            modifyValuePercentByKeys.Add(key, value);
-            TryInvokeValueChangeEvent(Value, prevValue);
+            if (!Mathf.Approximately(value, previous))
+                OnValueChanged?.Invoke(this, value, previous);
         }
 
-        public void RemoveModifyValuePercent(object key)
+        private static void ValidateKey(object key)
         {
-            if (!modifyValuePercentByKeys.Remove(key, out float value))
-                return;
-
-            float prevValue = Value;
-            _modifiedValuePercent -= value;
-            TryInvokeValueChangeEvent(Value, prevValue);
-        }
-
-        public void ClearModifier()
-        {
-            ClearModifyValue();
-            ClearModifyValuePercent();
-        }
-
-        public void ClearModifyValue()
-        {
-            float prevValue = Value;
-            modifyValueByKeys.Clear();
-            _modifiedValue = 0;
-            TryInvokeValueChangeEvent(Value, prevValue);
-        }
-
-        public void ClearModifyValuePercent()
-        {
-            float prevValue = Value;
-            modifyValuePercentByKeys.Clear();
-            _modifiedValuePercent = 0;
-            TryInvokeValueChangeEvent(Value, prevValue);
-        }
-
-        private void TryInvokeValueChangeEvent(float value, float prevValue)
-        {
-            if (!Mathf.Approximately(value, prevValue))
-                OnValueChanged?.Invoke(this, value, prevValue);
+            if (key == null)
+                throw new ArgumentNullException(nameof(key));
         }
     }
 }

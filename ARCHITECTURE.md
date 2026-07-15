@@ -44,7 +44,7 @@ ability.Init(this);
 |---------------------------|--------|
 | `ObjectInventorySystem` | `.Group` |
 | `ObjectEquipmentSystem` | `.Equipment` |
-| `ObjectStatSystem` | `.Collection` |
+| `ObjectStatSystem` | `.Stats` |
 | `ObjectAbilitySystem` | (AbilitySO 런타임 관리) |
 
 ## 네이밍

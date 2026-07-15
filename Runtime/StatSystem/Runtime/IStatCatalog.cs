@@ -1,10 +1,14 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 {
-    public interface IStatCatalog : IStatDatabase
+    /// <summary>
+    /// 스탯 정의를 이름으로 조회할 수 있는 데이터 원본입니다.
+    /// </summary>
+    public interface IStatCatalog
     {
-        IReadOnlyCollection<string> StatNames { get; }
-        bool TryGetEntry(string statName, out StatCatalogEntry entry);
+        IReadOnlyList<StatDefinition> Definitions { get; }
+
+        bool TryGetDefinition(string statName, out StatDefinition definition);
     }
 }
