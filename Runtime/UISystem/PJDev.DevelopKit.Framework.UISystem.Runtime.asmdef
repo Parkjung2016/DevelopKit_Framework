@@ -1,25 +1,34 @@
 {
-    "name": "PJDev.DevelopKit.Framework.UISystem.Runtime",
-    "rootNamespace": "PJDev.DevelopKit.Framework.UISystem.Runtime",
-    "references": [
-        "GUID:406d82ec2f4cd104699d60414ec8fcdb",
-        "GUID:75469ad4d38634e559750d17036d5f7c",
-        "GUID:f51ebe6a0ceec4240a699833d6309b23",
-        "GUID:d35d2ad768d62cd41b9d9989913d1b54"
-    ],
-    "includePlatforms": [],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
-    "autoReferenced": true,
-    "defineConstraints": [],
-    "versionDefines": [
-        {
-            "name": "com.cysharp.unitask",
-            "expression": "2.5.10",
-            "define": "UNITASK_INSTALLED"
-        }
-    ],
-    "noEngineReferences": false
+    "name":  "PJDev.DevelopKit.Framework.UISystem.Runtime",
+    "rootNamespace":  "PJDev.DevelopKit.Framework.UISystem.Runtime",
+    "references":  [
+                       "GUID:406d82ec2f4cd104699d60414ec8fcdb",
+                       "GUID:75469ad4d38634e559750d17036d5f7c",
+                       "GUID:f51ebe6a0ceec4240a699833d6309b23",
+                       "GUID:d35d2ad768d62cd41b9d9989913d1b54",
+                       "GUID:6f09b1a273c34b8ea6a1c42c7d5f9012"
+                   ],
+    "includePlatforms":  [
+
+                         ],
+    "excludePlatforms":  [
+
+                         ],
+    "allowUnsafeCode":  false,
+    "overrideReferences":  false,
+    "precompiledReferences":  [
+
+                              ],
+    "autoReferenced":  true,
+    "defineConstraints":  [
+
+                          ],
+    "versionDefines":  [
+                           {
+                               "name":  "com.cysharp.unitask",
+                               "expression":  "2.5.10",
+                               "define":  "UNITASK_INSTALLED"
+                           }
+                       ],
+    "noEngineReferences":  false
 }

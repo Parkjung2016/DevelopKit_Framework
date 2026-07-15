@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -51,7 +51,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             if (requiredTags == null || requiredTags.IsEmpty)
                 return true;
 
-            using (GameplayTagContainerPool.Get(out GameplayTagContainer combined))
+            using (GameplayTagPools.Rent(out GameplayTagContainer combined))
             {
                 combined.AddTags(staticContainer);
                 combined.AddTags(dynamicContainer);

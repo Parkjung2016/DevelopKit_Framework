@@ -1,3 +1,4 @@
+﻿using PJDev.DevelopKit.Framework.PoolSystem.Runtime;
 using UnityEngine;
 using UnityEngine.VFX;
 
@@ -16,8 +17,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         public void Begin(float delay, bool stopLoopingEffectsOnly)
         {
-            particleSystems = GetComponentsInChildren<ParticleSystem>(true);
-            visualEffects = GetComponentsInChildren<VisualEffect>(true);
+            particleSystems ??= GetComponentsInChildren<ParticleSystem>(true);
+            visualEffects ??= GetComponentsInChildren<VisualEffect>(true);
             this.stopLoopingEffectsOnly = stopLoopingEffectsOnly;
             shouldStopEffects = !stopLoopingEffectsOnly
                                 || AnimNotifyRuntimeUtility.HasLoopingEffects(particleSystems, visualEffects);
@@ -57,10 +58,14 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         private void CompleteDestroy()
         {
-            if (gameObject.activeSelf)
-                gameObject.SetActive(false);
+            enabled = false;
+            if (!PrefabPool.Release(gameObject))
+            {
+                if (gameObject.activeSelf)
+                    gameObject.SetActive(false);
 
-            Destroy(gameObject);
+                Destroy(gameObject);
+            }
         }
     }
 }

@@ -1,3 +1,4 @@
+﻿using PJDev.DevelopKit.Framework.PoolSystem.Runtime;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.VFX;
@@ -30,6 +31,23 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             return context.Animator != null ? context.Animator.gameObject : null;
         }
 
+        public static GameObject SpawnPrefab(
+            GameObject prefab,
+            Vector3 worldPosition,
+            Quaternion worldRotation,
+            Transform parent,
+            AnimNotifyContext context)
+        {
+            if (prefab == null)
+                return null;
+
+            GameObject instance = Application.isPlaying
+                ? PrefabPool.Spawn(prefab, worldPosition, worldRotation, parent)
+                : Object.Instantiate(prefab, worldPosition, worldRotation, parent);
+
+            MoveToOwnerScene(instance, context);
+            return instance;
+        }
         public static void MoveToOwnerScene(GameObject instance, AnimNotifyContext context)
         {
             if (instance == null)
@@ -108,10 +126,24 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 return;
             }
 
-            if (target is GameObject gameObject && HasEffects(gameObject))
+            if (target is GameObject gameObject)
             {
-                StopEffectsThenDestroy(gameObject, Mathf.Max(0f, delay));
-                return;
+                float safeDelay = Mathf.Max(0f, delay);
+                if (HasEffects(gameObject))
+                {
+                    StopEffectsThenDestroy(gameObject, safeDelay);
+                    return;
+                }
+
+                if (Application.isPlaying && PrefabPool.IsPooled(gameObject))
+                {
+                    if (safeDelay <= 0f)
+                        PrefabPool.Release(gameObject);
+                    else
+                        DestroyEffectObject(gameObject, safeDelay, stopLoopingEffectsOnly: false);
+
+                    return;
+                }
             }
 
             if (Application.isPlaying)

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
@@ -31,10 +31,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 ? ownerTransform.rotation * Quaternion.Euler(localEulerAngles)
                 : Quaternion.Euler(localEulerAngles);
 
-            GameObject instance = Object.Instantiate(prefab, worldPosition, worldRotation);
-            AnimNotifyRuntimeUtility.MoveToOwnerScene(instance, context);
-            if (parent != null)
-                instance.transform.SetParent(parent, true);
+            GameObject instance = AnimNotifyRuntimeUtility.SpawnPrefab(
+                prefab, worldPosition, worldRotation, parent, context);
             instance.transform.localScale = localScale;
             AnimNotifyRuntimeUtility.PlayEffects(instance);
 

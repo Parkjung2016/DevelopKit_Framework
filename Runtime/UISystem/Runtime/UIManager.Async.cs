@@ -1,10 +1,10 @@
-#if UNITASK_INSTALLED
+﻿#if UNITASK_INSTALLED
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.Pool;
+using PJDev.DevelopKit.Framework.PoolSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 {
@@ -221,7 +221,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             bool immediate = false,
             CancellationToken cancellationToken = default)
         {
-            List<IUIView> views = ListPool<IUIView>.Get();
+            List<IUIView> views = ListPool<IUIView>.Rent();
             try
             {
                 CollectByViewId(viewId, views);
@@ -233,7 +233,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             }
             finally
             {
-                ListPool<IUIView>.Release(views);
+                ListPool<IUIView>.Return(views);
             }
         }
 
@@ -254,7 +254,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 return count;
             }
 
-            List<IUIView> views = ListPool<IUIView>.Get();
+            List<IUIView> views = ListPool<IUIView>.Rent();
             try
             {
                 CollectVisibleByLayer(layerId, views);
@@ -266,7 +266,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             }
             finally
             {
-                ListPool<IUIView>.Release(views);
+                ListPool<IUIView>.Return(views);
             }
         }
 
@@ -276,7 +276,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             bool immediate = false,
             CancellationToken cancellationToken = default)
         {
-            List<string> layerIds = ListPool<string>.Get();
+            List<string> layerIds = ListPool<string>.Rent();
             try
             {
                 UILayerUtility.GetLayerIdsInGroup(groupId, layerRegistry, layerIds);
@@ -288,7 +288,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             }
             finally
             {
-                ListPool<string>.Release(layerIds);
+                ListPool<string>.Return(layerIds);
             }
         }
 
@@ -304,7 +304,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             bool immediate = false,
             CancellationToken cancellationToken = default) where T : UIViewBase
         {
-            List<IUIView> views = ListPool<IUIView>.Get();
+            List<IUIView> views = ListPool<IUIView>.Rent();
             try
             {
                 CollectVisibleOfType(typeof(T), views);
@@ -316,7 +316,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             }
             finally
             {
-                ListPool<IUIView>.Release(views);
+                ListPool<IUIView>.Return(views);
             }
         }
 

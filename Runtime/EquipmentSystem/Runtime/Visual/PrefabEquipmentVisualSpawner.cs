@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using PJDev.DevelopKit.Framework.PoolSystem.Runtime;
 using PJDev.DevelopKit.Framework.SocketSystem.Runtime;
 using UnityEngine;
 
@@ -23,10 +24,18 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
                 return;
             }
 
-            GameObject instance = UnityEngine.Object.Instantiate(prefab);
+            GameObject instance = PrefabPool.Spawn(prefab);
             OnSpawnCompleted?.Invoke(SocketItemUtility.FromGameObject(instance));
         }
 
-        public void Release(ISocketItem socketItem) => SocketItemUtility.ReleaseDestroy(socketItem);
+        public void Release(ISocketItem socketItem)
+        {
+            GameObject instance = socketItem?.SocketTransform != null
+                ? socketItem.SocketTransform.gameObject
+                : null;
+
+            if (instance == null || !PrefabPool.Release(instance))
+                SocketItemUtility.ReleaseDestroy(socketItem);
+        }
     }
 }

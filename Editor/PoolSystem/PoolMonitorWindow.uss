@@ -1,0 +1,64 @@
+.pool-monitor {
+    flex-grow: 1;
+    background-color: rgb(42, 42, 42);
+}
+
+.pool-toolbar {
+    min-height: 34px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(70, 70, 70);
+}
+
+.pool-status {
+    flex-grow: 1;
+    color: rgb(190, 190, 190);
+}
+
+.pool-button {
+    min-width: 96px;
+    height: 23px;
+}
+
+.pool-header,
+.pool-row {
+    min-height: 30px;
+    flex-direction: row;
+    align-items: center;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(58, 58, 58);
+}
+
+.pool-header {
+    background-color: rgb(48, 48, 48);
+    -unity-font-style: bold;
+}
+
+.pool-prefab-cell,
+.pool-header > #prefab {
+    flex-grow: 1;
+    min-width: 180px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 8px;
+}
+
+.pool-icon {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    margin-right: 7px;
+}
+
+.pool-name {
+    flex-grow: 1;
+}
+
+.number {
+    width: 72px;
+    min-width: 56px;
+    unity-text-align: middle-center;
+}

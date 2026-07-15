@@ -1,5 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
+using PJDev.DevelopKit.Framework.PoolSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 {
@@ -11,7 +12,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             out GameplayTag childTag, bool warnIfMultiple = true)
             where T : IReadOnlyGameplayTagContainer
         {
-            using (FastListPool<GameplayTag>.Get(out List<GameplayTag> childTags))
+            using (ListPool<GameplayTag>.Rent(out List<GameplayTag> childTags))
             {
                 container.GetChildTags(parentTag, childTags);
                 if (childTags.Count == 1)
@@ -147,7 +148,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             if (otherB.IsEmpty)
                 return HasAll(container, otherA);
 
-            using (GameplayTagContainerPool.Get(out GameplayTagContainer intersection))
+            using (GameplayTagPools.Rent(out GameplayTagContainer intersection))
             {
                 intersection.AddIntersection(otherA, otherB);
                 bool hasAll = HasAll(container, intersection);

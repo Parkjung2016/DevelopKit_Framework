@@ -1,14 +1,27 @@
 {
-    "name": "PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime",
-    "rootNamespace": "PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime",
-    "references": ["GUID:406d82ec2f4cd104699d60414ec8fcdb"],
-    "includePlatforms": [],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
-    "autoReferenced": true,
-    "defineConstraints": [],
-    "versionDefines": [],
-    "noEngineReferences": false
+    "name":  "PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime",
+    "rootNamespace":  "PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime",
+    "references":  [
+                       "GUID:406d82ec2f4cd104699d60414ec8fcdb",
+                       "GUID:6f09b1a273c34b8ea6a1c42c7d5f9012"
+                   ],
+    "includePlatforms":  [
+
+                         ],
+    "excludePlatforms":  [
+
+                         ],
+    "allowUnsafeCode":  false,
+    "overrideReferences":  false,
+    "precompiledReferences":  [
+
+                              ],
+    "autoReferenced":  true,
+    "defineConstraints":  [
+
+                          ],
+    "versionDefines":  [
+
+                       ],
+    "noEngineReferences":  false
 }

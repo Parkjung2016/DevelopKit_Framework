@@ -1,0 +1,25 @@
+{
+    "name": "PJDev.DevelopKit.Framework.PoolSystem.Tests",
+    "rootNamespace": "PJDev.DevelopKit.Framework.PoolSystem.Runtime.Tests",
+    "references": [
+        "GUID:6f09b1a273c34b8ea6a1c42c7d5f9012",
+        "GUID:27619889b8ba8c24980f49ee34dbb44a",
+        "GUID:0acc523941302664db1f4e527237feb3",
+        "GUID:e0cd26848372d4e5c891c569017e11f1"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

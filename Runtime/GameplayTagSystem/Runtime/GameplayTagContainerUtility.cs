@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 {
@@ -20,7 +20,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             if (containerB.IsEmpty)
                 return containerA.HasAll(other);
 
-            using (GameplayTagContainerPool.Get(out GameplayTagContainer intersection))
+            using (GameplayTagPools.Rent(out GameplayTagContainer intersection))
             {
                 intersection.AddIntersection(containerA, containerB);
                 bool hasAll = intersection.HasAll(other);
@@ -45,7 +45,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             if (containerB.IsEmpty)
                 return containerA.HasAllExact(other);
 
-            using (GameplayTagContainerPool.Get(out GameplayTagContainer intersection))
+            using (GameplayTagPools.Rent(out GameplayTagContainer intersection))
             {
                 intersection.AddIntersection(containerA, containerB);
                 bool hasAllExact = intersection.HasAllExact(other);

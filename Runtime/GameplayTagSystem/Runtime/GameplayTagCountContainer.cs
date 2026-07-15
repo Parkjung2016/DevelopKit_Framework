@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using PJDev.DevelopKit.Framework.PoolSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 {
@@ -180,7 +181,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         {
             tag.ValidateIsValid();
 
-            using (FastListPool<DeferredTagChangedDelegate>.Get(out List<DeferredTagChangedDelegate> delegates))
+            using (ListPool<DeferredTagChangedDelegate>.Rent(out List<DeferredTagChangedDelegate> delegates))
             {
                 AddTagInternal(tag, delegates);
 
@@ -191,7 +192,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
         public void AddTags<T>(in T other) where T : IReadOnlyGameplayTagContainer
         {
-            using (FastListPool<DeferredTagChangedDelegate>.Get(out List<DeferredTagChangedDelegate> delegates))
+            using (ListPool<DeferredTagChangedDelegate>.Rent(out List<DeferredTagChangedDelegate> delegates))
             {
                 foreach (GameplayTag gameplayTag in other.GetExplicitTags())
                     AddTagInternal(gameplayTag, delegates);
@@ -205,7 +206,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         {
             tag.ValidateIsValid();
 
-            using (FastListPool<DeferredTagChangedDelegate>.Get(out List<DeferredTagChangedDelegate> delegates))
+            using (ListPool<DeferredTagChangedDelegate>.Rent(out List<DeferredTagChangedDelegate> delegates))
             {
                 RemoveTagInternal(tag, delegates);
 
@@ -216,7 +217,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
         public void RemoveTags<T>(in T other) where T : IReadOnlyGameplayTagContainer
         {
-            using (FastListPool<DeferredTagChangedDelegate>.Get(out List<DeferredTagChangedDelegate> delegates))
+            using (ListPool<DeferredTagChangedDelegate>.Rent(out List<DeferredTagChangedDelegate> delegates))
             {
                 foreach (GameplayTag gameplayTag in other.GetExplicitTags())
                     RemoveTagInternal(gameplayTag, delegates);
@@ -228,7 +229,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
         public void Clear()
         {
-            using (FastListPool<DeferredTagChangedDelegate>.Get(out List<DeferredTagChangedDelegate> delegates))
+            using (ListPool<DeferredTagChangedDelegate>.Rent(out List<DeferredTagChangedDelegate> delegates))
             {
                 foreach (GameplayTag tag in GetTags())
                 {
@@ -249,7 +250,6 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                     deferred.Execute();
             }
         }
-
         public GameplayTagEnumerator GetEnumerator()
         {
             return new GameplayTagEnumerator(indices.Implicit);

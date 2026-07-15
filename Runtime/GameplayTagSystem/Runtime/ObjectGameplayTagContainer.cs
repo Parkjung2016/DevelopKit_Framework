@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 {
@@ -10,9 +10,9 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         public GameplayTagCountContainer GameplayTagContainer => gameplayTagContainer;
 
         [SerializeField]
-        private GameplayTagContainer persistentTags;
+        private GameplayTagContainer persistentTags = null;
 
-        private GameplayTagCountContainer gameplayTagContainer;
+        private GameplayTagCountContainer gameplayTagContainer = null;
 
         private void Awake()
         {
