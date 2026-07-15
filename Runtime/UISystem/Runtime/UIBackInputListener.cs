@@ -8,7 +8,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
     public sealed class UIBackInputListener : MonoBehaviour
     {
         [SerializeField]
-        private InputActionReference cancelAction;
+        private InputActionReference cancelAction = null;
 
         [SerializeField]
         private bool enabledInUpdateFallback = true;

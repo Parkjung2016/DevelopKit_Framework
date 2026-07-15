@@ -8,9 +8,10 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         public static bool TryHandleBack(
             UINavigationStack screenStack,
             IReadOnlyList<IUIView> floatingViews,
-            UILayerRegistry registry)
+            UILayerRegistry registry,
+            List<IUIView> candidates = null)
         {
-            if (TryHandleFloatingViews(floatingViews, registry))
+            if (TryHandleFloatingViews(floatingViews, registry, candidates))
                 return true;
 
             UIScreenBase topScreen = screenStack.Peek;
@@ -20,12 +21,16 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             return false;
         }
 
-        private static bool TryHandleFloatingViews(IReadOnlyList<IUIView> floatingViews, UILayerRegistry registry)
+        private static bool TryHandleFloatingViews(
+            IReadOnlyList<IUIView> floatingViews,
+            UILayerRegistry registry,
+            List<IUIView> candidates)
         {
             if (floatingViews == null || floatingViews.Count == 0)
                 return false;
 
-            List<IUIView> candidates = new();
+            candidates ??= new List<IUIView>();
+            candidates.Clear();
             for (int i = 0; i < floatingViews.Count; i++)
             {
                 IUIView view = floatingViews[i];

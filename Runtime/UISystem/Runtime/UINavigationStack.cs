@@ -78,14 +78,14 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             screens.Clear();
         }
 
-        internal List<UIScreenBase> Drain(bool immediate = false)
+        internal void DrainTo(List<UIScreenBase> buffer, bool immediate = false)
         {
+            buffer.Clear();
             for (int i = screens.Count - 1; i >= 0; i--)
                 UIViewLifecycle.Hide(screens[i], immediate);
 
-            var drained = new List<UIScreenBase>(screens);
+            buffer.AddRange(screens);
             screens.Clear();
-            return drained;
         }
 
         internal void CopyTo(List<UIScreenBase> buffer)

@@ -9,9 +9,9 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
     /// <summary>모든 런타임 UI 뷰의 기본 MonoBehaviour입니다.</summary>
     public abstract partial class UIViewBase : MonoBehaviour, IUIView
     {
-        [UILayerId] [SerializeField] private string layerId;
+        [UILayerId] [SerializeField] private string layerId = string.Empty;
 
-        [SerializeField] private int priority;
+        [SerializeField] private int priority = 0;
 
         [SerializeField] private UIViewBackBehavior backBehavior = UIViewBackBehavior.CloseOnBack;
 
@@ -22,6 +22,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         private int? runtimePriority;
         private string catalogViewId;
         private int duplicateDisplayIndex;
+        private int transitionVersion;
 
         /// <summary>뷰 ID입니다. 카탈로그 등록 시 viewId, 아니면 프리팹 루트 이름입니다.</summary>
         public virtual string ViewId => string.IsNullOrEmpty(catalogViewId) ? gameObject.name : catalogViewId;
@@ -71,11 +72,31 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 return;
             }
 
+            int version = ++transitionVersion;
             state = UIViewState.Showing;
             SetActiveHidden();
-            await OnOpen(context, cancellationToken);
-            SetVisible(true);
-            state = UIViewState.Shown;
+            try
+            {
+                await OnOpen(context, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (this == null || version != transitionVersion)
+                    return;
+
+                SetVisible(true);
+                state = UIViewState.Shown;
+            }
+            catch
+            {
+                if (this != null && version == transitionVersion)
+                {
+                    SetVisible(false, immediate: true);
+                    state = UIViewState.Hidden;
+                    currentContext = null;
+                    ClearOpenOverrides();
+                }
+
+                throw;
+            }
         }
 #else
         public void Show(object context = null)
@@ -98,20 +119,38 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 #if UNITASK_INSTALLED
         public async UniTask Hide(bool immediate = false, CancellationToken cancellationToken = default)
         {
-            if (!IsVisible && state != UIViewState.Hidden)
+            if (state is UIViewState.Hidden or UIViewState.Hiding)
                 return;
 
+            int version = ++transitionVersion;
             state = UIViewState.Hiding;
-            await OnClose(cancellationToken);
-            SetVisible(false, immediate);
-            state = UIViewState.Hidden;
-            currentContext = null;
-            ClearOpenOverrides();
+            try
+            {
+                await OnClose(cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (this == null || version != transitionVersion)
+                    return;
+
+                SetVisible(false, immediate);
+                state = UIViewState.Hidden;
+                currentContext = null;
+                ClearOpenOverrides();
+            }
+            catch
+            {
+                if (this != null && version == transitionVersion)
+                {
+                    SetVisible(true);
+                    state = UIViewState.Shown;
+                }
+
+                throw;
+            }
         }
 #else
         public void Hide(bool immediate = false)
         {
-            if (!IsVisible && state != UIViewState.Hidden)
+            if (state is UIViewState.Hidden or UIViewState.Hiding)
                 return;
 
             state = UIViewState.Hiding;

@@ -1,12 +1,18 @@
 #if UNITASK_INSTALLED
+using System;
+using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Pool;
 
 namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 {
     public sealed partial class UIManager
     {
+        private readonly Dictionary<string, UniTaskCompletionSource<UIViewBase>> pendingSingletonInstances =
+            new(StringComparer.Ordinal);
+        private readonly Dictionary<IUIView, UniTaskCompletionSource> pendingCloses = new();
         /// <summary>Addressable 로드 포함, Screen UI를 비동기로 엽니다.</summary>
         public async UniTask<UIViewResult<T>> OpenScreenAsync<T>(
             object context = null,
@@ -129,7 +135,9 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         }
 
         /// <summary>열려 있는 UI를 비동기로 닫습니다.</summary>
-        public async UniTask CloseAsync(IUIView view, bool immediate = false,
+        public async UniTask CloseAsync(
+            IUIView view,
+            bool immediate = false,
             CancellationToken cancellationToken = default)
         {
             if (!IsViewAlive(view))
@@ -138,19 +146,50 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 return;
             }
 
-            await view.Hide(immediate, cancellationToken);
-
-            if (view is UIScreenBase screen)
+            if (!pendingCloses.TryGetValue(view, out UniTaskCompletionSource completion))
             {
-                if (ReferenceEquals(screenStack.Peek, screen))
-                    screenStack.PopSilently();
-                else
-                    screenStack.Remove(screen, hide: false);
+                completion = new UniTaskCompletionSource();
+                pendingCloses.Add(view, completion);
+                CloseViewInternalAsync(view, immediate, completion).Forget();
             }
 
-            UntrackFloating(view);
-            TryReleaseInstance(view as UIViewBase);
-            RefreshSorting();
+            await completion.Task.AttachExternalCancellation(cancellationToken);
+        }
+
+        private async UniTaskVoid CloseViewInternalAsync(
+            IUIView view,
+            bool immediate,
+            UniTaskCompletionSource completion)
+        {
+            try
+            {
+                await view.Hide(immediate, CancellationToken.None);
+
+                if (view is UIScreenBase screen)
+                {
+                    if (ReferenceEquals(screenStack.Peek, screen))
+                        screenStack.PopSilently();
+                    else
+                        screenStack.Remove(screen, hide: false);
+                }
+
+                UntrackFloating(view);
+                TryReleaseInstance(view as UIViewBase);
+                RefreshSorting();
+                completion.TrySetResult();
+            }
+            catch (Exception exception)
+            {
+                completion.TrySetException(exception);
+            }
+            finally
+            {
+                if (pendingCloses.TryGetValue(view, out UniTaskCompletionSource current)
+                    && ReferenceEquals(current, completion))
+                {
+                    pendingCloses.Remove(view);
+                }
+            }
         }
 
         /// <summary>타입으로 열려 있는 팝업을 비동기로 닫습니다.</summary>
@@ -182,13 +221,20 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             bool immediate = false,
             CancellationToken cancellationToken = default)
         {
-            CollectByViewId(viewId, closeBuffer);
-            for (int i = closeBuffer.Count - 1; i >= 0; i--)
-                await CloseAsync(closeBuffer[i], immediate, cancellationToken);
+            List<IUIView> views = ListPool<IUIView>.Get();
+            try
+            {
+                CollectByViewId(viewId, views);
+                int count = views.Count;
+                for (int i = count - 1; i >= 0; i--)
+                    await CloseAsync(views[i], immediate, cancellationToken);
 
-            int closed = closeBuffer.Count;
-            closeBuffer.Clear();
-            return closed;
+                return count;
+            }
+            finally
+            {
+                ListPool<IUIView>.Release(views);
+            }
         }
 
         /// <summary>지정 레이어 ID의 열려 있는 UI를 비동기로 모두 닫습니다.</summary>
@@ -201,32 +247,27 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             if (layerRegistry.IsScreenLayer(layerId))
             {
-                int closed = screenStack.Count;
-                if (closed == 0)
-                    return 0;
-
+                int count = screenStack.Count;
                 while (screenStack.Peek != null)
-                {
-                    UIScreenBase top = screenStack.Peek;
+                    await CloseAsync(screenStack.Peek, immediate, cancellationToken);
 
-                    await top.Hide(immediate, cancellationToken);
-
-                    screenStack.PopSilently();
-                    UntrackFloating(top);
-                    TryReleaseInstance(top);
-                }
-
-                RefreshSorting();
-                return closed;
+                return count;
             }
 
-            CollectVisibleByLayer(layerId, closeBuffer);
-            for (int i = closeBuffer.Count - 1; i >= 0; i--)
-                await CloseAsync(closeBuffer[i], immediate, cancellationToken);
+            List<IUIView> views = ListPool<IUIView>.Get();
+            try
+            {
+                CollectVisibleByLayer(layerId, views);
+                int count = views.Count;
+                for (int i = count - 1; i >= 0; i--)
+                    await CloseAsync(views[i], immediate, cancellationToken);
 
-            int count = closeBuffer.Count;
-            closeBuffer.Clear();
-            return count;
+                return count;
+            }
+            finally
+            {
+                ListPool<IUIView>.Release(views);
+            }
         }
 
         /// <summary>지정 Canvas 묶음 ID의 열려 있는 UI를 비동기로 모두 닫습니다.</summary>
@@ -235,13 +276,20 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             bool immediate = false,
             CancellationToken cancellationToken = default)
         {
-            UILayerUtility.GetLayerIdsInGroup(groupId, layerRegistry, layerIdBuffer);
-            int closed = 0;
-            for (int i = 0; i < layerIdBuffer.Count; i++)
-                closed += await CloseLayerAsync(layerIdBuffer[i], immediate, cancellationToken);
+            List<string> layerIds = ListPool<string>.Get();
+            try
+            {
+                UILayerUtility.GetLayerIdsInGroup(groupId, layerRegistry, layerIds);
+                int closed = 0;
+                for (int i = 0; i < layerIds.Count; i++)
+                    closed += await CloseLayerAsync(layerIds[i], immediate, cancellationToken);
 
-            layerIdBuffer.Clear();
-            return closed;
+                return closed;
+            }
+            finally
+            {
+                ListPool<string>.Release(layerIds);
+            }
         }
 
         /// <summary>지정 Canvas 묶음의 열려 있는 UI를 비동기로 모두 닫습니다.</summary>
@@ -256,13 +304,20 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             bool immediate = false,
             CancellationToken cancellationToken = default) where T : UIViewBase
         {
-            CollectVisibleOfType(typeof(T), closeBuffer);
-            for (int i = closeBuffer.Count - 1; i >= 0; i--)
-                await CloseAsync(closeBuffer[i], immediate, cancellationToken);
+            List<IUIView> views = ListPool<IUIView>.Get();
+            try
+            {
+                CollectVisibleOfType(typeof(T), views);
+                int count = views.Count;
+                for (int i = count - 1; i >= 0; i--)
+                    await CloseAsync(views[i], immediate, cancellationToken);
 
-            int closed = closeBuffer.Count;
-            closeBuffer.Clear();
-            return closed;
+                return count;
+            }
+            finally
+            {
+                ListPool<IUIView>.Release(views);
+            }
         }
 
         private async UniTask<UIViewResult<T>> OpenPopupAsyncInternal<T>(
@@ -327,15 +382,78 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 return null;
 
             EnsureLayerRoots();
-
             if (layerRoots == null)
                 return null;
 
             string layerId = entry.Prefab != null ? entry.Prefab.LayerId : UILayers.Popup;
             RectTransform parent = layerRoots.GetRoot(layerId, layerRegistry);
             PurgeDeadReferences();
-            return await UIViewInstanceFactory.GetOrCreateAsync(
-                entry, parent, instancesById, duplicatePoolsByViewId, cancellationToken);
+
+            if (entry.AllowMultipleInstances)
+            {
+                return await UIViewInstanceFactory.GetOrCreateAsync(
+                    entry,
+                    parent,
+                    instancesById,
+                    duplicatePoolsByViewId,
+                    cancellationToken);
+            }
+
+            if (UIViewInstanceCache.TryGetAlive(instancesById, entry.ViewId, out UIViewBase cached))
+                return cached;
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!pendingSingletonInstances.TryGetValue(
+                    entry.ViewId,
+                    out UniTaskCompletionSource<UIViewBase> completion))
+            {
+                completion = new UniTaskCompletionSource<UIViewBase>();
+                pendingSingletonInstances.Add(entry.ViewId, completion);
+                CreateSingletonInstanceAsync(
+                    entry,
+                    parent,
+                    instanceGeneration,
+                    completion).Forget();
+            }
+
+            return await completion.Task.AttachExternalCancellation(cancellationToken);
+        }
+
+        private async UniTaskVoid CreateSingletonInstanceAsync(
+            UIViewCatalogEntry entry,
+            RectTransform parent,
+            int generation,
+            UniTaskCompletionSource<UIViewBase> completion)
+        {
+            try
+            {
+                UIViewBase instance = await UIViewInstanceFactory.GetOrCreateAsync(
+                    entry,
+                    parent,
+                    instancesById,
+                    duplicatePoolsByViewId,
+                    CancellationToken.None);
+
+                if (this == null || generation != instanceGeneration)
+                {
+                    DestroyInstance(instance);
+                    instance = null;
+                }
+
+                completion.TrySetResult(instance);
+            }
+            catch (Exception exception)
+            {
+                completion.TrySetException(exception);
+            }
+            finally
+            {
+                if (pendingSingletonInstances.TryGetValue(entry.ViewId, out var current)
+                    && ReferenceEquals(current, completion))
+                {
+                    pendingSingletonInstances.Remove(entry.ViewId);
+                }
+            }
         }
     }
 }

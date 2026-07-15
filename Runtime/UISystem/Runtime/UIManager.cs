@@ -13,12 +13,15 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         private UILayerRoots layerRoots;
         private GameObject uIRootObject;
         private bool layerRegistryReady;
+        private int instanceGeneration;
 
         private readonly UILayerRegistry layerRegistry = new();
         private readonly UINavigationStack screenStack = new();
         private readonly List<IUIView> floatingViews = new();
         private readonly List<IUIView> showOrder = new();
         private readonly List<IUIView> closeBuffer = new();
+        private readonly List<IUIView> visibleBuffer = new();
+        private readonly List<IUIView> backCandidateBuffer = new();
         private readonly List<string> layerIdBuffer = new();
         private readonly List<string> staleInstanceKeys = new();
         private readonly List<UIScreenBase> screenBuffer = new();
@@ -44,6 +47,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         /// <summary>카탈로그와 (선택) 레이어 설정으로 UI 시스템을 초기화합니다. 캔버스 루트는 자동으로 찾거나 생성합니다.</summary>
         public void Initialize(UIViewCatalog catalog, UILayerSettings settings = null)
         {
+            instanceGeneration++;
             viewCatalog = catalog;
             layerSettings = settings;
             layerRegistry.Initialize(settings ?? UILayerSettings.CreateBuiltIn());
@@ -91,6 +95,9 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         {
             UIScreenBase top = screenStack.Peek;
             if (top == null)
+                return false;
+
+            if (IsClosePending(top))
                 return false;
 
             screenStack.TryPop();
@@ -146,6 +153,9 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 PurgeDeadReferences();
                 return;
             }
+
+            if (IsClosePending(view))
+                return;
 
             if (view is UIScreenBase screen)
             {
@@ -257,7 +267,14 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         /// <summary>Back 입력을 처리합니다. 처리했으면 true를 반환합니다.</summary>
         public bool TryHandleBack()
         {
-            if (UIBackDispatcher.TryHandleBack(screenStack, floatingViews, layerRegistry))
+            bool handled = UIBackDispatcher.TryHandleBack(
+                screenStack,
+                floatingViews,
+                layerRegistry,
+                backCandidateBuffer);
+            backCandidateBuffer.Clear();
+
+            if (handled)
                 return true;
 
             BackUnhandled?.Invoke();
@@ -267,28 +284,70 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         /// <summary>열려 있는 UI를 숨깁니다. 풀링된 인스턴스는 유지됩니다.</summary>
         public void ClearAll(bool includeScreens = true)
         {
-            for (int i = floatingViews.Count - 1; i >= 0; i--)
-                UIViewLifecycle.Hide(floatingViews[i]);
-
-            floatingViews.Clear();
-            showOrder.Clear();
-
-            if (includeScreens)
-                screenStack.Clear();
-
-            RefreshCanvasRaycasters();
+            instanceGeneration++;
+            ClearVisibleViews(includeScreens, releaseInstances: true);
         }
 
-        /// <summary>열려 있는 UI를 숨기고, 풀링 설정과 관계없이 모든 인스턴스를 파괴합니다.</summary>
+        /// <summary>열려 있는 UI를 닫고 선택한 범위의 인스턴스를 모두 파괴합니다.</summary>
         public void DisposeAll(bool includeScreens = true)
         {
+            instanceGeneration++;
             CollectAllInstances(closeBuffer, includeScreens);
-            ClearAll(includeScreens);
+            ClearVisibleViews(includeScreens, releaseInstances: false);
             DestroyInstances(closeBuffer);
-            instancesById.Clear();
-            UIViewInstanceCache.ClearDuplicates(duplicatePoolsByViewId);
-            UIViewDuplicateInstanceNaming.ResetAll();
+
+            if (includeScreens)
+            {
+                instancesById.Clear();
+                UIViewInstanceCache.ClearDuplicates(duplicatePoolsByViewId);
+                UIViewDuplicateInstanceNaming.ResetAll();
+            }
+
             closeBuffer.Clear();
+        }
+
+        private void ClearVisibleViews(bool includeScreens, bool releaseInstances)
+        {
+            visibleBuffer.Clear();
+            for (int i = 0; i < floatingViews.Count; i++)
+            {
+                IUIView view = floatingViews[i];
+                if (view is not UIScreenBase && IsViewAlive(view))
+                    visibleBuffer.Add(view);
+            }
+
+            for (int i = visibleBuffer.Count - 1; i >= 0; i--)
+            {
+                IUIView view = visibleBuffer[i];
+                if (IsClosePending(view))
+                    continue;
+
+                UIViewLifecycle.Hide(view);
+                UntrackFloating(view);
+                if (releaseInstances)
+                    TryReleaseInstance(view as UIViewBase);
+            }
+
+            visibleBuffer.Clear();
+
+            if (includeScreens)
+            {
+                screenStack.DrainTo(screenBuffer);
+                for (int i = 0; i < screenBuffer.Count; i++)
+                {
+                    UIScreenBase screen = screenBuffer[i];
+                    if (IsClosePending(screen))
+                        continue;
+
+                    UntrackFloating(screen);
+                    if (releaseInstances)
+                        TryReleaseInstance(screen);
+                }
+
+                screenBuffer.Clear();
+            }
+
+            RefreshSorting();
         }
 
         private int CloseScreenLayer(bool immediate)
@@ -297,13 +356,17 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             if (count == 0)
                 return 0;
 
-            List<UIScreenBase> drained = screenStack.Drain(immediate);
-            for (int i = 0; i < drained.Count; i++)
+            screenStack.DrainTo(screenBuffer, immediate);
+            for (int i = 0; i < screenBuffer.Count; i++)
             {
-                UntrackFloating(drained[i]);
-                TryReleaseInstance(drained[i]);
+                if (IsClosePending(screenBuffer[i]))
+                    continue;
+
+                UntrackFloating(screenBuffer[i]);
+                TryReleaseInstance(screenBuffer[i]);
             }
 
+            screenBuffer.Clear();
             RefreshSorting();
             return count;
         }
@@ -408,6 +471,10 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             string layerId = entry.Prefab != null ? entry.Prefab.LayerId : UILayers.Popup;
             RectTransform parent = layerRoots.GetRoot(layerId, layerRegistry);
             PurgeDeadReferences();
+#if UNITASK_INSTALLED
+            if (!entry.AllowMultipleInstances && pendingSingletonInstances.ContainsKey(entry.ViewId))
+                return null;
+#endif
             return UIViewInstanceFactory.GetOrCreateFromPrefab(
                 entry, parent, instancesById, duplicatePoolsByViewId);
         }
@@ -438,21 +505,22 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         {
             PurgeDeadReferences();
 
-            List<IUIView> visible = new();
+            visibleBuffer.Clear();
             for (int i = 0; i < floatingViews.Count; i++)
             {
                 if (floatingViews[i].IsVisible)
-                    visible.Add(floatingViews[i]);
+                    visibleBuffer.Add(floatingViews[i]);
             }
 
-            UIViewSortUtility.SortByBackPriority(visible, showOrder, layerRegistry);
+            UIViewSortUtility.SortByBackPriority(visibleBuffer, showOrder, layerRegistry);
 
-            for (int i = 0; i < visible.Count; i++)
+            for (int i = 0; i < visibleBuffer.Count; i++)
             {
-                if (visible[i] is UIViewBase viewBase)
+                if (visibleBuffer[i] is UIViewBase viewBase)
                     viewBase.SetRuntimeSorting(i);
             }
 
+            visibleBuffer.Clear();
             RefreshCanvasRaycasters();
         }
 
@@ -555,7 +623,8 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             for (int i = 0; i < floatingViews.Count; i++)
             {
-                if (IsViewAlive(floatingViews[i]))
+                if (IsViewAlive(floatingViews[i])
+                    && (includeScreens || floatingViews[i] is not UIScreenBase))
                     buffer.Add(floatingViews[i]);
             }
 
@@ -572,7 +641,9 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             foreach (UIViewBase instance in instancesById.Values)
             {
-                if (IsViewAlive(instance) && !buffer.Contains(instance))
+                if (IsViewAlive(instance)
+                    && (includeScreens || instance is not UIScreenBase)
+                    && !buffer.Contains(instance))
                     buffer.Add(instance);
             }
 
@@ -582,22 +653,40 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 for (int i = 0; i < pool.Count; i++)
                 {
                     UIViewBase instance = pool[i];
-                    if (IsViewAlive(instance) && !buffer.Contains(instance))
+                    if (IsViewAlive(instance)
+                        && (includeScreens || instance is not UIScreenBase)
+                        && !buffer.Contains(instance))
                         buffer.Add(instance);
                 }
             }
+
+            screenBuffer.Clear();
         }
 
-        private static void DestroyInstances(List<IUIView> instances)
+        private void DestroyInstances(List<IUIView> instances)
         {
             for (int i = 0; i < instances.Count; i++)
             {
-                if (instances[i] is not UIViewBase viewBase || viewBase == null)
-                    continue;
-
-                ReleaseDuplicateDisplayIndex(viewBase);
-                UnityEngine.Object.Destroy(viewBase.gameObject);
+                if (instances[i] is UIViewBase viewBase)
+                    DestroyInstance(viewBase);
             }
+        }
+
+        private void DestroyInstance(UIViewBase view)
+        {
+            if (view == null)
+                return;
+
+            string viewId = view.ViewId;
+            if (instancesById.TryGetValue(viewId, out UIViewBase cached)
+                && ReferenceEquals(cached, view))
+            {
+                instancesById.Remove(viewId);
+            }
+
+            UIViewInstanceCache.RemoveDuplicate(duplicatePoolsByViewId, viewId, view);
+            ReleaseDuplicateDisplayIndex(view);
+            UnityEngine.Object.Destroy(view.gameObject);
         }
 
         private static void ReleaseDuplicateDisplayIndex(UIViewBase view)
@@ -638,6 +727,15 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
         private static bool IsViewAlive(IUIView view) =>
             view is UIViewBase viewBase && viewBase != null;
+
+        private bool IsClosePending(IUIView view)
+        {
+#if UNITASK_INSTALLED
+            return view != null && pendingCloses.ContainsKey(view);
+#else
+            return false;
+#endif
+        }
 
         private void RefreshCanvasRaycaster(UICanvasGroup group) =>
             RefreshCanvasRaycaster(UICanvasGroupUtility.EnumToId(group));

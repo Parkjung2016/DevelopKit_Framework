@@ -8,19 +8,19 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
     public sealed class UIViewCatalogEntry
     {
         [SerializeField]
-        private string viewId;
+        private string viewId = string.Empty;
 
         [SerializeField]
-        private UIViewBase prefab;
+        private UIViewBase prefab = null;
 
         [SerializeField]
-        private bool loadFromAddressable;
+        private bool loadFromAddressable = false;
 
         [SerializeField]
         private bool usePooling = true;
 
         [SerializeField]
-        private bool allowMultipleInstances;
+        private bool allowMultipleInstances = false;
 
         internal UIViewCatalogEntry()
         {
