@@ -1,6 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using NUnit.Framework;
-using PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime;
+using PJDev.DevelopKit.Framework.RandomSystem.Runtime;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 using UnityEngine;
 
@@ -116,7 +116,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             table.RollCount = 1;
 
             InventoryGroup group = InventoryTestFixtures.CreateGroup(container);
-            InventoryChangeResult result = LootRoller.TryGrantLoot(group, table.ToDefinition(), RandomSources.Deterministic(1));
+            InventoryChangeResult result = LootRoller.TryGrantLoot(group, table.ToDefinition(), RandomProvider.Create(1));
 
             Object.DestroyImmediate(table);
 
@@ -137,7 +137,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             table.RollCount = 2;
             table.AllowDuplicateRolls = false;
 
-            ItemStack[] loot = LootRoller.Roll(table.ToDefinition(), InventoryTestItemDatabase.Shared, RandomSources.Deterministic(1));
+            ItemStack[] loot = LootRoller.Roll(table.ToDefinition(), InventoryTestItemDatabase.Shared, RandomProvider.Create(1));
 
             Object.DestroyImmediate(table);
 

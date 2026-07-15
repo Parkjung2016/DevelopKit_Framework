@@ -1,11 +1,14 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime;
+using PJDev.DevelopKit.Framework.RandomSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
     public static class LootRoller
     {
+        private static readonly Func<LootEntry, double> GetEntryWeight =
+            static entry => entry.Weight;
+
         public static ItemStack[] Roll(
             in LootTableDefinition table,
             IItemDatabase database = null,
@@ -15,7 +18,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (table.Entries == null || table.Entries.Length == 0)
                 return Array.Empty<ItemStack>();
 
-            random ??= RandomSources.System();
+            random ??= RandomProvider.Shared;
             return table.AllowDuplicateRolls
                 ? RollWithReplacement(table, database, random)
                 : RollWithoutReplacement(table, database, random);
@@ -138,35 +141,12 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             if (entries == null || entries.Length == 0)
                 return false;
 
-            int candidateCount = candidateIndices?.Count ?? entries.Length;
-            double totalWeight = 0d;
-            for (int i = 0; i < candidateCount; i++)
-            {
-                int entryIndex = candidateIndices == null ? i : candidateIndices[i];
-                float weight = entries[entryIndex].Weight;
-                if (weight > 0f)
-                    totalWeight += weight;
-            }
-
-            if (totalWeight <= 0d)
-                return false;
-
-            double roll = random.NextDouble() * totalWeight;
-            double accumulatedWeight = 0d;
-            for (int i = 0; i < candidateCount; i++)
-            {
-                int entryIndex = candidateIndices == null ? i : candidateIndices[i];
-                float weight = entries[entryIndex].Weight;
-                if (weight <= 0f)
-                    continue;
-
-                pickedIndex = entryIndex;
-                accumulatedWeight += weight;
-                if (roll < accumulatedWeight)
-                    return true;
-            }
-
-            return pickedIndex >= 0;
+            return RandomPick.TryWeightedIndex(
+                entries,
+                candidateIndices,
+                GetEntryWeight,
+                random,
+                out pickedIndex);
         }
         private static int RollCount(LootEntry entry, ItemDefinition definition, IRandomSource random)
         {

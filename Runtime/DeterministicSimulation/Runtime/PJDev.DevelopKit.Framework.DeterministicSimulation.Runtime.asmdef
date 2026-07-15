@@ -1,7 +1,7 @@
-{
+﻿{
     "name": "PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime",
     "rootNamespace": "PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime",
-    "references": [],
+    "references": ["GUID:92f8e38b2d1f4c318315cc7592200601"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

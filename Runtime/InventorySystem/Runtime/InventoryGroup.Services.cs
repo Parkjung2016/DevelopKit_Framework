@@ -1,5 +1,5 @@
-using System.Collections.Generic;
-using PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime;
+﻿using System.Collections.Generic;
+using PJDev.DevelopKit.Framework.RandomSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {

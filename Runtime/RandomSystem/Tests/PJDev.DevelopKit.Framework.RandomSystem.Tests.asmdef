@@ -1,12 +1,10 @@
 {
-    "name": "PJDev.DevelopKit.Framework.DeterministicSimulation.Tests",
-    "rootNamespace": "PJDev.DevelopKit.Framework.DeterministicSimulation.Tests",
+    "name": "PJDev.DevelopKit.Framework.RandomSystem.Tests",
+    "rootNamespace": "PJDev.DevelopKit.Framework.RandomSystem.Runtime.Tests",
     "references": [
-        "GUID:c8d9e0f1a2b3478990ab12cd34ef0002",
         "GUID:92f8e38b2d1f4c318315cc7592200601",
         "GUID:27619889b8ba8c24980f49ee34dbb44a",
-        "GUID:0acc523941302664db1f4e527237feb3",
-        "GUID:e0cd26848372d4e5c891c569017e11f1"
+        "GUID:0acc523941302664db1f4e527237feb3"
     ],
     "includePlatforms": [
         "Editor"
@@ -22,5 +20,5 @@
         "UNITY_INCLUDE_TESTS"
     ],
     "versionDefines": [],
-    "noEngineReferences": false
+    "noEngineReferences": true
 }

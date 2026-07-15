@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime
 {
@@ -28,11 +28,20 @@ namespace PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime
 
         public int NextInt(int minInclusive, int maxExclusive)
         {
-            if (maxExclusive <= minInclusive)
+            long span = (long)maxExclusive - minInclusive;
+            if (span <= 0L)
                 throw new ArgumentOutOfRangeException(nameof(maxExclusive));
 
-            uint range = (uint)(maxExclusive - minInclusive);
-            return minInclusive + (int)(NextUInt() % range);
+            uint range = (uint)span;
+            uint threshold = unchecked(0U - range) % range;
+            uint value;
+            do
+            {
+                value = NextUInt();
+            }
+            while (value < threshold);
+
+            return (int)(minInclusive + (long)(value % range));
         }
 
         public Fixed64 NextFixed01()

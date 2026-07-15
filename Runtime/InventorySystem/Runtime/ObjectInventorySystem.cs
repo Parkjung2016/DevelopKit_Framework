@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
 using PJDev.DevelopKit.Framework.Shared.Runtime;
@@ -22,7 +22,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
 
         [SerializeField] private InventorySetupSO setup;
-        [SerializeField] private InventoryDatabaseSetupSO databaseSetup;
+        [SerializeField] private InventoryDatabaseSetupSO databaseSetup = null;
 
         private InventoryGroup group;
         private InventoryContainer primaryContainer;

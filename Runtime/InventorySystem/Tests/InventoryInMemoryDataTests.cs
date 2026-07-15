@@ -1,6 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using NUnit.Framework;
-using PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime;
+using PJDev.DevelopKit.Framework.RandomSystem.Runtime;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
@@ -81,7 +81,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         [Test]
         public void TryGrantLoot_ByTableId_UsesInMemoryDatabase()
         {
-            InventoryChangeResult result = group.TryGrantLoot("basic_loot", RandomSources.Deterministic(1));
+            InventoryChangeResult result = group.TryGrantLoot("basic_loot", RandomProvider.Create(1));
 
             Assert.IsTrue(result.Success);
             Assert.AreEqual(2, group.GetItemCount(InventoryTestItemDatabase.GeneralItemId));
