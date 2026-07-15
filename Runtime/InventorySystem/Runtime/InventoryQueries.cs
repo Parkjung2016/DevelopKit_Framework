@@ -1,10 +1,10 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
     public static class InventoryQueries
     {
-        public static float GetTotalWeight(IInventoryContainer container, IItemDatabase database)
+        public static float GetTotalWeight(IReadOnlyInventoryContainer container, IItemDatabase database)
         {
             if (container is InventoryContainer concrete)
                 return concrete.GetTotalWeight();
@@ -27,7 +27,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             return total;
         }
 
-        public static int CountByType(IInventoryContainer container, IItemDatabase database, ItemType itemType)
+        public static int CountByType(IReadOnlyInventoryContainer container, IItemDatabase database, ItemType itemType)
         {
             if (container == null || database == null)
                 return 0;
@@ -48,10 +48,10 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             return total;
         }
 
-        public static int CountOccupiedSlots(IInventoryContainer container) =>
+        public static int CountOccupiedSlots(IReadOnlyInventoryContainer container) =>
             container?.GetOccupiedSlotCount() ?? 0;
 
-        public static void CollectItemIds(IInventoryContainer container, HashSet<int> itemIds)
+        public static void CollectItemIds(IReadOnlyInventoryContainer container, HashSet<int> itemIds)
         {
             itemIds.Clear();
             if (container == null)
@@ -66,7 +66,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             }
         }
 
-        public static bool HasAnyByType(IInventoryContainer container, IItemDatabase database, ItemType itemType) =>
+        public static bool HasAnyByType(IReadOnlyInventoryContainer container, IItemDatabase database, ItemType itemType) =>
             CountByType(container, database, itemType) > 0;
     }
 }

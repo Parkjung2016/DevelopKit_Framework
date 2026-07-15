@@ -276,8 +276,48 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             Assert.IsFalse(result.Success);
             Assert.AreEqual(50, group.GetItemCount(InventoryTestItemDatabase.GeneralItemId));
         }
-    }
+        [Test]
+        public void CanCraft_MultipleRewardsDoNotReuseTheSameFreeSlot()
+        {
+            InventoryContainer small = InventoryTestFixtures.CreateMainContainer(1, "small");
+            InventoryGroup localGroup = InventoryTestFixtures.CreateGroup(small);
+            try
+            {
+                small.TryAddItem(InventoryTestItemDatabase.GeneralItemId, 1);
 
+                bool canCraft = localGroup.CanCraft(
+                    new[] { new InventoryRecipeEntry(InventoryTestItemDatabase.GeneralItemId, 1) },
+                    new[]
+                    {
+                        new InventoryRecipeEntry(InventoryTestItemDatabase.GeneralItemId, 1),
+                        new InventoryRecipeEntry(InventoryTestItemDatabase.EquipmentItemId, 1)
+                    },
+                    out InventoryFailReason reason);
+
+                Assert.IsFalse(canCraft);
+                Assert.AreEqual(InventoryFailReason.NoSpace, reason);
+                Assert.AreEqual(1, localGroup.GetItemCount(InventoryTestItemDatabase.GeneralItemId));
+            }
+            finally
+            {
+                localGroup.Dispose();
+            }
+        }
+
+        [Test]
+        public void TryCraft_WithoutRewards_ReturnsSuccessAndConsumesCosts()
+        {
+            main.TryAddItem(InventoryTestItemDatabase.GeneralItemId, 2);
+
+            InventoryChangeResult result = group.TryCraft(
+                new[] { new InventoryRecipeEntry(InventoryTestItemDatabase.GeneralItemId, 1) },
+                rewards: null);
+
+            Assert.IsTrue(result.Success);
+            Assert.AreEqual(InventoryChangeType.Craft, result.ChangeType);
+            Assert.AreEqual(1, group.GetItemCount(InventoryTestItemDatabase.GeneralItemId));
+        }
+    }
     [TestFixture]
     public sealed class InventoryGroupTransactionTests
     {

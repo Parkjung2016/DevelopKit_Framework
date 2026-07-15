@@ -73,6 +73,26 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         }
 
         [Test]
+        public void TryRemoveItem_AggregatesResultsAcrossContainers()
+        {
+            InventoryContainer bag = InventoryTestFixtures.CreateMainContainer(containerId: "bag");
+            group.RegisterContainer(bag);
+            main.TryAddItem(InventoryTestItemDatabase.GeneralItemId, 3);
+            bag.TryAddItem(InventoryTestItemDatabase.GeneralItemId, 4);
+
+            InventoryChangeResult result = group.TryRemoveItem(
+                InventoryTestItemDatabase.GeneralItemId,
+                5);
+
+            Assert.IsTrue(result.Success);
+            Assert.AreEqual(5, result.ProcessedCount);
+            Assert.AreEqual(0, result.Remainder);
+            Assert.AreEqual(7, result.TotalItemCountBefore);
+            Assert.AreEqual(2, result.TotalItemCountAfter);
+            Assert.AreEqual(2, result.SlotChanges.Length);
+            Assert.AreEqual("bag", result.SecondaryContainerId);
+        }
+        [Test]
         public void TryMoveBetween_MovesItemAcrossContainers()
         {
             main.TryAddItemToSlot(0, InventoryTestItemDatabase.EquipmentItemId, 1);

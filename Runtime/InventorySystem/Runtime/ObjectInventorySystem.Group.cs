@@ -26,51 +26,45 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         public InventoryChangeResult TryCraft(
             IReadOnlyList<InventoryRecipeEntry> costs,
-            IReadOnlyList<InventoryRecipeEntry> rewards) =>
-            ExecuteGroup(
-                () => group == null
-                    ? InventoryChangeResult.Fail(InventoryChangeType.Craft, InventoryFailReason.DatabaseNotReady)
-                    : group.TryCraft(costs, rewards),
-                0,
-                0,
-                InventoryChangeType.Craft);
+            IReadOnlyList<InventoryRecipeEntry> rewards)
+        {
+            InventoryGroup currentGroup = group;
+            return currentGroup == null
+                ? CreateNotReadyResult(InventoryChangeType.Craft)
+                : Complete(currentGroup.TryCraft(costs, rewards));
+        }
 
-        public InventoryChangeResult TryCraft(RecipeSO recipe) =>
-            ExecuteGroup(
-                () => group == null
-                    ? InventoryChangeResult.Fail(InventoryChangeType.Craft, InventoryFailReason.DatabaseNotReady)
-                    : group.TryCraft(recipe),
-                0,
-                0,
-                InventoryChangeType.Craft);
+        public InventoryChangeResult TryCraft(RecipeSO recipe)
+        {
+            InventoryGroup currentGroup = group;
+            return currentGroup == null
+                ? CreateNotReadyResult(InventoryChangeType.Craft)
+                : Complete(currentGroup.TryCraft(recipe));
+        }
 
-        public InventoryChangeResult TryCraft(string recipeId) =>
-            ExecuteGroup(
-                () => group == null
-                    ? InventoryChangeResult.Fail(InventoryChangeType.Craft, InventoryFailReason.DatabaseNotReady)
-                    : group.TryCraft(recipeId),
-                0,
-                0,
-                InventoryChangeType.Craft);
+        public InventoryChangeResult TryCraft(string recipeId)
+        {
+            InventoryGroup currentGroup = group;
+            return currentGroup == null
+                ? CreateNotReadyResult(InventoryChangeType.Craft)
+                : Complete(currentGroup.TryCraft(recipeId));
+        }
 
-        public InventoryChangeResult TryGrantLoot(string tableId, IRandomSource random = null) =>
-            ExecuteGroup(
-                () => group == null
-                    ? InventoryChangeResult.Fail(InventoryChangeType.Add, InventoryFailReason.DatabaseNotReady)
-                    : group.TryGrantLoot(tableId, random),
-                0,
-                0,
-                InventoryChangeType.Add);
+        public InventoryChangeResult TryGrantLoot(string tableId, IRandomSource random = null)
+        {
+            InventoryGroup currentGroup = group;
+            return currentGroup == null
+                ? CreateNotReadyResult(InventoryChangeType.Add)
+                : Complete(currentGroup.TryGrantLoot(tableId, random));
+        }
 
-        public InventoryChangeResult TryGrantLoot(LootTableSO table, IRandomSource random = null) =>
-            ExecuteGroup(
-                () => group == null
-                    ? InventoryChangeResult.Fail(InventoryChangeType.Add, InventoryFailReason.DatabaseNotReady)
-                    : group.TryGrantLoot(table, random),
-                0,
-                0,
-                InventoryChangeType.Add);
-
+        public InventoryChangeResult TryGrantLoot(LootTableSO table, IRandomSource random = null)
+        {
+            InventoryGroup currentGroup = group;
+            return currentGroup == null
+                ? CreateNotReadyResult(InventoryChangeType.Add)
+                : Complete(currentGroup.TryGrantLoot(table, random));
+        }
         public InventoryGroupDelta ComputeDelta(InventoryGroupSaveData baseline) =>
             group?.ComputeDelta(baseline) ?? new InventoryGroupDelta();
 

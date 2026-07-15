@@ -1,7 +1,7 @@
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
     /// <summary>
-    /// ScriptableObject 없이 컨테이너를 구성할 때 사용하는 순수 런타임 설정입니다.
+    /// ScriptableObject 없이 컨테이너를 생성할 때 사용하는 런타임 설정입니다.
     /// </summary>
     public readonly struct InventoryContainerConfig
     {

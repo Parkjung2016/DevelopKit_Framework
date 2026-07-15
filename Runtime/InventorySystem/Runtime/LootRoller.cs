@@ -121,17 +121,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         private static bool TryPickEntry(LootEntry[] entries, IRandomSource random, out LootEntry picked)
         {
             picked = default;
-            if (entries == null || entries.Length == 0)
-                return false;
-
-            var indices = new List<int>(entries.Length);
-            for (int i = 0; i < entries.Length; i++)
-            {
-                if (entries[i].Weight > 0f)
-                    indices.Add(i);
-            }
-
-            if (!TryPickEntryIndex(entries, indices, random, out int pickedIndex))
+            if (!TryPickEntryIndex(entries, null, random, out int pickedIndex))
                 return false;
 
             picked = entries[pickedIndex];
@@ -142,13 +132,42 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             LootEntry[] entries,
             IReadOnlyList<int> candidateIndices,
             IRandomSource random,
-            out int pickedIndex) =>
-            RandomUtility.TryPickWeightedIndex(
-                candidateIndices,
-                index => entries[index].Weight,
-                random,
-                out pickedIndex);
+            out int pickedIndex)
+        {
+            pickedIndex = -1;
+            if (entries == null || entries.Length == 0)
+                return false;
 
+            int candidateCount = candidateIndices?.Count ?? entries.Length;
+            double totalWeight = 0d;
+            for (int i = 0; i < candidateCount; i++)
+            {
+                int entryIndex = candidateIndices == null ? i : candidateIndices[i];
+                float weight = entries[entryIndex].Weight;
+                if (weight > 0f)
+                    totalWeight += weight;
+            }
+
+            if (totalWeight <= 0d)
+                return false;
+
+            double roll = random.NextDouble() * totalWeight;
+            double accumulatedWeight = 0d;
+            for (int i = 0; i < candidateCount; i++)
+            {
+                int entryIndex = candidateIndices == null ? i : candidateIndices[i];
+                float weight = entries[entryIndex].Weight;
+                if (weight <= 0f)
+                    continue;
+
+                pickedIndex = entryIndex;
+                accumulatedWeight += weight;
+                if (roll < accumulatedWeight)
+                    return true;
+            }
+
+            return pickedIndex >= 0;
+        }
         private static int RollCount(LootEntry entry, ItemDefinition definition, IRandomSource random)
         {
             int min = entry.MinCount <= 0 ? 1 : entry.MinCount;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.Shared.Runtime;
 #if UNITY_6000_5_OR_NEWER
@@ -8,7 +8,7 @@ using Unity.Scripting.LifecycleManagement;
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
     /// <summary>
-    /// 프로젝트 전역 아이템 카탈로그입니다. 런타임·테스트·에디터에서 하나의 <see cref="IItemCatalog"/>를 공유할 때 사용합니다.
+    /// 프로젝트 전역에서 사용하는 아이템 카탈로그입니다. 컨테이너마다 별도 데이터베이스를 지정하지 않아도 같은 정의를 공유할 수 있습니다.
     /// </summary>
 #if UNITY_6000_5_OR_NEWER
     [AutoStaticsCleanup]

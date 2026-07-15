@@ -7,7 +7,8 @@ using UnityEngine;
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
     /// <summary>
-    /// 플레이어·UI용 인벤토리 MonoBehaviour 어댑터. Domain은 <see cref="InventoryGroup"/>입니다.
+    /// 게임 오브젝트에서 여러 인벤토리 컨테이너를 관리하는 진입점입니다.
+    /// 실제 인벤토리 규칙과 데이터는 <see cref="InventoryGroup"/>에 위임합니다.
     /// </summary>
     [AddComponentMenu("PJDev/Framework/Object Inventory System")]
     public partial class ObjectInventorySystem : MonoBehaviour, IInventoryContainer
@@ -49,7 +50,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         }
 
         /// <summary>
-        /// <see cref="InventorySetupSO"/>로 인벤토리를 초기화합니다. setupAsset을 생략하면 Inspector의 <see cref="setup"/>을 사용합니다.
+        /// 설정 에셋을 사용해 인벤토리 컨테이너와 런타임 서비스를 초기화합니다.
         /// </summary>
         public void Init(
             IInventoryOwner owner,
@@ -112,102 +113,141 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         private void OnDestroy() => DisposeGroup();
 
-        public InventoryChangeResult TryAddItem(int itemId, int count) =>
-            ExecuteGroup(() => group.TryAddItem(itemId, count), itemId, count, InventoryChangeType.Add);
+        public InventoryChangeResult TryAddItem(int itemId, int count)
+        {
+            InventoryGroup currentGroup = group;
+            return currentGroup == null
+                ? CreateNotReadyResult(InventoryChangeType.Add, itemId, count)
+                : Complete(currentGroup.TryAddItem(itemId, count));
+        }
 
-        public InventoryChangeResult TryAddItemToContainer(string containerId, int itemId, int count) =>
-            ExecuteGroup(
-                () => group.TryAddItemToContainer(containerId, itemId, count),
-                itemId,
-                count,
-                InventoryChangeType.Add);
+        public InventoryChangeResult TryAddItemToContainer(string containerId, int itemId, int count)
+        {
+            InventoryGroup currentGroup = group;
+            return currentGroup == null
+                ? CreateNotReadyResult(InventoryChangeType.Add, itemId, count)
+                : Complete(currentGroup.TryAddItemToContainer(containerId, itemId, count));
+        }
 
-        public InventoryChangeResult TryAddItemToSlot(int slotIndex, int itemId, int count) =>
-            ExecuteContainer(
-                () => Primary.TryAddItemToSlot(slotIndex, itemId, count),
-                itemId,
-                count,
-                InventoryChangeType.Add);
+        public InventoryChangeResult TryAddItemToSlot(int slotIndex, int itemId, int count)
+        {
+            InventoryContainer container = Primary;
+            return container == null
+                ? CreateNotReadyResult(InventoryChangeType.Add, itemId, count)
+                : Complete(container.TryAddItemToSlot(slotIndex, itemId, count));
+        }
 
-        public InventoryChangeResult TryAddItemToSlot(int slotIndex, int itemId, int count, long instanceId) =>
-            ExecuteContainer(
-                () => Primary.TryAddItemToSlot(slotIndex, itemId, count, instanceId),
-                itemId,
-                count,
-                InventoryChangeType.Add);
+        public InventoryChangeResult TryAddItemToSlot(int slotIndex, int itemId, int count, long instanceId)
+        {
+            InventoryContainer container = Primary;
+            return container == null
+                ? CreateNotReadyResult(InventoryChangeType.Add, itemId, count)
+                : Complete(container.TryAddItemToSlot(slotIndex, itemId, count, instanceId));
+        }
 
-        public InventoryChangeResult TryRemoveItem(int itemId, int count) =>
-            ExecuteGroup(() => group.TryRemoveItem(itemId, count), itemId, count, InventoryChangeType.Remove);
+        public InventoryChangeResult TryRemoveItem(int itemId, int count)
+        {
+            InventoryGroup currentGroup = group;
+            return currentGroup == null
+                ? CreateNotReadyResult(InventoryChangeType.Remove, itemId, count)
+                : Complete(currentGroup.TryRemoveItem(itemId, count));
+        }
 
-        public InventoryChangeResult TryRemoveItemFromSlot(int slotIndex, int count) =>
-            ExecuteContainer(() => Primary.TryRemoveItemFromSlot(slotIndex, count), 0, count, InventoryChangeType.Remove);
+        public InventoryChangeResult TryRemoveItemFromSlot(int slotIndex, int count)
+        {
+            InventoryContainer container = Primary;
+            return container == null
+                ? CreateNotReadyResult(InventoryChangeType.Remove, count: count)
+                : Complete(container.TryRemoveItemFromSlot(slotIndex, count));
+        }
 
-        public InventoryChangeResult TryMoveSlot(int fromSlotIndex, int toSlotIndex) =>
-            ExecuteContainer(
-                () => Primary.TryMoveSlot(fromSlotIndex, toSlotIndex),
-                0,
-                0,
-                InventoryChangeType.Move);
+        public InventoryChangeResult TryMoveSlot(int fromSlotIndex, int toSlotIndex)
+        {
+            InventoryContainer container = Primary;
+            return container == null
+                ? CreateNotReadyResult(InventoryChangeType.Move)
+                : Complete(container.TryMoveSlot(fromSlotIndex, toSlotIndex));
+        }
 
-        public InventoryChangeResult TrySwapSlots(int slotIndexA, int slotIndexB) =>
-            ExecuteContainer(
-                () => Primary.TrySwapSlots(slotIndexA, slotIndexB),
-                0,
-                0,
-                InventoryChangeType.Swap);
+        public InventoryChangeResult TrySwapSlots(int slotIndexA, int slotIndexB)
+        {
+            InventoryContainer container = Primary;
+            return container == null
+                ? CreateNotReadyResult(InventoryChangeType.Swap)
+                : Complete(container.TrySwapSlots(slotIndexA, slotIndexB));
+        }
 
         public InventoryChangeResult TryMoveBetween(
             string fromContainerId,
             int fromSlotIndex,
             string toContainerId,
-            int toSlotIndex) =>
-            ExecuteGroup(
-                () => group.TryMoveBetween(fromContainerId, fromSlotIndex, toContainerId, toSlotIndex),
-                0,
-                0,
-                InventoryChangeType.Move);
+            int toSlotIndex)
+        {
+            InventoryGroup currentGroup = group;
+            return currentGroup == null
+                ? CreateNotReadyResult(InventoryChangeType.Move)
+                : Complete(currentGroup.TryMoveBetween(fromContainerId, fromSlotIndex, toContainerId, toSlotIndex));
+        }
 
         public InventoryChangeResult TrySwapBetween(
             string containerAId,
             int slotA,
             string containerBId,
-            int slotB) =>
-            ExecuteGroup(
-                () => group.TrySwapBetween(containerAId, slotA, containerBId, slotB),
-                0,
-                0,
-                InventoryChangeType.Swap);
+            int slotB)
+        {
+            InventoryGroup currentGroup = group;
+            return currentGroup == null
+                ? CreateNotReadyResult(InventoryChangeType.Swap)
+                : Complete(currentGroup.TrySwapBetween(containerAId, slotA, containerBId, slotB));
+        }
 
-        public InventoryChangeResult ClearSlot(int slotIndex) =>
-            ExecuteContainer(() => Primary.ClearSlot(slotIndex), 0, 0, InventoryChangeType.Clear);
+        public InventoryChangeResult ClearSlot(int slotIndex)
+        {
+            InventoryContainer container = Primary;
+            return container == null
+                ? CreateNotReadyResult(InventoryChangeType.Clear)
+                : Complete(container.ClearSlot(slotIndex));
+        }
 
-        public InventoryChangeResult ClearAll() =>
-            ExecuteContainer(() => Primary.ClearAll(), 0, 0, InventoryChangeType.Clear);
+        public InventoryChangeResult ClearAll()
+        {
+            InventoryContainer container = Primary;
+            return container == null
+                ? CreateNotReadyResult(InventoryChangeType.Clear)
+                : Complete(container.ClearAll());
+        }
 
-        public InventoryChangeResult TrySplitStack(int slotIndex, int splitCount) =>
-            ExecuteContainer(
-                () => Primary.TrySplitStack(slotIndex, splitCount),
-                0,
-                splitCount,
-                InventoryChangeType.Split);
+        public InventoryChangeResult TrySplitStack(int slotIndex, int splitCount)
+        {
+            InventoryContainer container = Primary;
+            return container == null
+                ? CreateNotReadyResult(InventoryChangeType.Split, count: splitCount)
+                : Complete(container.TrySplitStack(slotIndex, splitCount));
+        }
 
-        public InventoryChangeResult TryDropItemFromSlot(int slotIndex, int count) =>
-            ExecuteContainer(
-                () => Primary.TryDropItemFromSlot(slotIndex, count),
-                0,
-                count,
-                InventoryChangeType.Drop);
+        public InventoryChangeResult TryDropItemFromSlot(int slotIndex, int count)
+        {
+            InventoryContainer container = Primary;
+            return container == null
+                ? CreateNotReadyResult(InventoryChangeType.Drop, count: count)
+                : Complete(container.TryDropItemFromSlot(slotIndex, count));
+        }
 
-        public InventoryChangeResult TryTradeItemFromSlot(int slotIndex, int count) =>
-            ExecuteContainer(
-                () => Primary.TryTradeItemFromSlot(slotIndex, count),
-                0,
-                count,
-                InventoryChangeType.Trade);
+        public InventoryChangeResult TryTradeItemFromSlot(int slotIndex, int count)
+        {
+            InventoryContainer container = Primary;
+            return container == null
+                ? CreateNotReadyResult(InventoryChangeType.Trade, count: count)
+                : Complete(container.TryTradeItemFromSlot(slotIndex, count));
+        }
 
-        public InventoryChangeResult TryUseItem(int slotIndex, IItemUseHandler handler) =>
-            ExecuteContainer(() => Primary.TryUseItem(slotIndex, handler), 0, 0, InventoryChangeType.Use);
-
+        public InventoryChangeResult TryUseItem(int slotIndex, IItemUseHandler handler)
+        {
+            InventoryContainer container = Primary;
+            return container == null
+                ? CreateNotReadyResult(InventoryChangeType.Use)
+                : Complete(container.TryUseItem(slotIndex, handler));
+        }
         public bool CanAddItem(int itemId, int count, out InventoryFailReason reason, out int addableCount)
         {
             if (group == null)
@@ -286,7 +326,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         public int GetOccupiedSlotCount() =>
             Primary?.GetOccupiedSlotCount() ?? 0;
 
-        /// <summary>InventoryGroup에서 발생한 변경 결과를 UI 이벤트로 전파합니다.</summary>
+        /// <summary>그룹에서 발생한 변경 결과를 컴포넌트 이벤트로 전달합니다.</summary>
         public void NotifyChangeResult(InventoryChangeResult result) => ApplyChangeResult(result);
 
         public void FindSlotsWithItem(int itemId, List<int> results) =>
@@ -374,40 +414,24 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             CDebug.LogWarning("ObjectInventorySystem : not initialized.");
         }
 
-        private InventoryChangeResult ExecuteContainer(
-            Func<InventoryChangeResult> action,
-            int itemId,
-            int count,
-            InventoryChangeType changeType)
+        private InventoryChangeResult Complete(InventoryChangeResult result)
         {
-            if (Primary == null)
-            {
-                CDebug.LogWarning("ObjectInventorySystem : not initialized.");
-                return InventoryChangeResult.Fail(changeType, InventoryFailReason.DatabaseNotReady, itemId, count);
-            }
-
-            InventoryChangeResult result = action();
             ApplyChangeResult(result);
             return result;
         }
 
-        private InventoryChangeResult ExecuteGroup(
-            Func<InventoryChangeResult> action,
-            int itemId,
-            int count,
-            InventoryChangeType changeType)
+        private static InventoryChangeResult CreateNotReadyResult(
+            InventoryChangeType changeType,
+            int itemId = 0,
+            int count = 0)
         {
-            if (group == null)
-            {
-                CDebug.LogWarning("ObjectInventorySystem : not initialized.");
-                return InventoryChangeResult.Fail(changeType, InventoryFailReason.DatabaseNotReady, itemId, count);
-            }
-
-            InventoryChangeResult result = action();
-            ApplyChangeResult(result);
-            return result;
+            CDebug.LogWarning("ObjectInventorySystem : not initialized.");
+            return InventoryChangeResult.Fail(
+                changeType,
+                InventoryFailReason.DatabaseNotReady,
+                itemId,
+                count);
         }
-
         private void ApplyChangeResult(InventoryChangeResult result)
         {
             if (!result.Success)

@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
@@ -29,17 +29,32 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
             database.Register(new ItemDefinition(2, maxStackSize: 5, isStackable: true, itemType: ItemType.Consumable));
             ItemCatalog.Set(database);
 
-            var container = new InventoryContainer(4, null, InventoryContainerDescriptor.Main());
+            using var container = new InventoryContainer(4, null, InventoryContainerDescriptor.Main());
             InventoryChangeResult result = container.TryAddItem(2, 1);
 
             Assert.IsTrue(result.Success);
         }
 
         [Test]
+        public void CanAddItem_UsesGlobalCatalog_WhenDatabaseIsNull()
+        {
+            var database = new InventoryTestItemDatabase();
+            database.Register(new ItemDefinition(3, maxStackSize: 5, isStackable: true, itemType: ItemType.Consumable));
+            ItemCatalog.Set(database);
+            using var container = new InventoryContainer(4, null, InventoryContainerDescriptor.Main());
+
+            bool canAdd = container.CanAddItem(3, 2, out InventoryFailReason reason, out int addableCount);
+
+            Assert.IsTrue(canAdd);
+            Assert.AreEqual(InventoryFailReason.None, reason);
+            Assert.AreEqual(2, addableCount);
+        }
+
+        [Test]
         public void ContainerWithoutCatalog_ReturnsDatabaseNotReady()
         {
             ItemCatalog.Clear();
-            var container = InventoryTestFixtures.CreateContainerWithoutDatabase();
+            using InventoryContainer container = InventoryTestFixtures.CreateContainerWithoutDatabase();
 
             InventoryChangeResult result = container.TryAddItem(1, 1);
 
