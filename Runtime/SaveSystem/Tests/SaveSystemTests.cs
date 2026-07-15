@@ -28,12 +28,15 @@ namespace PJDev.DevelopKit.Framework.SaveSystemTests
             {
                 Assert.IsFalse(settings.EncryptionEnabled);
                 Assert.AreEqual("Saves", settings.FolderName);
+                string expectedDirectory = Path.GetFullPath(
+                    Path.Combine(Application.persistentDataPath, "Saves"));
+
                 Assert.AreEqual(
-                    Path.Combine(Application.persistentDataPath, "Saves"),
-                    settings.SaveDirectory);
+                    expectedDirectory,
+                    Path.GetFullPath(settings.SaveDirectory));
 
                 LocalFileSaveStorage storage = settings.CreateStorage();
-                Assert.AreEqual(settings.SaveDirectory, storage.SaveDirectory);
+                Assert.AreEqual(expectedDirectory, storage.SaveDirectory);
             }
             finally
             {
@@ -41,6 +44,7 @@ namespace PJDev.DevelopKit.Framework.SaveSystemTests
             }
         }
     }
+
     [TestFixture]
     public sealed class AesSaveEncryptionTests
     {
@@ -242,11 +246,13 @@ namespace PJDev.DevelopKit.Framework.SaveSystemTests
             using var cancellation = new CancellationTokenSource();
             cancellation.Cancel();
 
-            Assert.ThrowsAsync<OperationCanceledException>(
+            Assert.CatchAsync<OperationCanceledException>(
                 async () => await manager.SaveAsync(
                     "cancelled",
                     CreateTestData(),
                     cancellation.Token));
+
+            Assert.IsFalse(manager.HasSlot("cancelled"));
         }
 
         private static TestSaveData CreateTestData() =>
