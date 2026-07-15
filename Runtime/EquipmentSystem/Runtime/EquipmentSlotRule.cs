@@ -17,7 +17,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             if (slotCategories == null || slotCategories.Length == 0)
                 throw new ArgumentException("At least one slot category entry is required.", nameof(slotCategories));
 
-            this.slotCategories = slotCategories;
+            this.slotCategories = (string[])slotCategories.Clone();
             this.profileSource = profileSource ?? throw new ArgumentNullException(nameof(profileSource));
             this.equipmentItemType = equipmentItemType;
         }

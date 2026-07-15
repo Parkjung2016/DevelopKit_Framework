@@ -10,19 +10,21 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 
         public CompositeEquipmentEffectApplier(params IEquipmentEffectApplier[] appliers)
         {
-            this.appliers = appliers ?? Array.Empty<IEquipmentEffectApplier>();
+            this.appliers = appliers == null
+                ? Array.Empty<IEquipmentEffectApplier>()
+                : (IEquipmentEffectApplier[])appliers.Clone();
         }
 
         public void OnEquipped(int equipSlotIndex, in ItemStack stack, in ItemDefinition definition)
         {
             for (int i = 0; i < appliers.Length; i++)
-                appliers[i].OnEquipped(equipSlotIndex, stack, definition);
+                appliers[i]?.OnEquipped(equipSlotIndex, stack, definition);
         }
 
         public void OnUnequipped(int equipSlotIndex, in ItemStack stack, in ItemDefinition definition)
         {
             for (int i = 0; i < appliers.Length; i++)
-                appliers[i].OnUnequipped(equipSlotIndex, stack, definition);
+                appliers[i]?.OnUnequipped(equipSlotIndex, stack, definition);
         }
     }
 }

@@ -8,7 +8,9 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         private readonly IEquipmentItemProfileSource[] sources;
 
         public CompositeEquipmentProfileSource(params IEquipmentItemProfileSource[] sources) =>
-            this.sources = sources ?? Array.Empty<IEquipmentItemProfileSource>();
+            this.sources = sources == null
+                ? Array.Empty<IEquipmentItemProfileSource>()
+                : (IEquipmentItemProfileSource[])sources.Clone();
 
         public bool TryGetSlotCategory(int itemId, in ItemDefinition definition, out string slotCategory)
         {

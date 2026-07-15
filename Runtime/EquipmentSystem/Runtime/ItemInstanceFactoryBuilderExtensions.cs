@@ -5,11 +5,12 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
     public static class ItemInstanceFactoryBuilderExtensions
     {
-        /// <summary>장비 SlotCategory 라우터를 등록합니다. ProfileSource는 장착 규칙과 동일한 소스를 사용하세요.</summary>
+        /// <summary>장비 슬롯 카테고리별 인스턴스 팩토리를 등록합니다.</summary>
         public static ItemInstanceFactoryBuilder ConfigureEquipment(
             this ItemInstanceFactoryBuilder builder,
             IEquipmentItemProfileSource profileSource,
-            Action<EquipmentSlotItemInstanceFactory> configure)
+            Action<EquipmentSlotItemInstanceFactory> configure,
+            ItemType equipmentItemType = ItemType.Equipment)
         {
             if (builder == null)
                 throw new ArgumentNullException(nameof(builder));
@@ -18,9 +19,9 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             if (configure == null)
                 throw new ArgumentNullException(nameof(configure));
 
-            var equipment = new EquipmentSlotItemInstanceFactory(profileSource);
+            var equipment = new EquipmentSlotItemInstanceFactory(profileSource, equipmentItemType);
             configure(equipment);
-            builder.For(ItemType.Equipment, equipment);
+            builder.For(equipmentItemType, equipment);
             return builder;
         }
     }

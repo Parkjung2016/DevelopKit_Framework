@@ -1,4 +1,4 @@
-# DevelopKit Framework Architecture
+﻿# DevelopKit Framework Architecture
 
 Unity SO·Prefab 기반 **레이어드 OOP**.
 
@@ -10,8 +10,6 @@ Shared        GlobalRegistry, FrameworkInitOptions     (의존 없음)
 Domain        InventoryGroup, EquipmentSystem, StatCollection …  (Pure C#)
     ↑
 Catalog       ItemCatalog, StatCatalog, ItemInstanceCatalog …   (GlobalRegistry<T>)
-    ↑
-Bootstrap     FrameworkGlobals, FrameworkDatabaseSetupSO        (세션 Catalog 등록)
     ↑
 Presentation  ObjectInventorySystem, ObjectEquipmentSystem, ObjectStatSystem, ObjectAbilitySystem …
     ↑
@@ -25,10 +23,11 @@ Game          Player : MonoBehaviour, IInventoryOwner …
 ### 1. 세션 시작 (씬당 1회)
 
 ```csharp
-frameworkDatabaseSetup.RegisterAll();
-// 또는
-FrameworkGlobals.RegisterAll(frameworkDatabaseSetup);
+inventoryDatabaseSetup.RegisterGlobals();
+StatCatalog.Set(statDatabase);
 ```
+
+각 모듈은 필요한 Catalog만 직접 등록합니다. 통합 Bootstrap 에셋은 사용하지 않습니다.
 
 ### 2. 액터 Init (GameObject당, 순서만 지키면 됨)
 
@@ -66,19 +65,19 @@ ability.Init(this);
 | Stat | `StatDatabaseSO` → `StatCatalog.Set` |
 | ItemInstance | `ObjectInventorySystem.Init` → `ItemInstanceCatalog.Configure` |
 
-테스트 정리: `FrameworkGlobals.ClearCatalogs()` (또는 Play Mode 종료 시 자동)
+테스트 정리: 사용한 Catalog의 `Clear()`를 직접 호출합니다. Play Mode 종료 시에는 모듈별로 자동 정리됩니다.
 
 ## Static 정리 (Domain Reload 비활성화)
 
 | Unity 버전 | Catalog / Registry | GameplayTag / IdGenerator |
 |------------|-------------------|---------------------------|
-| **6000.5+** | `[AutoStaticsCleanup]` on `GlobalRegistry<T>`, `*Catalog`, … | 동일 + `[OnExitingPlayMode]` → `ClearCatalogs()` |
-| **6000.5 미만 (Editor)** | `FrameworkPlayModeCleanup` → Play Mode 종료 시 `ClearCatalogs()` 등 | 각 모듈이 `FrameworkPlayModeCleanup.Register(...)` |
+| **6000.5+** | `[AutoStaticsCleanup]` on `GlobalRegistry<T>`, `*Catalog`, … | 각 타입의 `[AutoStaticsCleanup]` |
+| **6000.5 미만 (Editor)** | 각 모듈이 `FrameworkPlayModeCleanup`에 자체 `Clear()` 등록 | 동일 |
 | **6000.5 미만 (Player)** | `Application.quitting` → `FrameworkPlayModeCleanup.RunAll()` | 동일 |
 
 Domain Reload **켜짐**: 어셈블리 리로드로 static 초기화 (별도 처리 불필요).
 
-테스트에서는 `FrameworkGlobals.ClearCatalogs()` 명시 호출 가능.
+테스트에서는 `ItemCatalog.Clear()`, `RecipeCatalog.Clear()`, `LootTableCatalog.Clear()`, `ItemInstanceCatalog.Clear()`, `StatCatalog.Clear()` 중 사용한 항목을 명시적으로 정리합니다.
 
 ## InitOptions
 
@@ -93,7 +92,6 @@ inventory.Init(owner, initOptions: FrameworkInitOptions.SkipGlobalCatalogs);
 ```
 Shared (leaf)
 Inventory, Stat, DeterministicSimulation → Shared
-Core (Bootstrap) → Shared + Inventory + Stat
 Equipment → Inventory + Socket
 Ability → GameplayTag
 AnimMontage → (standalone)

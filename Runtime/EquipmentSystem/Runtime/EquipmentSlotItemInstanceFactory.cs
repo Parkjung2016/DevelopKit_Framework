@@ -4,19 +4,21 @@ using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
-    /// <summary>
-    /// 장비 아이템을 <see cref="IEquipmentItemProfileSource"/> SlotCategory(Weapon, Head …)별 Factory로 라우팅합니다.
-    /// </summary>
+    /// <summary>장비 아이템을 슬롯 카테고리에 맞는 인스턴스 팩토리로 연결합니다.</summary>
     public sealed class EquipmentSlotItemInstanceFactory : IItemInstanceFactory
     {
         private readonly IEquipmentItemProfileSource profileSource;
+        private readonly ItemType equipmentItemType;
         private readonly Dictionary<string, IItemInstanceFactory> factoriesByCategory =
             new(StringComparer.OrdinalIgnoreCase);
         private IItemInstanceFactory fallback;
 
-        public EquipmentSlotItemInstanceFactory(IEquipmentItemProfileSource profileSource)
+        public EquipmentSlotItemInstanceFactory(
+            IEquipmentItemProfileSource profileSource,
+            ItemType equipmentItemType = ItemType.Equipment)
         {
             this.profileSource = profileSource ?? throw new ArgumentNullException(nameof(profileSource));
+            this.equipmentItemType = equipmentItemType;
         }
 
         public EquipmentSlotItemInstanceFactory Set(string slotCategory, IItemInstanceFactory factory)
@@ -60,7 +62,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             if (!ItemCatalog.TryGetDefinition(itemId, out ItemDefinition definition))
                 return fallback?.TryCreate(itemId, out data) ?? false;
 
-            if (definition.ItemType != ItemType.Equipment)
+            if (definition.ItemType != equipmentItemType)
                 return false;
 
             if (profileSource.TryGetSlotCategory(itemId, definition, out string slotCategory)

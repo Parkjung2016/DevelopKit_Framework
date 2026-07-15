@@ -9,7 +9,9 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         private readonly Dictionary<int, string> categoriesByItemId;
 
         public DictionaryEquipmentProfileSource(Dictionary<int, string> categoriesByItemId) =>
-            this.categoriesByItemId = categoriesByItemId ?? throw new ArgumentNullException(nameof(categoriesByItemId));
+            this.categoriesByItemId = categoriesByItemId == null
+                ? throw new ArgumentNullException(nameof(categoriesByItemId))
+                : new Dictionary<int, string>(categoriesByItemId);
 
         public bool TryGetSlotCategory(int itemId, in ItemDefinition definition, out string slotCategory)
         {

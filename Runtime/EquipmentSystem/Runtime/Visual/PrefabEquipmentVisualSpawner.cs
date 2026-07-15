@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
-    /// <summary>AssetKey → Prefab 매핑으로 동기 스폰합니다. 부착은 <see cref="ObjectSocket.ChangeItem"/>에서 처리합니다.</summary>
+    /// <summary>AssetKey에 연결된 프리팹을 생성하고 장비 소켓에 붙일 항목으로 반환합니다.</summary>
     public sealed class PrefabEquipmentVisualSpawner : IEquipmentVisualSpawner
     {
         private readonly IReadOnlyDictionary<string, GameObject> prefabsByKey;
@@ -23,7 +23,8 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
                 return;
             }
 
-            OnSpawnCompleted?.Invoke(SocketItemUtility.FromGameObject(prefab));
+            GameObject instance = UnityEngine.Object.Instantiate(prefab);
+            OnSpawnCompleted?.Invoke(SocketItemUtility.FromGameObject(instance));
         }
 
         public void Release(ISocketItem socketItem) => SocketItemUtility.ReleaseDestroy(socketItem);

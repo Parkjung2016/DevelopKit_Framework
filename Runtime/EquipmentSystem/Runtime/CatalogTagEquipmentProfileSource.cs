@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
@@ -29,6 +30,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
     {
         private readonly IItemCatalog catalog;
         private readonly string tagPrefix;
+        private readonly Dictionary<int, string> categoriesByItemId = new();
 
         public CatalogTagEquipmentProfileSource(IItemCatalog catalog, string tagPrefix = "equip.")
         {
@@ -38,11 +40,20 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 
         public bool TryGetSlotCategory(int itemId, in ItemDefinition definition, out string slotCategory)
         {
-            slotCategory = null;
-            if (!catalog.TryGetEntry(itemId, out ItemCatalogEntry entry))
-                return false;
+            if (categoriesByItemId.TryGetValue(itemId, out slotCategory))
+                return !string.IsNullOrEmpty(slotCategory);
 
-            return EquipmentTagUtility.TryGetCategoryFromTags(entry.Tags, tagPrefix, out slotCategory);
+            if (!catalog.TryGetEntry(itemId, out ItemCatalogEntry entry) ||
+                !EquipmentTagUtility.TryGetCategoryFromTags(entry.Tags, tagPrefix, out slotCategory))
+            {
+                categoriesByItemId[itemId] = null;
+                return false;
+            }
+
+            categoriesByItemId[itemId] = slotCategory;
+            return true;
         }
+
+        public void ClearCache() => categoriesByItemId.Clear();
     }
 }

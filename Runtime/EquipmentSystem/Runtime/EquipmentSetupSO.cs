@@ -1,6 +1,6 @@
 using System;
-using UnityEngine;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
+using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
@@ -14,128 +14,142 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
     [CreateAssetMenu(fileName = "SO_EquipmentSetup", menuName = "PJDev/SO/EquipmentSystem/Setup")]
     public class EquipmentSetupSO : ScriptableObject
     {
+        private static readonly string[] BuiltInSlotCategories =
+        {
+            EquipmentSlotCategories.Weapon,
+            EquipmentSlotCategories.Head,
+            EquipmentSlotCategories.Chest,
+            EquipmentSlotCategories.Hands,
+            EquipmentSlotCategories.Feet,
+            EquipmentSlotCategories.Ring
+        };
+
         [field: SerializeField] public string ContainerId { get; set; } = "equipment";
         [field: SerializeField] public ContainerKind Kind { get; set; } = ContainerKind.Equipment;
         [field: SerializeField] public int SlotCount { get; set; } = 6;
         [field: SerializeField] public ItemType EquipmentItemType { get; set; } = ItemType.Equipment;
         [field: SerializeField] public string EquipmentTagPrefix { get; set; } = "equip.";
-        [field: SerializeField] public string[] SlotCategories { get; set; } = DefaultSlotCategories();
+        [field: SerializeField] public string[] SlotCategories { get; set; } = CreateDefaultSlotCategories();
         [field: SerializeField] public EquipmentItemProfileEntry[] ItemProfileOverrides { get; set; } = Array.Empty<EquipmentItemProfileEntry>();
+
+        public int EffectiveSlotCount => Math.Max(1, SlotCount);
 
         public void Normalize()
         {
-            if (SlotCount < 1)
-                SlotCount = 1;
+            SlotCount = EffectiveSlotCount;
+            SlotCategories = CreateSlotCategorySnapshot();
+        }
 
-            if (SlotCategories == null || SlotCategories.Length == 0)
-            {
-                SlotCategories = DefaultSlotCategories();
-                return;
-            }
+        public string[] CreateSlotCategorySnapshot()
+        {
+            int count = EffectiveSlotCount;
+            var snapshot = new string[count];
+            string[] configured = SlotCategories;
+            bool useBuiltInDefaults = configured == null || configured.Length == 0;
+            string[] source = useBuiltInDefaults ? BuiltInSlotCategories : configured;
 
-            if (SlotCategories.Length < SlotCount)
-            {
-                var resized = new string[SlotCount];
-                Array.Copy(SlotCategories, resized, SlotCategories.Length);
-                for (int i = SlotCategories.Length; i < SlotCount; i++)
-                    resized[i] = EquipmentSlotCategories.Any;
+            int copiedCount = Math.Min(source.Length, count);
+            Array.Copy(source, snapshot, copiedCount);
+            for (int i = copiedCount; i < count; i++)
+                snapshot[i] = EquipmentSlotCategories.Any;
 
-                SlotCategories = resized;
-                return;
-            }
-
-            if (SlotCategories.Length > SlotCount)
-            {
-                var trimmed = new string[SlotCount];
-                Array.Copy(SlotCategories, trimmed, SlotCount);
-                SlotCategories = trimmed;
-            }
+            return snapshot;
         }
 
         public IEquipmentItemProfileSource CreateProfileSource(IItemDatabase itemDatabase = null)
         {
-            Normalize();
-            IItemDatabase resolvedDatabase = ItemCatalog.Resolve(itemDatabase);
+            IEquipmentItemProfileSource overrideSource = CreateOverrideProfileSource();
+            IEquipmentItemProfileSource catalogSource = ItemCatalog.Resolve(itemDatabase) is IItemCatalog catalog
+                ? new CatalogTagEquipmentProfileSource(catalog, EquipmentTagPrefix)
+                : null;
 
-            var sources = new System.Collections.Generic.List<IEquipmentItemProfileSource>(2);
-            if (ItemProfileOverrides is { Length: > 0 })
-            {
-                var map = new System.Collections.Generic.Dictionary<int, string>();
-                for (int i = 0; i < ItemProfileOverrides.Length; i++)
-                {
-                    EquipmentItemProfileEntry entry = ItemProfileOverrides[i];
-                    if (entry.ItemId <= 0 || string.IsNullOrEmpty(entry.SlotCategory))
-                        continue;
+            if (overrideSource == null)
+                return catalogSource ?? NullEquipmentProfileSource.Instance;
 
-                    map[entry.ItemId] = entry.SlotCategory;
-                }
-
-                if (map.Count > 0)
-                    sources.Add(new DictionaryEquipmentProfileSource(map));
-            }
-
-            if (resolvedDatabase is IItemCatalog catalog)
-                sources.Add(new CatalogTagEquipmentProfileSource(catalog, EquipmentTagPrefix));
-
-            return sources.Count switch
-            {
-                0 => NullEquipmentProfileSource.Instance,
-                1 => sources[0],
-                _ => new CompositeEquipmentProfileSource(sources.ToArray())
-            };
+            return catalogSource == null
+                ? overrideSource
+                : new CompositeEquipmentProfileSource(overrideSource, catalogSource);
         }
 
         public InventoryContainerDescriptor CreateDescriptor(IEquipmentItemProfileSource profileSource = null)
         {
-            Normalize();
-            IEquipmentItemProfileSource resolvedProfile = profileSource ?? CreateProfileSource(null);
-            var slotRule = new EquipmentSlotRule(SlotCategories, resolvedProfile, EquipmentItemType);
-            return new InventoryContainerDescriptor(ContainerId, Kind, slotRule);
+            IEquipmentItemProfileSource resolvedProfile = profileSource ?? CreateProfileSource();
+            return CreateDescriptor(resolvedProfile, CreateSlotCategorySnapshot());
         }
 
-        /// <summary>
-        /// 장비 컨테이너를 생성합니다. <paramref name="itemDatabase"/>를 생략하면
-        /// <see cref="ItemCatalog"/>가 등록된 경우 현재 카탈로그를 컨테이너에 고정합니다.
-        /// </summary>
         public InventoryContainer CreateContainer(IEquipmentItemProfileSource profileSource = null) =>
             CreateContainer(null, profileSource);
 
-        /// <summary>
-        /// 장비 컨테이너를 생성합니다. <paramref name="itemDatabase"/>가 null이고 전역 <see cref="ItemCatalog"/>가 준비되면
-        /// <see cref="ItemCatalog.Current"/>를 컨테이너에 고정합니다. 미등록 시 null을 넘겨 런타임 resolve에 맡깁니다.
-        /// </summary>
-        public InventoryContainer CreateContainer(IItemDatabase itemDatabase, IEquipmentItemProfileSource profileSource = null)
+        public InventoryContainer CreateContainer(
+            IItemDatabase itemDatabase,
+            IEquipmentItemProfileSource profileSource = null)
         {
-            Normalize();
             IItemDatabase resolvedDatabase = ItemCatalog.Resolve(itemDatabase);
-            IEquipmentItemProfileSource resolvedProfile = profileSource ?? CreateProfileSource(resolvedDatabase);
-            return new InventoryContainer(SlotCount, resolvedDatabase, CreateDescriptor(resolvedProfile));
+            IEquipmentItemProfileSource resolvedProfile =
+                profileSource ?? CreateProfileSource(resolvedDatabase);
+            string[] slotCategories = CreateSlotCategorySnapshot();
+            InventoryContainerDescriptor descriptor = CreateDescriptor(
+                resolvedProfile,
+                slotCategories);
+
+            return new InventoryContainer(EffectiveSlotCount, resolvedDatabase, descriptor);
         }
 
         public bool TryGetSlotCategory(int equipSlotIndex, out string slotCategory)
         {
-            Normalize();
-
-            if (equipSlotIndex >= 0 && equipSlotIndex < SlotCategories.Length)
+            if (equipSlotIndex < 0 || equipSlotIndex >= EffectiveSlotCount)
             {
-                slotCategory = SlotCategories[equipSlotIndex];
+                slotCategory = EquipmentSlotCategories.Any;
+                return false;
+            }
+
+            string[] configured = SlotCategories;
+            if (configured != null && configured.Length > 0)
+            {
+                slotCategory = equipSlotIndex < configured.Length
+                    ? configured[equipSlotIndex]
+                    : EquipmentSlotCategories.Any;
                 return true;
             }
 
-            slotCategory = EquipmentSlotCategories.Any;
-            return false;
+            slotCategory = equipSlotIndex < BuiltInSlotCategories.Length
+                ? BuiltInSlotCategories[equipSlotIndex]
+                : EquipmentSlotCategories.Any;
+            return true;
         }
 
-        private static string[] DefaultSlotCategories() =>
-            new[]
+        private InventoryContainerDescriptor CreateDescriptor(
+            IEquipmentItemProfileSource profileSource,
+            string[] slotCategories)
+        {
+            var slotRule = new EquipmentSlotRule(
+                slotCategories,
+                profileSource,
+                EquipmentItemType);
+            return new InventoryContainerDescriptor(ContainerId, Kind, slotRule);
+        }
+
+        private IEquipmentItemProfileSource CreateOverrideProfileSource()
+        {
+            if (ItemProfileOverrides == null || ItemProfileOverrides.Length == 0)
+                return null;
+
+            var categoriesByItemId = new System.Collections.Generic.Dictionary<int, string>(
+                ItemProfileOverrides.Length);
+            for (int i = 0; i < ItemProfileOverrides.Length; i++)
             {
-                EquipmentSlotCategories.Weapon,
-                EquipmentSlotCategories.Head,
-                EquipmentSlotCategories.Chest,
-                EquipmentSlotCategories.Hands,
-                EquipmentSlotCategories.Feet,
-                EquipmentSlotCategories.Ring
-            };
+                EquipmentItemProfileEntry entry = ItemProfileOverrides[i];
+                if (entry.ItemId > 0 && !string.IsNullOrEmpty(entry.SlotCategory))
+                    categoriesByItemId[entry.ItemId] = entry.SlotCategory;
+            }
+
+            return categoriesByItemId.Count == 0
+                ? null
+                : new DictionaryEquipmentProfileSource(categoriesByItemId);
+        }
+
+        private static string[] CreateDefaultSlotCategories() =>
+            (string[])BuiltInSlotCategories.Clone();
 
 #if UNITY_EDITOR
         private void OnValidate() => Normalize();
@@ -146,7 +160,10 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
     {
         public static readonly NullEquipmentProfileSource Instance = new();
 
-        public bool TryGetSlotCategory(int itemId, in ItemDefinition definition, out string slotCategory)
+        public bool TryGetSlotCategory(
+            int itemId,
+            in ItemDefinition definition,
+            out string slotCategory)
         {
             slotCategory = null;
             return false;
