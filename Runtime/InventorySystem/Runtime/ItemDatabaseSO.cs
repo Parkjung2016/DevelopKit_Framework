@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
-    [CreateAssetMenu(fileName = "SO_ItemDatabase", menuName = "PJDev/SO/InventorySystem/ItemDatabase")]
+    [CreateAssetMenu(fileName = "SO_ItemDatabase", menuName = "PJDev/InventorySystem/ItemDatabase")]
     public class ItemDatabaseSO : ScriptableObject, IItemCatalog
     {
         [field: SerializeField] public ItemDefinitionSO[] Items { get; set; } = System.Array.Empty<ItemDefinitionSO>();

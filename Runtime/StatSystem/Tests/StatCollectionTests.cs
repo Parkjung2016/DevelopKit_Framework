@@ -73,7 +73,8 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Tests
         public void Snapshot_RestoresBaseValuesWithoutTemporaryModifiers()
         {
             collection.SetBaseValue(StatTestDatabase.HpStatName, 70f);
-            collection.SetFlatModifier(StatTestDatabase.HpStatName, "buff", 10f);
+            StatModifierKey runtimeKey = StatModifierKey.CreateRuntime();
+            collection.SetFlatModifier(StatTestDatabase.HpStatName, runtimeKey, 10f);
             StatCollectionSnapshot snapshot = collection.CaptureSnapshot();
 
             collection.SetBaseValue(StatTestDatabase.HpStatName, 20f);
@@ -82,6 +83,8 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Tests
             Assert.AreEqual(collection.Count, restoredCount);
             Assert.AreEqual(70f, collection.GetBaseValue(StatTestDatabase.HpStatName));
             Assert.AreEqual(80f, collection.GetStat(StatTestDatabase.HpStatName).Value);
+            Assert.IsTrue(collection.GetStat(StatTestDatabase.HpStatName)
+                .TryGetModifier(runtimeKey, out _));
         }
 
         [Test]
@@ -94,6 +97,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Tests
             Assert.AreSame(destination, result);
             Assert.AreEqual(collection.Count, result.Stats.Count);
         }
+
         [Test]
         public void Snapshot_RoundTripsThroughUnityJson()
         {
@@ -108,6 +112,38 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Tests
 
             Assert.AreEqual(75f, collection.GetBaseValue(StatTestDatabase.HpStatName));
         }
+
+        [Test]
+        public void PersistentModifier_RoundTripsThroughUnityJson()
+        {
+            collection.SetFlatModifier(StatTestDatabase.HpStatName, "equipment.weapon", 15f);
+            StatCollectionSnapshot source = collection.CaptureSnapshot();
+
+            string json = JsonUtility.ToJson(source);
+            StatCollectionSnapshot restored = JsonUtility.FromJson<StatCollectionSnapshot>(json);
+
+            collection.SetFlatModifier(StatTestDatabase.HpStatName, "equipment.weapon", 2f);
+            collection.RestoreSnapshot(restored);
+
+            Stat hp = collection.GetStat(StatTestDatabase.HpStatName);
+            Assert.IsTrue(hp.TryGetModifier("equipment.weapon", out StatModifier modifier));
+            Assert.AreEqual(15f, modifier.Flat);
+            Assert.AreEqual(65f, hp.Value);
+        }
+
+        [Test]
+        public void SnapshotWithoutModifiers_ClearsExistingPersistentModifiers()
+        {
+            collection.SetFlatModifier(StatTestDatabase.HpStatName, "equipment.weapon", 15f);
+            StatCollectionSnapshot snapshot = collection.CaptureSnapshot(
+                includePersistentModifiers: false);
+
+            collection.RestoreSnapshot(snapshot);
+
+            Assert.IsFalse(collection.GetStat(StatTestDatabase.HpStatName)
+                .TryGetModifier("equipment.weapon", out _));
+        }
+
         [Test]
         public void Enumeration_VisitsEveryStat()
         {

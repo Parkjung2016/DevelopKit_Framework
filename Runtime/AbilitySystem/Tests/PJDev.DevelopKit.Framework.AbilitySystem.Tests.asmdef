@@ -1,0 +1,27 @@
+{
+    "name": "PJDev.DevelopKit.Framework.AbilitySystem.Tests",
+    "rootNamespace": "PJDev.DevelopKit.Framework.AbilitySystem.Runtime.Tests",
+    "references": [
+        "GUID:8e33616c81991d64bb92344d08721f5b",
+        "GUID:3c59230c53379ed4ba8be6ce5813699b",
+        "GUID:75469ad4d38634e559750d17036d5f7c",
+        "GUID:27619889b8ba8c24980f49ee34dbb44a",
+        "GUID:0acc523941302664db1f4e527237feb3",
+        "GUID:e0cd26848372d4e5c891c569017e11f1"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

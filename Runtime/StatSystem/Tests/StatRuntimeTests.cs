@@ -68,6 +68,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Tests
             Assert.AreEqual(0, hp.ModifierCount);
             Assert.AreEqual(50f, hp.Value);
         }
+
         [Test]
         public void RemoveModifiers_RemovesBothTypesForKey()
         {
@@ -84,6 +85,18 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Tests
         {
             Assert.Throws<ArgumentNullException>(() => hp.SetFlatModifier(null, 10f));
             Assert.Throws<ArgumentNullException>(() => hp.RemovePercentModifier(null));
+            Assert.Throws<ArgumentException>(() => hp.SetFlatModifier(default, 10f));
+        }
+
+        [Test]
+        public void RuntimeModifierKeys_AreUniqueAndNotPersistent()
+        {
+            StatModifierKey first = StatModifierKey.CreateRuntime();
+            StatModifierKey second = StatModifierKey.CreateRuntime();
+
+            Assert.AreNotEqual(first, second);
+            Assert.IsFalse(first.IsPersistent);
+            Assert.IsNull(first.PersistentId);
         }
 
         [Test]

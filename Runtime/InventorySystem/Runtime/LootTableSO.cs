@@ -13,7 +13,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         public float Weight;
     }
 
-    [CreateAssetMenu(fileName = "SO_LootTable", menuName = "PJDev/SO/InventorySystem/LootTable")]
+    [CreateAssetMenu(fileName = "SO_LootTable", menuName = "PJDev/InventorySystem/LootTable")]
     public class LootTableSO : ScriptableObject
     {
         [field: SerializeField] public string TableId { get; set; }

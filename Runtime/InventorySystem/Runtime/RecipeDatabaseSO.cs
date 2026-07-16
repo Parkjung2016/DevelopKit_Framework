@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
-    [CreateAssetMenu(fileName = "SO_RecipeDatabase", menuName = "PJDev/SO/InventorySystem/RecipeDatabase")]
+    [CreateAssetMenu(fileName = "SO_RecipeDatabase", menuName = "PJDev/InventorySystem/RecipeDatabase")]
     public class RecipeDatabaseSO : ScriptableObject, IRecipeDatabase
     {
         [field: SerializeField] public RecipeSO[] Recipes { get; set; } = System.Array.Empty<RecipeSO>();

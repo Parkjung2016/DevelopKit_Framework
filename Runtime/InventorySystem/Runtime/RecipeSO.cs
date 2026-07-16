@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
-    [CreateAssetMenu(fileName = "SO_Recipe", menuName = "PJDev/SO/InventorySystem/Recipe")]
+    [CreateAssetMenu(fileName = "SO_Recipe", menuName = "PJDev/InventorySystem/Recipe")]
     public class RecipeSO : ScriptableObject
     {
         [field: SerializeField] public string RecipeId { get; set; }

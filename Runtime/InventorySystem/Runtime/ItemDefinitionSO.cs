@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
-    [CreateAssetMenu(fileName = "SO_Item", menuName = "PJDev/SO/InventorySystem/Item")]
+    [CreateAssetMenu(fileName = "SO_Item", menuName = "PJDev/InventorySystem/Item")]
     public class ItemDefinitionSO : ScriptableObject
     {
         [field: SerializeField] public int ItemId { get; set; }

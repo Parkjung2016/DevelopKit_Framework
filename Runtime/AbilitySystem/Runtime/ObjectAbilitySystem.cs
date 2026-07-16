@@ -1,289 +1,275 @@
+﻿using System;
 using System.Collections.Generic;
-using PJDev.DevelopKit.BasicTemplate.Runtime;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
+using PJDev.DevelopKit.Framework.StatSystem.Runtime;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 {
     [AddComponentMenu("PJDev/Framework/Object Ability System")]
-    public class ObjectAbilitySystem : MonoBehaviour
+    public sealed class ObjectAbilitySystem : MonoBehaviour
     {
-        private readonly Dictionary<GameplayTag, AbilitySO> abilitiyDic = new();
+        [Header("Setup")] [SerializeField] private AbilitySetupSO abilitySetup = null;
+        [SerializeField] private AbilityInputBridgeSO inputBridge = null;
+        [SerializeField] private bool initializeOnAwake = true;
 
-        public AbilityInputBridgeSO InputBridge => abilityInputBridge;
+        [Header("Owner Components")] [SerializeField]
+        private ObjectGameplayTagContainer tags = null;
 
-        [Header("InputSystem 연동이 필요한 경우에만 사용")] [SerializeField]
-        private AbilityInputBridgeSO abilityInputBridge;
+        [SerializeField] private ObjectStatSystem stats = null;
 
-        [Header("초기 Ability 등록이 필요한 경우에만 사용")] [SerializeField]
-        private AbilitySetupSO abilitySetup;
-
-        [SerializeField] private ObjectGameplayTagContainer playTagContainerCompo;
-
-
+        private readonly Dictionary<GameplayTag, AbilitySO> abilities = new();
         private IAbilitySystemOwner owner;
+        private AbilityInputBridgeSO runtimeInputBridge;
 
-        public void Init(IAbilitySystemOwner owner)
+        public event Action<AbilityContext> OnAbilityActivated;
+        public event Action<AbilityContext> OnAbilityEnded;
+
+        public ObjectGameplayTagContainer Tags => tags;
+        public ObjectStatSystem Stats => stats;
+        public IAbilitySystemOwner Owner => owner;
+        public int AbilityCount => abilities.Count;
+        public bool IsInitialized { get; private set; }
+
+        private void Awake()
         {
-            this.owner = owner;
-            CheckAbilitySetup();
-            if (abilityInputBridge != null)
-            {
-                abilityInputBridge = abilityInputBridge.Clone();
-                abilityInputBridge.Init(this);
-                abilityInputBridge.Bind();
-            }
+            if (initializeOnAwake)
+                Initialize();
+        }
+
+        private void OnEnable()
+        {
+            if (IsInitialized)
+                runtimeInputBridge?.Bind();
+        }
+
+        private void OnDisable()
+        {
+            runtimeInputBridge?.Unbind();
+            EndAllAbilities();
         }
 
         private void OnDestroy()
         {
-            abilityInputBridge?.Unbind();
+            Shutdown();
         }
 
-        private void CheckAbilitySetup()
+        public void Initialize(IAbilitySystemOwner abilityOwner = null)
         {
-            if (abilitySetup == null) return;
+            if (IsInitialized)
+                return;
+
+            owner = abilityOwner;
+            tags ??= GetComponent<ObjectGameplayTagContainer>();
+            stats ??= GetComponent<ObjectStatSystem>();
+            if (stats != null && !stats.IsInitialized)
+                stats.Initialize();
+
+            IsInitialized = true;
+            GiveSetupAbilities();
+
+            if (inputBridge != null)
+            {
+                runtimeInputBridge = inputBridge.CreateRuntimeInstance();
+                runtimeInputBridge.Initialize(this);
+                if (isActiveAndEnabled)
+                    runtimeInputBridge.Bind();
+            }
+        }
+
+        public void Shutdown()
+        {
+            if (!IsInitialized)
+                return;
+
+            runtimeInputBridge?.Unbind();
+            EndAllAbilities();
+
+            foreach (AbilitySO ability in abilities.Values)
+            {
+                ability.Unregister();
+                if (ability != null)
+                    Destroy(ability);
+            }
+
+            abilities.Clear();
+
+            if (runtimeInputBridge != null)
+                Destroy(runtimeInputBridge);
+
+            runtimeInputBridge = null;
+            owner = null;
+            IsInitialized = false;
+            OnAbilityActivated = null;
+            OnAbilityEnded = null;
+        }
+
+        public bool TryGiveAbility(AbilitySO abilityAsset)
+        {
+            if (abilityAsset == null || !abilityAsset.AbilityTag.IsValid)
+                return false;
+            if (abilities.ContainsKey(abilityAsset.AbilityTag))
+                return false;
+
+            AbilitySO ability = abilityAsset.CreateRuntimeInstance();
+            abilities.Add(ability.AbilityTag, ability);
+            ability.Register(this, owner);
+
+            if (ability.ActivateWhenGranted)
+                TryActivateInternal(ability, stats.StatCollection, null);
+
+            return true;
+        }
+
+        public bool TryRemoveAbility(GameplayTag abilityTag)
+        {
+            if (!abilities.TryGetValue(abilityTag, out AbilitySO ability))
+                return false;
+
+            if (ability.IsActive)
+                EndAbility(ability);
+
+            abilities.Remove(abilityTag);
+            ability.Unregister();
+            Destroy(ability);
+            return true;
+        }
+
+        public bool TryRemoveAbility(AbilitySO ability) =>
+            ability != null && TryRemoveAbility(ability.AbilityTag);
+
+        public bool TryActivateAbility(AbilitySO ability, ObjectStatSystem targetStats = null)
+        {
+            if (!TryGetAbility(ability, out AbilitySO runtimeAbility))
+                return false;
+
+            return TryActivateInternal(runtimeAbility, targetStats?.StatCollection, null);
+        }
+
+        public bool TryActivateAbility(
+            AbilitySO ability,
+            InputAction.CallbackContext inputContext,
+            StatCollection targetStatCollection = null)
+        {
+            if (!TryGetAbility(ability, out AbilitySO runtimeAbility))
+                return false;
+
+            return TryActivateInternal(runtimeAbility, targetStatCollection, inputContext);
+        }
+
+        public bool TryActivateAbility(GameplayTag abilityTag, StatCollection targetStatCollection = null)
+        {
+            return abilities.TryGetValue(abilityTag, out AbilitySO ability) &&
+                   TryActivateInternal(ability, targetStatCollection, null);
+        }
+
+        public bool EndAbility(AbilitySO ability)
+        {
+            if (ability == null || !ability.IsActive ||
+                !abilities.TryGetValue(ability.AbilityTag, out AbilitySO registered))
+                return false;
+            if (!ReferenceEquals(ability, registered))
+                return false;
+
+            AbilityContext context = ability.ActiveContext;
+            if (ability.AbilityTag.IsValid && tags != null)
+                tags.GameplayTagContainer.RemoveTag(ability.AbilityTag);
+
+            ability.EndInternal();
+            OnAbilityEnded?.Invoke(context);
+            return true;
+        }
+
+        public void EndAllAbilities()
+        {
+            foreach (AbilitySO ability in abilities.Values)
+            {
+                if (ability.IsActive)
+                    EndAbility(ability);
+            }
+        }
+
+        public bool CanActivateAbility(AbilitySO ability, StatCollection targetStatCollection = null)
+        {
+            if (!TryGetAbility(ability, out AbilitySO runtimeAbility))
+                return false;
+
+            return CanActivateInternal(runtimeAbility, targetStatCollection, out _);
+        }
+
+        public bool HasAbility(AbilitySO ability) =>
+            ability != null && abilities.ContainsKey(ability.AbilityTag);
+
+        public bool HasAbility(GameplayTag abilityTag) =>
+            abilities.ContainsKey(abilityTag);
+
+        public bool TryGetAbility(GameplayTag abilityTag, out AbilitySO ability) =>
+            abilities.TryGetValue(abilityTag, out ability);
+
+        public bool TryGetAbility<T>(GameplayTag abilityTag, out T ability) where T : AbilitySO
+        {
+            if (abilities.TryGetValue(abilityTag, out AbilitySO found) && found is T typed)
+            {
+                ability = typed;
+                return true;
+            }
+
+            ability = null;
+            return false;
+        }
+
+        public bool TryGetAbility(AbilitySO abilityAsset, out AbilitySO ability)
+        {
+            ability = null;
+            return abilityAsset != null &&
+                   abilities.TryGetValue(abilityAsset.AbilityTag, out ability);
+        }
+
+        private bool TryActivateInternal(
+            AbilitySO ability,
+            StatCollection targetStatCollection,
+            InputAction.CallbackContext? inputContext)
+        {
+            if (!CanActivateInternal(ability, targetStatCollection, out AbilityContext context))
+                return false;
+
+            if (ability.AbilityTag.IsValid && tags != null)
+                tags.GameplayTagContainer.AddTag(ability.AbilityTag);
+
+            ability.ActivateInternal(context, inputContext);
+            OnAbilityActivated?.Invoke(context);
+            return true;
+        }
+
+        private bool CanActivateInternal(
+            AbilitySO ability,
+            StatCollection targetStatCollection,
+            out AbilityContext context)
+        {
+            context = default;
+            if (!IsInitialized || ability == null || ability.IsActive)
+                return false;
+
+            if (ability.BlockedByTag.IsValid &&
+                tags != null &&
+                tags.GameplayTagContainer.GetTagCount(ability.BlockedByTag) > 0)
+            {
+                return false;
+            }
+
+            context = new AbilityContext(this, ability, owner, stats.StatCollection,
+                targetStatCollection ?? stats.StatCollection);
+            return ability.CanStart(context, out _);
+        }
+
+        private void GiveSetupAbilities()
+        {
+            if (abilitySetup == null)
+                return;
+
             foreach (AbilitySO ability in abilitySetup)
-            {
                 TryGiveAbility(ability);
-            }
-        }
-
-        /// <summary>
-        /// Ability 추가하고, 해당 GamePlayTag도 부여합니다.
-        /// </summary>
-        /// <param name="ability">추가할 Ability 객체입니다.</param>
-        public bool TryGiveAbility(AbilitySO ability)
-        {
-            if (abilitiyDic.ContainsKey(ability.GrantedGamePlayTag)) return false;
-            AbilitySO clonedAbility = ability.Clone();
-            abilitiyDic.Add(ability.GrantedGamePlayTag, clonedAbility);
-            clonedAbility.RegisteredAbility(owner);
-            if (clonedAbility.ActivateAbilityWhenRegistered)
-                TryActivateAbility(clonedAbility);
-            return true;
-        }
-
-        /// <summary>
-        /// Ability 제거하고, 관련 GamePlayTag도 제거합니다.
-        /// </summary>
-        /// <param name="abilityTag">제거할 Ability의 GamePlayTag입니다.</param>
-        /// <param name="destroyAfterRemoved">Ability 제거 후 해당 객체를 파괴할지 여부입니다.</param>
-        public bool TryRemoveAbility(GameplayTag abilityTag, bool destroyAfterRemoved = true)
-        {
-            if (abilitiyDic.Remove(abilityTag, out AbilitySO removedAbility))
-            {
-                playTagContainerCompo.GameplayTagContainer.RemoveTag(removedAbility.GrantedGamePlayTag);
-                removedAbility.UnRegisteredAbility();
-                if (destroyAfterRemoved)
-                    Destroy(removedAbility);
-                return true;
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Ability 제거하고, 관련 GamePlayTag도 제거합니다.
-        /// </summary>
-        /// <param name="ability">제거할 Ability입니다.</param>
-        /// <param name="destroyAfterRemoved">Ability 제거 후 해당 객체를 파괴할지 여부입니다.</param>
-        public bool TryRemoveAbility(AbilitySO ability, bool destroyAfterRemoved = true)
-        {
-            if (abilitiyDic.Remove(ability.GrantedGamePlayTag, out AbilitySO removedAbility))
-            {
-                playTagContainerCompo.GameplayTagContainer.RemoveTag(removedAbility.GrantedGamePlayTag);
-                removedAbility.UnRegisteredAbility();
-                if (destroyAfterRemoved)
-                    Destroy(removedAbility);
-                return true;
-            }
-
-            return false;
-        }
-
-        private bool TryActivateInternal(AbilitySO ability, InputAction.CallbackContext? context = null)
-        {
-            if (!TryGetAbility(ability, out AbilitySO foundAbility))
-            {
-                CDebug.LogWarning($"Can't find {ability} in registered abilities");
-                return false;
-            }
-
-            if (!CanActivateAbility(foundAbility))
-            {
-                return false;
-            }
-
-            playTagContainerCompo.GameplayTagContainer.AddTag(ability.GrantedGamePlayTag);
-
-            if (context.HasValue)
-                foundAbility.ActivateAbility(context.Value);
-            else
-                foundAbility.ActivateAbility();
-
-            void OnEnded()
-            {
-                playTagContainerCompo.GameplayTagContainer.RemoveTag(ability.GrantedGamePlayTag);
-                foundAbility.OnAbilityEnded -= OnEnded;
-            }
-
-            foundAbility.OnAbilityEnded += OnEnded;
-
-            return true;
-        }
-
-        /// <summary>
-        /// AbilitySO 기준으로 Ability 활성화를 시도합니다.
-        /// 활성화 이후에는 AbilitySO의 EndAbility를 호출해야 해당 Ability를 다시 활성화할 수 있습니다.
-        /// </summary>
-        /// <param name="ability">활성화하려는 Ability 객체입니다.</param>
-        /// <returns>성공적으로 활성화되면 true, 그렇지 않으면 false를 반환합니다.</returns>
-        public bool TryActivateAbility(AbilitySO ability)
-        {
-            TryActivateInternal(ability);
-            return true;
-        }
-
-        /// <summary>
-        /// AbilitySO 기준으로 Ability 활성화를 시도합니다.
-        /// 활성화 이후에는 AbilitySO의 EndAbility를 호출해야 해당 Ability를 다시 활성화할 수 있습니다.
-        /// </summary>
-        /// <param name="ability">활성화하려는 Ability 객체입니다.</param>
-        /// <returns>성공적으로 활성화되면 true, 그렇지 않으면 false를 반환합니다.</returns>
-        public bool TryActivateAbility(AbilitySO ability, InputAction.CallbackContext context)
-        {
-            return TryActivateInternal(ability, context);
-        }
-
-
-        /// <summary>
-        /// GamePlayTag 기준으로 Ability 활성화를 시도합니다.
-        /// 활성화 이후에는 AbilitySO의 EndAbility를 호출해야 해당 Ability를 다시 활성화할 수 있습니다.
-        /// </summary>
-        /// <param name="abilityTag">활성화하려는 Ability의 GamePlayTag입니다.</param>
-        /// <returns>성공적으로 활성화되면 true, 그렇지 않으면 false를 반환합니다.</returns>
-        public bool TryActivateAbility(GameplayTag abilityTag)
-        {
-            if (!TryGetAbility(abilityTag, out AbilitySO foundAbility)) return false;
-            if (!CanActivateAbility(foundAbility))
-                return false;
-
-            foundAbility.ActivateAbility();
-            return true;
-        }
-
-        /// <summary>
-        /// 해당 Ability 활성화할 수 있는지 확인합니다.
-        /// </summary>
-        /// <param name="ability">
-        /// TryGetAbility를 통해 가져온 AbilitySO.  
-        /// </param>
-        public bool CanActivateAbility(AbilitySO ability)
-        {
-            if (ability.IsActivating) return false;
-
-            if (playTagContainerCompo.GameplayTagContainer.HasTag(ability.BlockedGamePlayTags))
-            {
-                CDebug.LogWarning($"{ability.GrantedGamePlayTag} tag could not be found.");
-                return false;
-            }
-
-            return true;
-        }
-
-        /// <summary>
-        /// AbilitySO 기준으로 Ability 보유 여부를 확인합니다.
-        /// </summary>
-        public bool HasAbility(AbilitySO ability)
-        {
-            foreach (var pair in abilitiyDic)
-            {
-                if (pair.Value.name == ability.name)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// GamePlayTag 기준으로 Ability 보유 여부를 확인합니다.
-        /// </summary>
-        public bool HasAbility(GameplayTag abilityTag)
-        {
-            return playTagContainerCompo.GameplayTagContainer.HasTag(abilityTag);
-        }
-
-        /// <summary>
-        /// GamePlayTag 기준으로 Ability 가져오기를 시도합니다.
-        /// </summary>
-        /// <param name="abilityTag">찾고자 하는 Ability의 GamePlayTag입니다.</param>
-        /// <param name="foundAbility">검색에 성공한 경우, 해당 AbilitySO가 할당됩니다.</param>
-        /// <returns>해당 GamePlayTag를 가진 Ability가 존재하면 true, 그렇지 않으면 false를 반환합니다.</returns>
-        public bool TryGetAbility(GameplayTag abilityTag, out AbilitySO foundAbility)
-        {
-            return abilitiyDic.TryGetValue(abilityTag, out foundAbility);
-        }
-
-
-        /// <summary>
-        /// GamePlayTag 기준으로 Ability 가져오기를 시도합니다.
-        /// </summary>
-        /// <param name="abilityTag">찾고자 하는 Ability의 GamePlayTag입니다.</param>
-        /// <param name="foundAbility">검색에 성공한 경우, 해당 AbilitySO가 할당됩니다.</param>
-        /// <returns>해당 GamePlayTag를 가진 Ability가 존재하면 true, 그렇지 않으면 false를 반환합니다.</returns>
-        public bool TryGetAbility<T>(GameplayTag abilityTag, out T foundAbility) where T : AbilitySO
-        {
-            if (abilitiyDic.TryGetValue(abilityTag, out AbilitySO ability))
-            {
-                foundAbility = ability as T;
-                return true;
-            }
-
-            foundAbility = null;
-            return false;
-        }
-
-        /// <summary>
-        /// AbilitySO 기준으로 Ability 가져오기를 시도합니다.
-        /// </summary>
-        /// <param name="ability">기준이 되는 AbilitySO입니다. 이름을 비교하여 검색합니다.</param>
-        /// <param name="foundAbility">검색에 성공한 경우, 해당 AbilitySO가 할당됩니다.</param>
-        /// <returns>Ability를 찾았으면 true, 그렇지 않으면 false를 반환합니다.</returns>
-        public bool TryGetAbility(AbilitySO ability, out AbilitySO foundAbility)
-        {
-            foundAbility = null;
-            foreach (var storedAbility in abilitiyDic.Values)
-            {
-                if (storedAbility.name == ability.name)
-                {
-                    foundAbility = storedAbility;
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// AbilitySO 기준으로 Ability 가져오기를 시도합니다.
-        /// </summary>
-        /// <param name="ability">기준이 되는 AbilitySO입니다. 이름을 비교하여 검색합니다.</param>
-        /// <param name="foundAbility">검색에 성공한 경우, 해당 AbilitySO가 할당됩니다.</param>
-        /// <returns>Ability를 찾았으면 true, 그렇지 않으면 false를 반환합니다.</returns>
-        public bool TryGetAbility<T>(AbilitySO ability, out T foundAbility) where T : AbilitySO
-        {
-            if (TryGetAbility(ability, out AbilitySO foundBaseAbility))
-            {
-                foundAbility = foundBaseAbility as T;
-                return true;
-            }
-
-            foundAbility = null;
-            return false;
         }
     }
 }

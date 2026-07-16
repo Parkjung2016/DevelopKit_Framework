@@ -12,10 +12,10 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
         [SerializeField] private StatOverrideListSO overrides = null;
         [SerializeField] private bool initializeOnAwake = true;
 
-        private readonly StatCollection stats = new();
+        private readonly StatCollection statCollection = new();
         private readonly List<StatOverrideEntry> overrideBuffer = new();
 
-        public StatCollection Stats => stats;
+        public StatCollection StatCollection => statCollection;
         public bool IsInitialized { get; private set; }
 
         private void Awake()
@@ -31,74 +31,76 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             if (overrides == null)
                 overrideBuffer.Clear();
 
-            stats.Initialize(catalog, overrideBuffer);
+            statCollection.Initialize(catalog, overrideBuffer);
             IsInitialized = true;
         }
 
         public void Initialize(IStatCatalog catalog, IReadOnlyList<StatOverrideEntry> statOverrides = null)
         {
-            stats.Initialize(catalog, statOverrides);
+            statCollection.Initialize(catalog, statOverrides);
             IsInitialized = true;
         }
 
         public void Initialize(IReadOnlyList<StatOverrideEntry> statOverrides)
         {
-            stats.Initialize(statOverrides);
+            statCollection.Initialize(statOverrides);
             IsInitialized = true;
         }
 
-        public Stat GetStat(string statName) => stats.GetStat(statName);
+        public Stat GetStat(string statName) => statCollection.GetStat(statName);
 
         public Stat GetStat(StatSO stat) =>
-            stats.GetStat(GetStatName(stat));
+            statCollection.GetStat(GetStatName(stat));
 
         public bool TryGetStat(string statName, out Stat stat) =>
-            stats.TryGetStat(statName, out stat);
+            statCollection.TryGetStat(statName, out stat);
 
         public bool TryGetStat(StatSO statAsset, out Stat stat)
         {
             stat = null;
-            return statAsset != null && stats.TryGetStat(statAsset.StatName, out stat);
+            return statAsset != null && statCollection.TryGetStat(statAsset.StatName, out stat);
         }
 
-        public bool HasStat(string statName) => stats.HasStat(statName);
+        public bool HasStat(string statName) => statCollection.HasStat(statName);
 
         public bool HasStat(StatSO stat) =>
-            stat != null && stats.HasStat(stat.StatName);
+            stat != null && statCollection.HasStat(stat.StatName);
 
-        public float GetBaseValue(string statName) => stats.GetBaseValue(statName);
+        public float GetBaseValue(string statName) => statCollection.GetBaseValue(statName);
 
         public void SetBaseValue(string statName, float value) =>
-            stats.SetBaseValue(statName, value);
+            statCollection.SetBaseValue(statName, value);
 
         public float AddBaseValue(string statName, float amount) =>
-            stats.AddBaseValue(statName, amount);
+            statCollection.AddBaseValue(statName, amount);
 
-        public void SetModifier(string statName, object key, in StatModifier modifier) =>
-            stats.SetModifier(statName, key, modifier);
+        public void SetModifier(string statName, StatModifierKey key, in StatModifier modifier) =>
+            statCollection.SetModifier(statName, key, modifier);
 
-        public void SetFlatModifier(string statName, object key, float amount) =>
-            stats.SetFlatModifier(statName, key, amount);
+        public void SetFlatModifier(string statName, StatModifierKey key, float amount) =>
+            statCollection.SetFlatModifier(statName, key, amount);
 
-        public void SetPercentModifier(string statName, object key, float percent) =>
-            stats.SetPercentModifier(statName, key, percent);
+        public void SetPercentModifier(string statName, StatModifierKey key, float percent) =>
+            statCollection.SetPercentModifier(statName, key, percent);
 
-        public bool RemoveFlatModifier(string statName, object key) =>
-            stats.RemoveFlatModifier(statName, key);
+        public bool RemoveFlatModifier(string statName, StatModifierKey key) =>
+            statCollection.RemoveFlatModifier(statName, key);
 
-        public bool RemovePercentModifier(string statName, object key) =>
-            stats.RemovePercentModifier(statName, key);
+        public bool RemovePercentModifier(string statName, StatModifierKey key) =>
+            statCollection.RemovePercentModifier(statName, key);
 
-        public bool RemoveModifiers(string statName, object key) =>
-            stats.RemoveModifiers(statName, key);
+        public bool RemoveModifiers(string statName, StatModifierKey key) =>
+            statCollection.RemoveModifiers(statName, key);
 
-        public void ClearModifiers() => stats.ClearModifiers();
+        public void ClearModifiers() => statCollection.ClearModifiers();
 
-        public StatCollectionSnapshot CaptureSnapshot(StatCollectionSnapshot destination = null) =>
-            stats.CaptureSnapshot(destination);
+        public StatCollectionSnapshot CaptureSnapshot(
+            StatCollectionSnapshot destination = null,
+            bool includePersistentModifiers = true) =>
+            statCollection.CaptureSnapshot(destination, includePersistentModifiers);
 
         public int RestoreSnapshot(StatCollectionSnapshot snapshot, bool ignoreMissingStats = true) =>
-            stats.RestoreSnapshot(snapshot, ignoreMissingStats);
+            statCollection.RestoreSnapshot(snapshot, ignoreMissingStats);
 
         private static string GetStatName(StatSO stat)
         {

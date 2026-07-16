@@ -11,7 +11,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         public string SlotCategory;
     }
 
-    [CreateAssetMenu(fileName = "SO_EquipmentSetup", menuName = "PJDev/SO/EquipmentSystem/Setup")]
+    [CreateAssetMenu(fileName = "SO_EquipmentSetup", menuName = "PJDev/EquipmentSystem/Setup")]
     public class EquipmentSetupSO : ScriptableObject
     {
         private static readonly string[] BuiltInSlotCategories =

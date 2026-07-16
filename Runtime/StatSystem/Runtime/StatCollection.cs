@@ -77,22 +77,22 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             return stat.BaseValue;
         }
 
-        public void SetModifier(string statName, object key, in StatModifier modifier) =>
+        public void SetModifier(string statName, StatModifierKey key, in StatModifier modifier) =>
             GetStat(statName).SetModifier(key, modifier);
 
-        public void SetFlatModifier(string statName, object key, float amount) =>
+        public void SetFlatModifier(string statName, StatModifierKey key, float amount) =>
             GetStat(statName).SetFlatModifier(key, amount);
 
-        public void SetPercentModifier(string statName, object key, float percent) =>
+        public void SetPercentModifier(string statName, StatModifierKey key, float percent) =>
             GetStat(statName).SetPercentModifier(key, percent);
 
-        public bool RemoveFlatModifier(string statName, object key) =>
+        public bool RemoveFlatModifier(string statName, StatModifierKey key) =>
             GetStat(statName).RemoveFlatModifier(key);
 
-        public bool RemovePercentModifier(string statName, object key) =>
+        public bool RemovePercentModifier(string statName, StatModifierKey key) =>
             GetStat(statName).RemovePercentModifier(key);
 
-        public bool RemoveModifiers(string statName, object key) =>
+        public bool RemoveModifiers(string statName, StatModifierKey key) =>
             GetStat(statName).RemoveModifiers(key);
 
         public void ClearModifiers()
@@ -101,10 +101,12 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
                 stat.ClearModifiers();
         }
 
-        public StatCollectionSnapshot CaptureSnapshot(StatCollectionSnapshot destination = null)
+        public StatCollectionSnapshot CaptureSnapshot(
+            StatCollectionSnapshot destination = null,
+            bool includePersistentModifiers = true)
         {
             destination ??= new StatCollectionSnapshot();
-            destination.Capture(this);
+            destination.Capture(this, includePersistentModifiers);
             return destination;
         }
 
@@ -112,6 +114,9 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
         {
             if (snapshot == null)
                 throw new ArgumentNullException(nameof(snapshot));
+
+            foreach (Stat stat in stats.Values)
+                stat.ClearPersistentModifiers();
 
             int restoredCount = 0;
             IReadOnlyList<StatValueSnapshot> values = snapshot.Stats;
@@ -127,6 +132,26 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 
                 if (!ignoreMissingStats)
                     throw new KeyNotFoundException($"Stat '{savedStat.StatName}' was not found.");
+            }
+
+            IReadOnlyList<StatModifierSnapshot> modifiers = snapshot.Modifiers;
+            for (int i = 0; i < modifiers.Count; i++)
+            {
+                StatModifierSnapshot savedModifier = modifiers[i];
+                if (TryGetStat(savedModifier.StatName, out Stat stat))
+                {
+                    if (!string.IsNullOrWhiteSpace(savedModifier.Key))
+                    {
+                        stat.SetModifier(
+                            StatModifierKey.Persistent(savedModifier.Key),
+                            savedModifier.Modifier);
+                    }
+
+                    continue;
+                }
+
+                if (!ignoreMissingStats)
+                    throw new KeyNotFoundException($"Stat '{savedModifier.StatName}' was not found.");
             }
 
             return restoredCount;

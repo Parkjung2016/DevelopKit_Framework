@@ -6,62 +6,47 @@ using UnityEngine.InputSystem;
 namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 {
     [Serializable]
-    public class AbilityInputBridgeInfo
+    public sealed class AbilityInputBinding
     {
-        public InputActionReference activationInput;
-        public AbilitySO abilityToActivate;
+        [SerializeField] private InputActionReference input = null;
+        [SerializeField] private AbilitySO ability = null;
+
+        public InputActionReference Input => input;
+        public AbilitySO Ability => ability;
     }
 
-    [CreateAssetMenu(fileName = "SO_AbilityInputBridge", menuName = "PJDev/SO/GameAbility/Config/InputBridge")]
-    public class AbilityInputBridgeSO : ScriptableObject
+    [CreateAssetMenu(fileName = "SO_AbilityInputBridge", menuName = "PJDev/Ability System/Input Bridge")]
+    public sealed class AbilityInputBridgeSO : ScriptableObject
     {
-        [Header("외부 주입이 없을 경우 사용할 InputActionAsset")] [SerializeField]
-        private InputActionAsset inputAsset;
+        [SerializeField] private List<AbilityInputBinding> bindings = new();
 
-        [SerializeField] private List<AbilityInputBridgeInfo> abilityInputBridgeInfoList;
-
-        private ObjectAbilitySystem abilitySystemCompo;
-        private IInputActionCollection2 inputActionCollection;
-
-        private readonly Dictionary<InputAction, Action<InputAction.CallbackContext>> callbackMap = new();
-
+        private readonly Dictionary<InputAction, Action<InputAction.CallbackContext>> callbacks = new();
+        private ObjectAbilitySystem abilitySystem;
         private bool isBound;
 
-        public void Init(ObjectAbilitySystem abilitySystem)
+        internal void Initialize(ObjectAbilitySystem system)
         {
-            abilitySystemCompo = abilitySystem;
-
-            ResolveInputCollection();
-            Bind();
-        }
-
-        public void SetInputActionCollection(IInputActionCollection2 collection)
-        {
-            inputActionCollection = collection;
-        }
-
-        private void ResolveInputCollection()
-        {
-            inputActionCollection ??= inputAsset;
+            abilitySystem = system;
         }
 
         public void Bind()
         {
-            if (isBound)
+            if (isBound || abilitySystem == null)
                 return;
 
-            foreach (var info in abilityInputBridgeInfoList)
+            for (int i = 0; i < bindings.Count; i++)
             {
-                var action = info.activationInput?.action;
-                if (action == null)
+                AbilityInputBinding binding = bindings[i];
+                InputAction action = binding?.Input?.action;
+                AbilitySO ability = binding?.Ability;
+                if (action == null || ability == null || callbacks.ContainsKey(action))
                     continue;
 
-                action.Enable();
-
-                var callback = CreateCallback(info);
-
-                callbackMap[action] = callback;
+                Action<InputAction.CallbackContext> callback =
+                    context => abilitySystem.TryActivateAbility(ability, context);
+                callbacks.Add(action, callback);
                 action.performed += callback;
+                action.Enable();
             }
 
             isBound = true;
@@ -69,30 +54,21 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 
         public void Unbind()
         {
-            if (isBound == false)
+            if (!isBound)
                 return;
 
-            foreach (var pair in callbackMap)
-            {
-                var action = pair.Key;
-                var callback = pair.Value;
+            foreach (KeyValuePair<InputAction, Action<InputAction.CallbackContext>> pair in callbacks)
+                pair.Key.performed -= pair.Value;
 
-                action.performed -= callback;
-                action.Disable();
-            }
-
-            callbackMap.Clear();
+            callbacks.Clear();
             isBound = false;
         }
 
-        private Action<InputAction.CallbackContext> CreateCallback(AbilityInputBridgeInfo info)
+        internal AbilityInputBridgeSO CreateRuntimeInstance()
         {
-            return (ctx) => { abilitySystemCompo.TryActivateAbility(info.abilityToActivate, ctx); };
-        }
-        
-        public AbilityInputBridgeSO Clone()
-        {
-            return Instantiate(this);
+            AbilityInputBridgeSO instance = Instantiate(this);
+            instance.name = name;
+            return instance;
         }
     }
 }

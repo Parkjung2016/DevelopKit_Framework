@@ -9,7 +9,8 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
     /// </summary>
     public sealed class Stat
     {
-        private readonly Dictionary<object, StatModifier> modifiers = new();
+        private readonly Dictionary<StatModifierKey, StatModifier> modifiers = new();
+        private readonly List<StatModifierKey> modifierKeyBuffer = new();
 
         private float baseValue;
         private float flatModifierTotal;
@@ -64,7 +65,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 
         public void AddBasePercent(float percent) => BaseValue *= 1f + percent * 0.01f;
 
-        public void SetModifier(object key, in StatModifier modifier)
+        public void SetModifier(StatModifierKey key, in StatModifier modifier)
         {
             ValidateKey(key);
             modifiers.TryGetValue(key, out StatModifier previous);
@@ -83,27 +84,27 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             Recalculate();
         }
 
-        public void SetFlatModifier(object key, float amount)
+        public void SetFlatModifier(StatModifierKey key, float amount)
         {
             ValidateKey(key);
             modifiers.TryGetValue(key, out StatModifier modifier);
             SetModifier(key, modifier.WithFlat(amount));
         }
 
-        public void SetPercentModifier(object key, float percent)
+        public void SetPercentModifier(StatModifierKey key, float percent)
         {
             ValidateKey(key);
             modifiers.TryGetValue(key, out StatModifier modifier);
             SetModifier(key, modifier.WithPercent(percent));
         }
 
-        public bool TryGetModifier(object key, out StatModifier modifier)
+        public bool TryGetModifier(StatModifierKey key, out StatModifier modifier)
         {
             ValidateKey(key);
             return modifiers.TryGetValue(key, out modifier);
         }
 
-        public bool RemoveFlatModifier(object key)
+        public bool RemoveFlatModifier(StatModifierKey key)
         {
             ValidateKey(key);
             if (!modifiers.TryGetValue(key, out StatModifier modifier) ||
@@ -114,7 +115,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             return true;
         }
 
-        public bool RemovePercentModifier(object key)
+        public bool RemovePercentModifier(StatModifierKey key)
         {
             ValidateKey(key);
             if (!modifiers.TryGetValue(key, out StatModifier modifier) ||
@@ -125,7 +126,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             return true;
         }
 
-        public bool RemoveModifiers(object key)
+        public bool RemoveModifiers(StatModifierKey key)
         {
             ValidateKey(key);
             if (!modifiers.Remove(key, out StatModifier modifier))
@@ -148,6 +149,40 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             Recalculate();
         }
 
+        internal void CapturePersistentModifiers(List<StatModifierSnapshot> destination)
+        {
+            foreach (KeyValuePair<StatModifierKey, StatModifier> pair in modifiers)
+            {
+                if (pair.Key.IsPersistent)
+                    destination.Add(new StatModifierSnapshot(StatName, pair.Key.PersistentId, pair.Value));
+            }
+        }
+
+        internal void ClearPersistentModifiers()
+        {
+            modifierKeyBuffer.Clear();
+            foreach (StatModifierKey key in modifiers.Keys)
+            {
+                if (key.IsPersistent)
+                    modifierKeyBuffer.Add(key);
+            }
+
+            if (modifierKeyBuffer.Count == 0)
+                return;
+
+            for (int i = 0; i < modifierKeyBuffer.Count; i++)
+            {
+                StatModifierKey key = modifierKeyBuffer[i];
+                StatModifier modifier = modifiers[key];
+                modifiers.Remove(key);
+                flatModifierTotal -= modifier.Flat;
+                percentModifierTotal -= modifier.Percent;
+            }
+
+            modifierKeyBuffer.Clear();
+            Recalculate();
+        }
+
         private void Recalculate()
         {
             float previous = value;
@@ -158,10 +193,10 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
                 OnValueChanged?.Invoke(this, value, previous);
         }
 
-        private static void ValidateKey(object key)
+        private static void ValidateKey(StatModifierKey key)
         {
-            if (key == null)
-                throw new ArgumentNullException(nameof(key));
+            if (!key.IsValid)
+                throw new ArgumentException("A valid modifier key is required.", nameof(key));
         }
     }
 }

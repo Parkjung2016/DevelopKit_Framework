@@ -570,7 +570,7 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
 
             ObjectStatSystem system = runtimeSystems[index];
             ((Label)element).text =
-                $"{system.name}  ({system.Stats.Count})";
+                $"{system.name}  ({system.StatCollection.Count})";
             element.tooltip = GetHierarchyPath(system.transform);
         }
 
@@ -588,13 +588,13 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
 
         private void RefreshSelectedRuntimeStats()
         {
-            int expectedCount = selectedSystem != null ? selectedSystem.Stats.Count : 0;
+            int expectedCount = selectedSystem != null ? selectedSystem.StatCollection.Count : 0;
             bool structureChanged = runtimeStats.Count != expectedCount;
 
             if (!structureChanged && selectedSystem != null)
             {
                 int index = 0;
-                foreach (Stat stat in selectedSystem.Stats)
+                foreach (Stat stat in selectedSystem.StatCollection)
                 {
                     if (!ReferenceEquals(runtimeStats[index], stat))
                     {
@@ -611,7 +611,7 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
                 runtimeStats.Clear();
                 if (selectedSystem != null)
                 {
-                    foreach (Stat stat in selectedSystem.Stats)
+                    foreach (Stat stat in selectedSystem.StatCollection)
                         runtimeStats.Add(stat);
                 }
 

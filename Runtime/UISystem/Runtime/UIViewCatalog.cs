@@ -5,7 +5,7 @@ using UnityEngine;
 namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 {
     /// <summary>프리팹 뷰를 ID·타입으로 조회하는 카탈로그입니다.</summary>
-    [CreateAssetMenu(fileName = "UIViewCatalog", menuName = "PJDev/SO/UI/View Catalog")]
+    [CreateAssetMenu(fileName = "UIViewCatalog", menuName = "PJDev/UISystem/View Catalog")]
     public sealed class UIViewCatalog : ScriptableObject
     {
         [SerializeField]

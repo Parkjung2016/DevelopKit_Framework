@@ -5,7 +5,7 @@ using UnityEngine;
 namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 {
     /// <summary>프로젝트별 UI 레이어·Canvas 묶음 구성을 정의하는 ScriptableObject입니다.</summary>
-    [CreateAssetMenu(fileName = "UILayerSettings", menuName = "PJDev/SO/UI/Layer Settings")]
+    [CreateAssetMenu(fileName = "UILayerSettings", menuName = "PJDev/UISystem/Layer Settings")]
     public sealed class UILayerSettings : ScriptableObject
     {
         [SerializeField]

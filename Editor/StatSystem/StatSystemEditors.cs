@@ -117,7 +117,7 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
             EditorGUILayout.Space(8f);
             showRuntimeStats = EditorGUILayout.Foldout(
                 showRuntimeStats,
-                $"Runtime Stats ({system.Stats.Count})",
+                $"Runtime Stats ({system.StatCollection.Count})",
                 true);
 
             if (!showRuntimeStats)
@@ -129,7 +129,7 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
                 return;
             }
 
-            foreach (Stat stat in system.Stats)
+            foreach (Stat stat in system.StatCollection)
             {
                 using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
                 {
