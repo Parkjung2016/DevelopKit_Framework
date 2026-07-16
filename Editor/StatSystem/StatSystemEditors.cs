@@ -1,4 +1,6 @@
+﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using PJDev.DevelopKit.Framework.StatSystem.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -8,18 +10,96 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
     [CustomEditor(typeof(StatSO))]
     internal sealed class StatSOEditor : Editor
     {
+        private const string StatNameControl = "StatSO.StatName";
+
+        private SerializedProperty statNameProperty;
+        private string statNameDraft;
+
+        private void OnEnable()
+        {
+            statNameProperty = serializedObject.FindProperty("statName");
+            statNameDraft = statNameProperty?.stringValue ?? string.Empty;
+        }
+
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            DrawDefaultInspector();
+
+            bool isEditingName = GUI.GetNameOfFocusedControl() == StatNameControl;
+            if (!isEditingName)
+                statNameDraft = statNameProperty.stringValue;
+
+            using (new EditorGUI.DisabledScope(true))
+            {
+                EditorGUILayout.ObjectField(
+                    "Script",
+                    MonoScript.FromScriptableObject((StatSO)target),
+                    typeof(MonoScript),
+                    false);
+            }
+
+            Event currentEvent = Event.current;
+            bool confirmName = isEditingName &&
+                               currentEvent.type == EventType.KeyDown &&
+                               (currentEvent.keyCode == KeyCode.Return ||
+                                currentEvent.keyCode == KeyCode.KeypadEnter);
+
+            GUI.SetNextControlName(StatNameControl);
+            statNameDraft = EditorGUILayout.TextField("Stat Name", statNameDraft);
+            DrawPropertiesExcluding(serializedObject, "m_Script", "statName");
+
+            if (confirmName)
+            {
+                statNameProperty.stringValue = statNameDraft.Trim();
+                if (Event.current.type != EventType.Used)
+                    Event.current.Use();
+                GUI.FocusControl(null);
+            }
+
             serializedObject.ApplyModifiedProperties();
 
             var stat = (StatSO)target;
+            if (confirmName)
+            {
+                string confirmedName = stat.StatName;
+                EditorApplication.delayCall += () => RenameAsset(stat, confirmedName);
+            }
+
             if (string.IsNullOrWhiteSpace(stat.StatName))
                 EditorGUILayout.HelpBox("Stat Name is required.", MessageType.Warning);
 
             if (stat.MaxValue < stat.MinValue)
                 EditorGUILayout.HelpBox("Max Value must be greater than or equal to Min Value.", MessageType.Error);
+        }
+
+        private static void RenameAsset(StatSO stat, string statName)
+        {
+            if (stat == null || string.IsNullOrWhiteSpace(statName))
+                return;
+
+            string path = AssetDatabase.GetAssetPath(stat);
+            if (string.IsNullOrEmpty(path))
+                return;
+
+            string assetName = $"SO_{SanitizeFileName(statName.Trim())}_Stat";
+            if (string.IsNullOrEmpty(assetName) ||
+                string.Equals(Path.GetFileNameWithoutExtension(path), assetName, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            string error = AssetDatabase.RenameAsset(path, assetName);
+            if (!string.IsNullOrEmpty(error))
+                Debug.LogWarning($"Stat asset rename failed: {error}", stat);
+        }
+
+        private static string SanitizeFileName(string value)
+        {
+            char[] invalidCharacters = Path.GetInvalidFileNameChars();
+            for (int i = 0; i < invalidCharacters.Length; i++)
+                value = value.Replace(invalidCharacters[i], '_');
+
+            return value.Replace('/', '_').Replace('\\', '_');
         }
     }
 

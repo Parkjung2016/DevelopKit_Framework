@@ -21,6 +21,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 
         private readonly Dictionary<GameplayTag, AbilitySO> abilities = new();
         private IAbilitySystemOwner owner;
+        private IInputActionCollection2 inputActions;
         private AbilityInputBridgeSO runtimeInputBridge;
 
         public event Action<AbilityContext> OnAbilityActivated;
@@ -72,7 +73,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
             if (inputBridge != null)
             {
                 runtimeInputBridge = inputBridge.CreateRuntimeInstance();
-                runtimeInputBridge.Initialize(this);
+                runtimeInputBridge.Initialize(this, inputActions);
                 if (isActiveAndEnabled)
                     runtimeInputBridge.Bind();
             }
@@ -103,6 +104,16 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
             IsInitialized = false;
             OnAbilityActivated = null;
             OnAbilityEnded = null;
+        }
+
+        /// <summary>
+        /// 외부에서 생성하고 관리하는 Input Actions 컬렉션을 연결합니다.
+        /// <code>abilitySystem.SetInputActions(inputManager.Input);</code>
+        /// </summary>
+        public void SetInputActions(IInputActionCollection2 actions)
+        {
+            inputActions = actions;
+            runtimeInputBridge?.SetInputActions(actions);
         }
 
         public bool TryGiveAbility(AbilitySO abilityAsset)

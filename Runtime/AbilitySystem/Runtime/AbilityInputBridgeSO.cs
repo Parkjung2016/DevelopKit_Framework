@@ -21,12 +21,26 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         [SerializeField] private List<AbilityInputBinding> bindings = new();
 
         private readonly Dictionary<InputAction, Action<InputAction.CallbackContext>> callbacks = new();
+        private readonly HashSet<InputAction> actionsEnabledByBridge = new();
         private ObjectAbilitySystem abilitySystem;
+        private IInputActionCollection2 inputActions;
         private bool isBound;
 
-        internal void Initialize(ObjectAbilitySystem system)
+        internal void Initialize(ObjectAbilitySystem system, IInputActionCollection2 actions)
         {
             abilitySystem = system;
+            inputActions = actions;
+        }
+
+        internal void SetInputActions(IInputActionCollection2 actions)
+        {
+            bool shouldRebind = isBound;
+            if (shouldRebind)
+                Unbind();
+
+            inputActions = actions;
+            if (shouldRebind)
+                Bind();
         }
 
         public void Bind()
@@ -37,7 +51,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
             for (int i = 0; i < bindings.Count; i++)
             {
                 AbilityInputBinding binding = bindings[i];
-                InputAction action = binding?.Input?.action;
+                InputAction action = ResolveAction(binding?.Input);
                 AbilitySO ability = binding?.Ability;
                 if (action == null || ability == null || callbacks.ContainsKey(action))
                     continue;
@@ -46,7 +60,12 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
                     context => abilitySystem.TryActivateAbility(ability, context);
                 callbacks.Add(action, callback);
                 action.performed += callback;
-                action.Enable();
+
+                if (!action.enabled)
+                {
+                    action.Enable();
+                    actionsEnabledByBridge.Add(action);
+                }
             }
 
             isBound = true;
@@ -60,8 +79,36 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
             foreach (KeyValuePair<InputAction, Action<InputAction.CallbackContext>> pair in callbacks)
                 pair.Key.performed -= pair.Value;
 
+            foreach (InputAction action in actionsEnabledByBridge)
+                action.Disable();
+
             callbacks.Clear();
+            actionsEnabledByBridge.Clear();
             isBound = false;
+        }
+
+        private InputAction ResolveAction(InputActionReference reference)
+        {
+            InputAction configuredAction = reference?.action;
+            if (configuredAction == null || inputActions == null)
+                return configuredAction;
+
+            InputAction namedMatch = null;
+            string configuredMapName = configuredAction.actionMap?.name;
+            foreach (InputAction candidate in inputActions)
+            {
+                if (candidate.id == configuredAction.id)
+                    return candidate;
+
+                if (namedMatch == null &&
+                    string.Equals(candidate.name, configuredAction.name, StringComparison.Ordinal) &&
+                    string.Equals(candidate.actionMap?.name, configuredMapName, StringComparison.Ordinal))
+                {
+                    namedMatch = candidate;
+                }
+            }
+
+            return namedMatch;
         }
 
         internal AbilityInputBridgeSO CreateRuntimeInstance()
