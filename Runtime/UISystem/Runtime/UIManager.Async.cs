@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
-using PJDev.DevelopKit.Framework.PoolSystem.Runtime;
+using PJDev.DevelopKit.BasicTemplate.Runtime.PoolSystem;
 
 namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 {

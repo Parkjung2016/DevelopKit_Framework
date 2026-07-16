@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using PJDev.DevelopKit.Framework.PoolSystem.Runtime;
+using PJDev.DevelopKit.BasicTemplate.Runtime.PoolSystem;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 {
