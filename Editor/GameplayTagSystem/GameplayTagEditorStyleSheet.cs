@@ -1,16 +1,16 @@
-using PJDev.DevelopKit.BasicTemplate.Runtime;
+﻿using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
 {
-    /// <summary>게임플레이 태그 에디터 UIElements 스타일시트를 로드·적용합니다.</summary>
+    /// <summary>Gameplay Tag 에디터의 UIElements 스타일을 불러와 적용합니다.</summary>
     internal static class GameplayTagEditorStyleSheet
     {
         private static StyleSheet cachedSheet;
 
-        /// <summary>루트 비주얼 요소에 태그 에디터 USS를 연결합니다.</summary>
+        /// <summary>루트 요소에 Gameplay Tag 에디터 스타일을 적용합니다.</summary>
         public static void Apply(VisualElement root)
         {
             StyleSheet sheet = GetOrLoad();

@@ -13,7 +13,8 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
 {
     public sealed class StatDatabaseWindow : EditorWindow
     {
-        private const string StylePath = "Assets/Framework/Editor/StatSystem/StatDatabaseWindow.uss";
+        private const string StyleGuid = "ccca89dbaa4945cdb65ce8efdc886385";
+        private static StyleSheet cachedStyleSheet;
         private const string LastDatabaseKey = "PJDev.StatSystem.LastDatabase";
 
         private readonly List<StatSO> allStats = new();
@@ -72,7 +73,7 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
             rootVisualElement.Clear();
             rootVisualElement.AddToClassList("stat-window");
 
-            StyleSheet style = AssetDatabase.LoadAssetAtPath<StyleSheet>(StylePath);
+            StyleSheet style = GetStyleSheet();
             if (style != null)
                 rootVisualElement.styleSheets.Add(style);
 
@@ -88,6 +89,19 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
                 SetDatabase(LoadLastDatabase(), rebuild: false);
 
             ShowDataTab();
+        }
+
+        private static StyleSheet GetStyleSheet()
+        {
+            if (cachedStyleSheet != null)
+                return cachedStyleSheet;
+
+            string path = AssetDatabase.GUIDToAssetPath(StyleGuid);
+            if (string.IsNullOrEmpty(path))
+                return null;
+
+            cachedStyleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(path);
+            return cachedStyleSheet;
         }
 
         private VisualElement BuildHeader()

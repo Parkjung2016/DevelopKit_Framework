@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -12,8 +12,8 @@ namespace PJDev.DevelopKit.Framework.Editors.SaveSystem
 {
     public sealed class SaveBrowserWindow : EditorWindow
     {
-        private const string StylePath =
-            "Assets/Framework/Editor/SaveSystem/SaveBrowser.uss";
+        private const string StyleGuid = "deb6d2fa55c343858a559ccf14d03d08";
+        private static StyleSheet cachedStyleSheet;
 
         private readonly List<SaveBrowserEntry> entries = new();
         private readonly List<SaveBrowserEntry> filteredEntries = new();
@@ -56,7 +56,7 @@ namespace PJDev.DevelopKit.Framework.Editors.SaveSystem
             rootVisualElement.Clear();
             rootVisualElement.AddToClassList("save-browser");
 
-            StyleSheet styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(StylePath);
+            StyleSheet styleSheet = GetStyleSheet();
             if (styleSheet != null)
                 rootVisualElement.styleSheets.Add(styleSheet);
 
@@ -91,6 +91,19 @@ namespace PJDev.DevelopKit.Framework.Editors.SaveSystem
                 ApplyDefaultPath();
 
             RefreshEntries();
+        }
+
+        private static StyleSheet GetStyleSheet()
+        {
+            if (cachedStyleSheet != null)
+                return cachedStyleSheet;
+
+            string path = AssetDatabase.GUIDToAssetPath(StyleGuid);
+            if (string.IsNullOrEmpty(path))
+                return null;
+
+            cachedStyleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(path);
+            return cachedStyleSheet;
         }
 
         private VisualElement BuildHeader()
