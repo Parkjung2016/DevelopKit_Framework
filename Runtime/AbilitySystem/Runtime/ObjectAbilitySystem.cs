@@ -12,7 +12,6 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
     {
         [Header("Setup")] [SerializeField] private AbilitySetupSO abilitySetup = null;
         [SerializeField] private AbilityInputBridgeSO inputBridge = null;
-        [SerializeField] private bool initializeOnAwake = true;
 
         [Header("Owner Components")] [SerializeField]
         private ObjectGameplayTagContainer tags = null;
@@ -32,12 +31,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         public IAbilitySystemOwner Owner => owner;
         public int AbilityCount => abilities.Count;
         public bool IsInitialized { get; private set; }
-
-        private void Awake()
-        {
-            if (initializeOnAwake)
-                Initialize();
-        }
+        
 
         private void OnEnable()
         {

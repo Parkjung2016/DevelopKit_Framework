@@ -10,19 +10,12 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
         [Header("Data")]
         [SerializeField] private StatDatabaseSO statDatabase = null;
         [SerializeField] private StatOverrideListSO overrides = null;
-        [SerializeField] private bool initializeOnAwake = true;
 
         private readonly StatCollection statCollection = new();
         private readonly List<StatOverrideEntry> overrideBuffer = new();
 
         public StatCollection StatCollection => statCollection;
         public bool IsInitialized { get; private set; }
-
-        private void Awake()
-        {
-            if (initializeOnAwake)
-                Initialize();
-        }
 
         public void Initialize()
         {
