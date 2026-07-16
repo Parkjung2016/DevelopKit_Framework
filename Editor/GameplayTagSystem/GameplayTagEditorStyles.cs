@@ -1,4 +1,4 @@
-namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
+﻿namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
 {
     /// <summary>게임플레이 태그 에디터 UIElements USS 클래스 이름 상수입니다.</summary>
     internal static class GameplayTagEditorStyles
@@ -13,8 +13,6 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
         public const string SearchFieldClass = "gt-search-field";
         public const string TreeRowClass = "gt-tree-row";
         public const string TreeRowSelectedClass = "gt-tree-row-selected";
-        public const string TreeRowHoverClass = "gt-tree-row-hover";
-        public const string TreeIndentClass = "gt-tree-indent";
         public const string TreeFoldoutClass = "gt-tree-foldout";
         public const string TreeLabelClass = "gt-tree-label";
         public const string TreeSourceClass = "gt-tree-source";

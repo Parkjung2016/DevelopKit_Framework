@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
@@ -6,7 +6,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
     /// <summary>게임플레이 태그 이름·계층 관련 유틸리티입니다.</summary>
     public static class GameplayTagUtility
     {
-        internal static void WarnNotExplictlyAddedTagRemoval(GameplayTag gameplayTag)
+        internal static void WarnNotExplicitlyAddedTagRemoval(GameplayTag gameplayTag)
         {
             CDebug.LogWarning(
                 $"Attempted to remove tag {gameplayTag} from tag count container, but it is not explicitly added to the container.");
@@ -15,18 +15,18 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         internal static void WarnNotExplicitTagsRemoval(GameplayTagEnumerator tags)
         {
             foreach (GameplayTag tag in tags)
-                WarnNotExplictlyAddedTagRemoval(tag);
+                WarnNotExplicitlyAddedTagRemoval(tag);
         }
 
         /// <summary>
         /// 지정한 태그 계층의 모든 태그 이름을 반환합니다.
         /// 예: "A.B.C"이면 ["A", "A.B", "A.B.C"]입니다.
         /// </summary>
-        public static string[] GetHeirarchyNames(string tagName)
+        public static string[] GetHierarchyNames(string tagName)
         {
             ValidateName(tagName);
 
-            int level = GetHeirarchyLevelFromName(tagName);
+            int level = GetHierarchyLevelFromName(tagName);
             string[] names = new string[level];
             names[--level] = tagName;
 
@@ -64,7 +64,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         }
 
         /// <summary>태그 이름의 계층 깊이를 반환합니다.</summary>
-        public static int GetHeirarchyLevelFromName(string name)
+        public static int GetHierarchyLevelFromName(string name)
         {
             ValidateName(name);
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 using UnityEditor;
@@ -110,7 +110,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             treeView.style.flexGrow = 1;
             treeView.style.flexShrink = 1;
             treeView.style.minHeight = 0;
-            treeView.SetParentFilter(parentFilter);
+            treeView.SetParentFilter(parentFilter, rebuild: false);
             searchField.RegisterValueChangedCallback(evt => treeView.SetSearch(evt.newValue));
             treeView.TagSelected += OnSingleTagSelected;
             treeView.TagToggled += OnTagToggled;
@@ -162,7 +162,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             managerButton.AddToClassList(GameplayTagEditorStyles.ActionButtonClass);
             footerActions.Add(managerButton);
 
-            treeView.SetSourceFileFilter(sourceFilePanel.GetSelectedFilter());
+            treeView.SetSourceFileFilter(sourceFilePanel.GetSelectedFilter(), rebuild: false);
             RefreshTreeState();
 
             root.focusable = true;
@@ -212,8 +212,9 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             {
                 treeView.SetSelectedTagName(boundProperty.stringValue);
             }
+            if (!multiSelect && boundProperty == null)
+                treeView.Rebuild();
 
-            treeView.Rebuild();
             ShowInitialDescription();
         }
 

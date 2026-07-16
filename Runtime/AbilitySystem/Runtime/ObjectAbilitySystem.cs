@@ -174,7 +174,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 
             AbilityContext context = ability.ActiveContext;
             if (ability.AbilityTag.IsValid && tags != null)
-                tags.GameplayTagContainer.RemoveTag(ability.AbilityTag);
+                tags.Container.RemoveTag(ability.AbilityTag);
 
             ability.EndInternal();
             OnAbilityEnded?.Invoke(context);
@@ -235,7 +235,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
                 return false;
 
             if (ability.AbilityTag.IsValid && tags != null)
-                tags.GameplayTagContainer.AddTag(ability.AbilityTag);
+                tags.Container.AddTag(ability.AbilityTag);
 
             ability.ActivateInternal(context, inputContext);
             OnAbilityActivated?.Invoke(context);
@@ -253,7 +253,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 
             if (ability.BlockedByTag.IsValid &&
                 tags != null &&
-                tags.GameplayTagContainer.GetTagCount(ability.BlockedByTag) > 0)
+                tags.Container.GetTagCount(ability.BlockedByTag) > 0)
             {
                 return false;
             }

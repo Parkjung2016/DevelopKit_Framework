@@ -1,4 +1,4 @@
-.gt-window-root {
+﻿.gt-window-root {
 
     flex-grow: 1;
 
@@ -227,19 +227,6 @@
     background-color: rgba(255, 255, 255, 0.08);
 
 }
-
-
-
-.gt-tree-indent {
-
-    width: 14px;
-
-    flex-shrink: 0;
-
-}
-
-
-
 .gt-tree-label {
 
     flex-grow: 1;

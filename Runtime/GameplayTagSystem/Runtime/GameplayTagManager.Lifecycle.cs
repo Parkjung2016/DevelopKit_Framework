@@ -1,4 +1,4 @@
-#if !UNITY_6000_5_OR_NEWER
+﻿#if !UNITY_6000_5_OR_NEWER
 using PJDev.DevelopKit.Framework.Shared.Runtime;
 using UnityEngine;
 
@@ -16,6 +16,8 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         {
             isInitialized = false;
             hasBeenReloaded = false;
+            currentGeneration = 0;
+            indexRemapsByGeneration.Clear();
             tagDefinitionsByName?.Clear();
             tagDefinitions = null;
             tagLookUpTable = null;

@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
@@ -65,5 +65,35 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
     {
       Assert.AreEqual("<None>", GameplayTag.None.ToString());
     }
-  }
+
+    [Test]
+    public void None_EqualsDefaultValue()
+    {
+      GameplayTag defaultTag = default;
+
+      Assert.IsTrue(GameplayTag.None.Equals(defaultTag));
+      Assert.IsTrue(GameplayTag.None == defaultTag);
+      Assert.AreEqual(GameplayTag.None.GetHashCode(), defaultTag.GetHashCode());
+    }
+
+    [Test]
+    public void MissingTags_WithSameName_AreEqual()
+    {
+      GameplayTag first = GameplayTagManager.RequestTag("Missing.Tag", false);
+      GameplayTag second = GameplayTagManager.RequestTag("Missing.Tag", false);
+
+      Assert.IsFalse(first.IsNone);
+      Assert.IsFalse(first.IsValid);
+      Assert.AreEqual(first, second);
+      Assert.AreEqual(first.GetHashCode(), second.GetHashCode());
+    }
+
+    [Test]
+    public void MissingTags_WithDifferentNames_AreNotEqual()
+    {
+      GameplayTag first = GameplayTagManager.RequestTag("Missing.First", false);
+      GameplayTag second = GameplayTagManager.RequestTag("Missing.Second", false);
+
+      Assert.AreNotEqual(first, second);
+    }  }
 }

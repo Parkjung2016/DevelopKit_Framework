@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
@@ -97,7 +97,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             if (!GameplayTagUtility.IsNameValid(tagName, out _))
                 return false;
 
-            string[] hierarchy = GameplayTagUtility.GetHeirarchyNames(tagName);
+            string[] hierarchy = GameplayTagUtility.GetHierarchyNames(tagName);
             return hierarchy.Length > 1;
         }
 
@@ -158,7 +158,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             if (!GameplayTagUtility.IsNameValid(tagName, out _))
                 return missing;
 
-            string[] hierarchy = GameplayTagUtility.GetHeirarchyNames(tagName);
+            string[] hierarchy = GameplayTagUtility.GetHierarchyNames(tagName);
             for (int i = 0; i < hierarchy.Length - 1; i++)
             {
                 GameplayTag parentTag = GameplayTagManager.RequestTag(hierarchy[i], logWarningIfNotFound: false);

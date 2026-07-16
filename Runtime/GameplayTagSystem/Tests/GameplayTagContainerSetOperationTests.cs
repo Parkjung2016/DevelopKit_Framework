@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using NUnit.Framework;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 
@@ -92,5 +92,16 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
       Assert.IsTrue(container.HasAll(required));
       Assert.IsFalse(container.HasAllExact(required));
     }
-  }
+
+    [Test]
+    public void Union_EmptyRight_ReturnsLeftTags()
+    {
+      GameplayTagContainer left = new();
+      left.AddTag(jump);
+
+      GameplayTagContainer union = GameplayTagContainer.Union(left, new GameplayTagContainer());
+
+      Assert.AreEqual(1, union.ExplicitTagCount);
+      Assert.IsTrue(union.HasTagExact(jump));
+    }  }
 }

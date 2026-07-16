@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using NUnit.Framework;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 
@@ -8,9 +8,9 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
   public sealed class GameplayTagUtilityTests
   {
     [Test]
-    public void GetHeirarchyNames_ReturnsFullChain()
+    public void GetHierarchyNames_ReturnsFullChain()
     {
-      string[] names = GameplayTagUtility.GetHeirarchyNames("A.B.C");
+      string[] names = GameplayTagUtility.GetHierarchyNames("A.B.C");
 
       Assert.AreEqual(new[] { "A", "A.B", "A.B.C" }, names);
     }
@@ -29,10 +29,10 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
     }
 
     [Test]
-    public void GetHeirarchyLevelFromName_CountsSegments()
+    public void GetHierarchyLevelFromName_CountsSegments()
     {
-      Assert.AreEqual(1, GameplayTagUtility.GetHeirarchyLevelFromName("Root"));
-      Assert.AreEqual(3, GameplayTagUtility.GetHeirarchyLevelFromName("A.B.C"));
+      Assert.AreEqual(1, GameplayTagUtility.GetHierarchyLevelFromName("Root"));
+      Assert.AreEqual(3, GameplayTagUtility.GetHierarchyLevelFromName("A.B.C"));
     }
 
     [Test]

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 using UnityEditor;
@@ -18,7 +18,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
         private ToolbarSearchField searchField;
         private GameplayTagSourceFilePanel sourceFilePanel;
         private GameplayTagAddTagPanel addTagForm;
-        private List<GameplayTag> selectedTags = new();
+        private readonly List<GameplayTag> selectedTags = new();
         private List<string> lastDisplayedTagNames = new();
 
         /// <summary>태그 관리 에디터 창을 엽니다.</summary>
@@ -76,7 +76,10 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             treeView.AddToClassList(GameplayTagEditorStyles.TreePaneClass);
             treeView.SelectionChanged += tags =>
             {
-                selectedTags = new List<GameplayTag>(tags);
+                selectedTags.Clear();
+                for (int i = 0; i < tags.Count; i++)
+                    selectedTags.Add(tags[i]);
+
                 ShowDetail(selectedTags);
             };
             splitView.LeftPane.Add(treeView);
@@ -662,7 +665,8 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
                 return;
             }
 
-            selectedTags = new List<GameplayTag> { updated };
+            selectedTags.Clear();
+            selectedTags.Add(updated);
             lastDisplayedTagNames.Clear();
             treeView.SetSelectedTagName(updated.Name);
             RebuildAll();

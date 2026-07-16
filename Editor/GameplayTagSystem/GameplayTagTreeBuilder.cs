@@ -1,10 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
 {
-    /// <summary>태그 트리 UI의 선택·표시 모드입니다.</summary>
     internal enum GameplayTagTreeSelectionMode
     {
         Manager,
@@ -12,7 +11,6 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
         PickerMulti
     }
 
-    /// <summary>태그 계층 트리의 단일 노드입니다.</summary>
     internal sealed class GameplayTagTreeNode
     {
         public GameplayTag Tag;
@@ -21,27 +19,27 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
         public bool IsExpanded = true;
     }
 
-    /// <summary>런타임 태그 목록에서 에디터 트리 데이터를 구성합니다.</summary>
+    /// <summary>등록된 태그를 에디터 트리 데이터로 구성합니다.</summary>
     internal static class GameplayTagTreeBuilder
     {
-        /// <summary>필터·검색 조건에 맞는 트리 루트 노드를 만듭니다.</summary>
-        public static List<GameplayTagTreeNode> BuildRoots(
+        /// <summary>필터에 맞는 태그 트리를 지정한 출력 리스트에 구성합니다.</summary>
+        public static void BuildRoots(
+            List<GameplayTagTreeNode> output,
             string parentFilter = null,
             string search = null,
             string sourceFileFilter = null)
         {
-            Dictionary<int, GameplayTagTreeNode> nodesByRuntimeIndex = new();
-            List<GameplayTagTreeNode> roots = new();
+            if (output == null)
+                throw new ArgumentNullException(nameof(output));
 
-            bool hasFilter = !string.IsNullOrEmpty(parentFilter);
-            string prefix = hasFilter ? parentFilter + "." : null;
+            output.Clear();
+            Dictionary<int, GameplayTagTreeNode> nodesByRuntimeIndex = new();
+            bool hasParentFilter = !string.IsNullOrEmpty(parentFilter);
+            string parentPrefix = hasParentFilter ? parentFilter + "." : null;
 
             foreach (GameplayTag tag in GameplayTagManager.GetAllTags())
             {
-                if (tag.Name.StartsWith("Test.", StringComparison.Ordinal) || tag.Name.Equals("Test", StringComparison.Ordinal))
-                    continue;
-
-                if (hasFilter && !tag.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                if (hasParentFilter && !tag.Name.StartsWith(parentPrefix, StringComparison.Ordinal))
                     continue;
 
                 if (!string.IsNullOrEmpty(sourceFileFilter) &&
@@ -57,7 +55,9 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
                     continue;
                 }
 
-                nodesByRuntimeIndex[tag.RuntimeIndex] = new GameplayTagTreeNode { Tag = tag };
+                nodesByRuntimeIndex.Add(
+                    tag.RuntimeIndex,
+                    new GameplayTagTreeNode { Tag = tag });
             }
 
             foreach (GameplayTagTreeNode node in nodesByRuntimeIndex.Values)
@@ -72,41 +72,44 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
                 }
                 else
                 {
-                    roots.Add(node);
+                    output.Add(node);
                 }
             }
 
-            SortRecursive(roots);
-            return roots;
+            SortRecursive(output);
         }
 
-        /// <summary>펼침·검색 상태에 따라 화면에 표시할 노드 행을 수집합니다.</summary>
-        public static void CollectVisibleRows(IReadOnlyList<GameplayTagTreeNode> roots, List<GameplayTagTreeNode> output, bool flattenSearch)
+        /// <summary>현재 펼침 상태에 따라 화면에 표시할 행을 수집합니다.</summary>
+        public static void CollectVisibleRows(
+            IReadOnlyList<GameplayTagTreeNode> roots,
+            List<GameplayTagTreeNode> output,
+            bool flattenSearch)
         {
             output.Clear();
-            foreach (GameplayTagTreeNode root in roots)
-                Walk(root, output, flattenSearch);
+            for (int i = 0; i < roots.Count; i++)
+                CollectRows(roots[i], output, flattenSearch);
         }
 
-        private static void Walk(GameplayTagTreeNode node, List<GameplayTagTreeNode> output, bool flattenSearch)
+        private static void CollectRows(
+            GameplayTagTreeNode node,
+            List<GameplayTagTreeNode> output,
+            bool flattenSearch)
         {
             output.Add(node);
+            if (!flattenSearch && !node.IsExpanded)
+                return;
 
-            if (flattenSearch || node.IsExpanded)
-            {
-                foreach (GameplayTagTreeNode child in node.Children)
-                    Walk(child, output, flattenSearch);
-            }
+            for (int i = 0; i < node.Children.Count; i++)
+                CollectRows(node.Children[i], output, flattenSearch);
         }
 
         private static void SortRecursive(List<GameplayTagTreeNode> nodes)
         {
-            nodes.Sort((a, b) => string.Compare(a.Tag.Name, b.Tag.Name, StringComparison.OrdinalIgnoreCase));
-            foreach (GameplayTagTreeNode node in nodes)
-                SortRecursive(node.Children);
+            nodes.Sort(static (a, b) => string.Compare(a.Tag.Name, b.Tag.Name, StringComparison.Ordinal));
+            for (int i = 0; i < nodes.Count; i++)
+                SortRecursive(nodes[i].Children);
         }
 
-        /// <summary>루트 기준 노드의 들여쓰기 깊이를 반환합니다.</summary>
         public static int GetDepth(GameplayTagTreeNode node)
         {
             int depth = 0;
@@ -119,28 +122,20 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             return depth;
         }
 
-        /// <summary>트리 행에 표시할 태그 라벨 문자열을 반환합니다.</summary>
-        public static string GetRowLabel(GameplayTag tag, bool flattenSearch, GameplayTagTreeSelectionMode mode)
+        public static string GetRowLabel(GameplayTag tag, bool flattenSearch)
         {
-            if (flattenSearch)
-                return tag.Name;
-
-            return tag.Label;
+            return flattenSearch ? tag.Name : tag.Label;
         }
 
-        /// <summary>태그가 속한 JSON 소스 파일 이름(또는 다중 소스 표시)을 반환합니다.</summary>
         public static string GetSourceLabel(GameplayTag tag)
         {
             if (tag.Definition.SourceCount == 0)
                 return string.Empty;
-
             if (tag.Definition.SourceCount == 1)
                 return tag.Definition.GetSource(0).Name;
-
             return GameplayTagEditorLocalization.MultipleSources;
         }
 
-        /// <summary>태그가 에디터에서 삭제 가능한 소스를 가지는지 확인합니다.</summary>
         public static bool CanDelete(GameplayTag tag)
         {
             for (int i = 0; i < tag.Definition.SourceCount; i++)
@@ -152,7 +147,15 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             return false;
         }
 
-        /// <summary>태그가 에디터에서 편집 가능한 소스를 가지는지 확인합니다.</summary>
-        public static bool CanEdit(GameplayTag tag) => CanDelete(tag);
+        public static bool CanEdit(GameplayTag tag)
+        {
+            for (int i = 0; i < tag.Definition.SourceCount; i++)
+            {
+                if (tag.Definition.GetSource(i) is IGameplayTagEditHandler)
+                    return true;
+            }
+
+            return false;
+        }
     }
 }

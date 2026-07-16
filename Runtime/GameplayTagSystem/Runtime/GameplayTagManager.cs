@@ -1,7 +1,5 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
 #if UNITY_6000_5_OR_NEWER
@@ -10,35 +8,46 @@ using Unity.Scripting.LifecycleManagement;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 {
-    /// <summary>
-    /// 게임플레이 태그 등록·조회·리로드를 담당하는 정적 매니저입니다.
-    /// </summary>
+    /// <summary>게임플레이 태그 등록과 조회를 담당합니다.</summary>
 #if UNITY_6000_5_OR_NEWER
     [AutoStaticsCleanup]
 #endif
     public static partial class GameplayTagManager
     {
-        private static Dictionary<string, GameplayTagDefinition> tagDefinitionsByName = new();
+        internal const int RetainedRemapGenerations = 8;
+
+        private static readonly Dictionary<string, GameplayTagDefinition> tagDefinitionsByName =
+            new(StringComparer.Ordinal);
+        private static readonly Dictionary<int, int[]> indexRemapsByGeneration = new();
+
         private static GameplayTagDefinition[] tagDefinitions;
         private static GameplayTag[] tagLookUpTable;
         private static GameplayTag[] tags;
         private static bool isInitialized;
         private static bool hasBeenReloaded;
+        private static int currentGeneration;
 
-        /// <summary>에디터 또는 런타임에서 <see cref="ReloadTags"/>가 호출된 적이 있는지 여부입니다.</summary>
         public static bool HasBeenReloaded => hasBeenReloaded;
 
-        /// <summary>등록된 모든 태그를 반환합니다. None 태그는 포함하지 않습니다.</summary>
+        internal static int Generation
+        {
+            get
+            {
+                InitializeIfNeeded();
+                return currentGeneration;
+            }
+        }
+
         public static ReadOnlySpan<GameplayTag> GetAllTags()
         {
             InitializeIfNeeded();
-            return new ReadOnlySpan<GameplayTag>(tags);
+            return tags;
         }
 
-        /// <summary>런타임 인덱스로 태그를 조회합니다.</summary>
         public static GameplayTag GetTagFromRuntimeIndex(int runtimeIndex)
         {
-            if (tagLookUpTable == null || runtimeIndex < 0 || runtimeIndex >= tagLookUpTable.Length)
+            InitializeIfNeeded();
+            if ((uint)runtimeIndex >= (uint)tagLookUpTable.Length)
                 return GameplayTag.None;
 
             return tagLookUpTable[runtimeIndex];
@@ -46,10 +55,66 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
         internal static GameplayTagDefinition GetDefinitionFromRuntimeIndex(int runtimeIndex)
         {
+            InitializeIfNeeded();
             return tagDefinitions[runtimeIndex];
         }
 
-        /// <summary>이름으로 태그를 요청합니다. 없으면 유효하지 않은 태그를 반환합니다.</summary>
+        internal static bool TryGetCurrentDefinition(string name, out GameplayTagDefinition definition)
+        {
+            InitializeIfNeeded();
+            if (string.IsNullOrEmpty(name))
+            {
+                definition = null;
+                return false;
+            }
+
+            return tagDefinitionsByName.TryGetValue(name, out definition);
+        }
+
+        internal static bool HasRuntimeIndexRemap(int sourceGeneration)
+        {
+            InitializeIfNeeded();
+            if (sourceGeneration == currentGeneration)
+                return true;
+            if (sourceGeneration <= 0 || sourceGeneration > currentGeneration)
+                return false;
+
+            for (int generation = sourceGeneration; generation < currentGeneration; generation++)
+            {
+                if (!indexRemapsByGeneration.ContainsKey(generation))
+                    return false;
+            }
+
+            return true;
+        }
+        internal static bool TryRemapRuntimeIndex(
+            int sourceGeneration,
+            int sourceIndex,
+            out int currentIndex)
+        {
+            InitializeIfNeeded();
+            currentIndex = sourceIndex;
+
+            if (sourceGeneration <= 0 || sourceGeneration > currentGeneration)
+                return sourceGeneration == currentGeneration;
+
+            for (int generation = sourceGeneration; generation < currentGeneration; generation++)
+            {
+                if (!indexRemapsByGeneration.TryGetValue(generation, out int[] remap) ||
+                    (uint)currentIndex >= (uint)remap.Length)
+                {
+                    currentIndex = -1;
+                    return false;
+                }
+
+                currentIndex = remap[currentIndex];
+                if (currentIndex < 0)
+                    return false;
+            }
+
+            return true;
+        }
+
         public static GameplayTag RequestTag(string name, bool logWarningIfNotFound = true)
         {
             InitializeIfNeeded();
@@ -57,46 +122,26 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             if (string.IsNullOrEmpty(name))
                 return GameplayTag.None;
 
-            if (!TryGetDefinition(name, out GameplayTagDefinition definition))
-            {
-                if (logWarningIfNotFound)
-                    CDebug.LogWarning($"등록되지 않은 태그 이름입니다: \"{name}\".");
+            if (tagDefinitionsByName.TryGetValue(name, out GameplayTagDefinition definition))
+                return definition.Tag;
 
-                return GameplayTagDefinition.CreateInvalidDefinition(name).Tag;
-            }
+            if (logWarningIfNotFound)
+                CDebug.LogWarning($"등록되지 않은 게임플레이 태그입니다: \"{name}\".");
 
-            return definition.Tag;
+            return GameplayTag.CreateInvalid(name);
         }
 
-        /// <summary>이름으로 태그를 요청하고, 존재 여부를 반환합니다.</summary>
         public static bool RequestTag(string name, out GameplayTag tag)
         {
-            GameplayTag result = RequestTag(name, logWarningIfNotFound: false);
-            tag = result;
-            return tag.IsValid && !tag.IsNone;
+            tag = RequestTag(name, logWarningIfNotFound: false);
+            return tag.IsValid;
         }
 
-        /// <summary>등록된 태그를 다시 로드합니다. 에디터에서 JSON 변경 후 호출합니다.</summary>
         public static void ReloadTags()
         {
             isInitialized = false;
-            tagDefinitionsByName.Clear();
-
             InitializeIfNeeded();
-
             hasBeenReloaded = true;
-
-            if (Application.isPlaying)
-            {
-                CDebug.LogWarning(
-                    "플레이 모드 중 게임플레이 태그가 다시 로드되었습니다. " +
-                    "기존 태그 컨테이너는 예상대로 동작하지 않을 수 있습니다. 도메인 리로드가 필요합니다.");
-            }
-        }
-
-        private static bool TryGetDefinition(string name, out GameplayTagDefinition definition)
-        {
-            return tagDefinitionsByName.TryGetValue(name, out definition);
         }
 
 #if UNITY_EDITOR
@@ -111,18 +156,12 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             GameplayTagRegistrationContext context = new();
 
 #if UNITY_EDITOR
-            // GameplayTagAttribute가 있는 어셈블리에서 태그를 등록합니다.
-            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                AssemblyGameplayTagSource source = new(assembly);
+            foreach (IGameplayTagSource source in AssemblyGameplayTagSource.GetAllSources())
                 source.RegisterTags(context);
-            }
 
-            // ProjectSettings/GameplayTags 아래 JSON 파일에서 태그를 등록합니다.
             foreach (IGameplayTagSource source in FileGameplayTagSource.GetAllFileSources())
                 source.RegisterTags(context);
 #else
-            // StreamingAssets의 빌드 태그 파일에서 등록합니다.
             BuildGameplayTagSource buildSource = new();
             buildSource.RegisterTags(context);
 #endif
@@ -145,28 +184,52 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
         private static void ApplyDefinitions(GameplayTagDefinition[] definitions)
         {
-            tagDefinitions = definitions;
+            GameplayTagDefinition[] previousDefinitions = tagDefinitions;
+            int previousGeneration = currentGeneration;
+            int nextGeneration = previousGeneration + 1;
 
-            tagLookUpTable = tagDefinitions
-                .Select(definition => definition.Tag)
-                .ToArray();
-
-            // None 태그를 제외한 목록을 만듭니다.
-            tags = tagDefinitions
-                .Select(definition => definition.Tag)
-                .Skip(1)
-                .ToArray();
-
+            tagDefinitions = definitions ?? Array.Empty<GameplayTagDefinition>();
             tagDefinitionsByName.Clear();
-            foreach (GameplayTagDefinition definition in tagDefinitions)
+            for (int i = 0; i < tagDefinitions.Length; i++)
+            {
+                GameplayTagDefinition definition = tagDefinitions[i];
+                definition.SetGeneration(nextGeneration);
                 tagDefinitionsByName[definition.TagName] = definition;
+            }
+
+            if (previousDefinitions != null && previousGeneration > 0)
+            {
+                int[] remap = new int[previousDefinitions.Length];
+                for (int i = 0; i < previousDefinitions.Length; i++)
+                {
+                    string name = previousDefinitions[i].TagName;
+                    remap[i] = tagDefinitionsByName.TryGetValue(name, out GameplayTagDefinition current)
+                        ? current.RuntimeIndex
+                        : -1;
+                }
+
+                indexRemapsByGeneration[previousGeneration] = remap;
+
+                int expiredGeneration = nextGeneration - RetainedRemapGenerations - 1;
+                if (expiredGeneration > 0)
+                    indexRemapsByGeneration.Remove(expiredGeneration);
+            }
+
+            currentGeneration = nextGeneration;
+            tagLookUpTable = new GameplayTag[tagDefinitions.Length];
+            tags = new GameplayTag[Math.Max(0, tagDefinitions.Length - 1)];
+            for (int i = 0; i < tagDefinitions.Length; i++)
+            {
+                GameplayTag tag = tagDefinitions[i].Tag;
+                tagLookUpTable[i] = tag;
+                if (i > 0)
+                    tags[i - 1] = tag;
+            }
         }
 
-        /// <summary>유닛 테스트용으로 지정한 소스만으로 태그를 등록합니다.</summary>
         internal static void InitializeForTests(params IGameplayTagSource[] sources)
         {
             ResetInitializationState();
-
             GameplayTagRegistrationContext context = new();
             foreach (IGameplayTagSource source in sources)
                 source.RegisterTags(context);
@@ -174,7 +237,17 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             FinishInitialization(context);
         }
 
-        /// <summary>유닛 테스트 후 프로젝트 기본 태그 등록 상태로 되돌립니다.</summary>
+        internal static void ReloadForTests(params IGameplayTagSource[] sources)
+        {
+            GameplayTagRegistrationContext context = new();
+            foreach (IGameplayTagSource source in sources)
+                source.RegisterTags(context);
+
+            FinishInitialization(context);
+            isInitialized = true;
+            hasBeenReloaded = true;
+        }
+
         internal static void RestoreDefaultInitialization()
         {
             ResetInitializationState();
@@ -185,6 +258,8 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         {
             isInitialized = false;
             hasBeenReloaded = false;
+            currentGeneration = 0;
+            indexRemapsByGeneration.Clear();
             tagDefinitionsByName.Clear();
             tagDefinitions = null;
             tagLookUpTable = null;

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
@@ -151,6 +151,67 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
       ((UnityEngine.ISerializationCallbackReceiver)restored).OnAfterDeserialize();
 
       Assert.IsTrue(restored.HasTagExact(jump));
+    }
+
+    [Test]
+    public void Copy_EmptySource_ClearsDestination()
+    {
+      GameplayTagContainer destination = new();
+      destination.AddTag(jump);
+
+      GameplayTagContainer.Copy(destination, new GameplayTagContainer());
+
+      Assert.IsTrue(destination.IsEmpty);
+    }
+    [Test]
+    public void Reload_ContainerRemapsIndicesAcrossMultipleGenerations()
+    {
+      GameplayTagContainer container = new();
+      container.AddTag(jump);
+      container.AddTag(roll);
+
+      GameplayTagManager.ReloadForTests(GameplayTagTestFixtures.CreateFileSource(
+        @"{
+  ""BeforeTest"": {},
+  ""Test"": {},
+  ""Test.Ability"": {},
+  ""Test.Ability.Jump"": {},
+  ""Test.Ability.Roll"": {}
+}"));
+      GameplayTagManager.ReloadForTests(GameplayTagTestFixtures.CreateFileSource(
+        @"{
+  ""BeforeBeforeTest"": {},
+  ""BeforeTest"": {},
+  ""Test"": {},
+  ""Test.Ability"": {},
+  ""Test.Ability.Jump"": {}
+}"));
+
+      Assert.AreEqual(1, container.ExplicitTagCount);
+      Assert.IsTrue(container.HasTagExact(GameplayTagTestFixtures.Tag("Test.Ability.Jump")));
+      Assert.IsFalse(container.HasTagExact(roll));
+    }
+
+    [Test]
+    public void Reload_ContainerRestoresByNameAfterRemapHistoryExpires()
+    {
+      GameplayTagContainer container = new();
+      container.AddTag(jump);
+
+      for (int i = 0; i < GameplayTagManager.RetainedRemapGenerations + 2; i++)
+      {
+        GameplayTagManager.ReloadForTests(GameplayTagTestFixtures.CreateFileSource(
+          $@"{{
+  ""Prefix{i}"": {{}},
+  ""Test"": {{}},
+  ""Test.Ability"": {{}},
+  ""Test.Ability.Jump"": {{}}
+}}"));
+      }
+
+      GameplayTag currentJump = GameplayTagTestFixtures.Tag("Test.Ability.Jump");
+      Assert.AreEqual(1, container.ExplicitTagCount);
+      Assert.IsTrue(container.HasTagExact(currentJump));
     }
   }
 }

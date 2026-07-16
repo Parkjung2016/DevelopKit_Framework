@@ -1,10 +1,9 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 {
@@ -116,25 +115,53 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         public static GameplayTagContainer Empty { get; } = new();
 
         /// <inheritdoc />
-        public bool IsEmpty => indices.IsEmpty;
+        public bool IsEmpty
+        {
+            get
+            {
+                EnsureCurrentGeneration();
+                return indices.IsEmpty;
+            }
+        }
 
         /// <inheritdoc />
-        public int ExplicitTagCount => indices.ExplicitTagCount;
+        public int ExplicitTagCount
+        {
+            get
+            {
+                EnsureCurrentGeneration();
+                return indices.ExplicitTagCount;
+            }
+        }
 
         /// <inheritdoc />
-        public int TagCount => indices.TagCount;
+        public int TagCount
+        {
+            get
+            {
+                EnsureCurrentGeneration();
+                return indices.TagCount;
+            }
+        }
 
         /// <inheritdoc />
-        public GameplayTagContainerIndices Indices => indices;
+        public GameplayTagContainerIndices Indices
+        {
+            get
+            {
+                EnsureCurrentGeneration();
+                return indices;
+            }
+        }
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private string DebuggerDisplay => $"Count (Explicit, Total) = ({ExplicitTagCount}, {TagCount})";
 
         [SerializeField]
-        [FormerlySerializedAs("m_SerializedExplicitTags")]
         private List<string> serializedExplicitTags;
 
         private GameplayTagContainerIndices indices = new();
+        private int generation;
 
         /// <summary>빈 컨테이너를 생성합니다.</summary>
         public GameplayTagContainer()
@@ -158,11 +185,19 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         /// <summary>소스 컨테이너의 태그를 대상 컨테이너로 복사합니다.</summary>
         public static void Copy<T>(GameplayTagContainer dest, in T src) where T : IReadOnlyGameplayTagContainer
         {
+            if (dest == null)
+                throw new ArgumentNullException(nameof(dest));
+
             if (src.IsEmpty)
+            {
+                dest.Clear();
                 return;
+            }
 
             GameplayTagContainerIndices.Create(ref dest.indices);
             src.Indices.CopyTo(dest.indices);
+            dest.generation = GameplayTagManager.Generation;
+            dest.UpdateSerializedTagNames();
         }
 
         /// <summary>두 컨테이너의 교집합을 담은 새 컨테이너를 만듭니다.</summary>
@@ -187,6 +222,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         /// <summary>두 컨테이너의 교집합을 이 컨테이너에 추가합니다.</summary>
         internal void AddIntersection<T, U>(in T lhs, in U rhs) where T : IReadOnlyGameplayTagContainer where U : IReadOnlyGameplayTagContainer
         {
+            generation = GameplayTagManager.Generation;
             static void OrderedListIntersection(List<int> a, List<int> b, List<int> dst)
             {
                 int i = 0, j = 0;
@@ -219,6 +255,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
             OrderedListIntersection(lhs.Indices.Explicit, rhs.Indices.Explicit, indices.Explicit);
             OrderedListIntersection(lhs.Indices.Implicit, rhs.Indices.Implicit, indices.Implicit);
+            UpdateSerializedTagNames();
         }
 
         /// <summary>두 컨테이너의 합집합을 담은 새 컨테이너를 만듭니다.</summary>
@@ -259,6 +296,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             }
 
             GameplayTagContainer union = new();
+            union.generation = GameplayTagManager.Generation;
             GameplayTagContainerIndices.Create(ref union.indices);
 
             if (lhs.IsEmpty && rhs.IsEmpty)
@@ -268,10 +306,11 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                 return new GameplayTagContainer(rhs);
 
             if (rhs.IsEmpty)
-                new GameplayTagContainer(lhs);
+                return new GameplayTagContainer(lhs);
 
             OrderedListUnion(lhs.Indices.Explicit, rhs.Indices.Explicit, union.indices.Explicit);
             OrderedListUnion(lhs.Indices.Implicit, rhs.Indices.Implicit, union.indices.Implicit);
+            union.UpdateSerializedTagNames();
 
             return union;
         }
@@ -279,6 +318,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         /// <summary>다른 컨테이너와 명시 태그를 비교해 추가·제거된 태그 목록을 채웁니다.</summary>
         public void GetDiffExplicitTags<T>(T other, List<GameplayTag> added, List<GameplayTag> removed) where T : IReadOnlyGameplayTagContainer
         {
+            EnsureCurrentGeneration();
             GameplayTagContainerIndices otherIndices = other.Indices;
 
             List<int> currentContainerTagIndices = Indices.Explicit;
@@ -318,42 +358,49 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         /// <inheritdoc />
         public GameplayTagEnumerator GetExplicitTags()
         {
+            EnsureCurrentGeneration();
             return new GameplayTagEnumerator(indices.Explicit);
         }
 
         /// <inheritdoc />
         public GameplayTagEnumerator GetTags()
         {
+            EnsureCurrentGeneration();
             return new GameplayTagEnumerator(indices.Implicit);
         }
 
         /// <inheritdoc />
         public void GetParentTags(GameplayTag tag, List<GameplayTag> parentTags)
         {
+            EnsureCurrentGeneration();
             GameplayTagContainerUtility.GetParentTags(indices.Implicit, tag, parentTags);
         }
 
         /// <inheritdoc />
         public void GetChildTags(GameplayTag tag, List<GameplayTag> childTags)
         {
+            EnsureCurrentGeneration();
             GameplayTagContainerUtility.GetChildTags(indices.Implicit, tag, childTags);
         }
 
         /// <inheritdoc />
         public void GetExplicitParentTags(GameplayTag tag, List<GameplayTag> parentTags)
         {
+            EnsureCurrentGeneration();
             GameplayTagContainerUtility.GetParentTags(indices.Explicit, tag, parentTags);
         }
 
         /// <inheritdoc />
         public void GetExplicitChildTags(GameplayTag tag, List<GameplayTag> childTags)
         {
+            EnsureCurrentGeneration();
             GameplayTagContainerUtility.GetChildTags(indices.Explicit, tag, childTags);
         }
 
         /// <inheritdoc />
         public void Clear()
         {
+            generation = GameplayTagManager.Generation;
             indices.Clear();
             serializedExplicitTags?.Clear();
         }
@@ -361,6 +408,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         /// <inheritdoc />
         public void AddTag(GameplayTag tag)
         {
+            EnsureCurrentGeneration();
             tag.ValidateIsValid();
 
             GameplayTagContainerIndices.Create(ref indices);
@@ -370,18 +418,33 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
             indices.Explicit.Insert(~index, tag.RuntimeIndex);
             AddImplicitTagsFor(tag);
+            UpdateSerializedTagNames();
         }
 
         /// <inheritdoc />
         public void AddTags<T>(in T container) where T : IReadOnlyGameplayTagContainer
         {
+            EnsureCurrentGeneration();
+            GameplayTagContainerIndices.Create(ref indices);
+
             foreach (GameplayTag tag in container.GetExplicitTags())
-                AddTag(tag);
+            {
+                tag.ValidateIsValid();
+                int index = BinarySearchUtility.Search(indices.Explicit, tag.RuntimeIndex);
+                if (index >= 0)
+                    continue;
+
+                indices.Explicit.Insert(~index, tag.RuntimeIndex);
+                AddImplicitTagsFor(tag);
+            }
+
+            UpdateSerializedTagNames();
         }
 
         /// <inheritdoc />
         public void RemoveTag(GameplayTag tag)
         {
+            EnsureCurrentGeneration();
             tag.ValidateIsValid();
 
             if (!indices.IsCreated)
@@ -390,18 +453,20 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             int index = BinarySearchUtility.Search(indices.Explicit, tag.RuntimeIndex);
             if (index < 0)
             {
-                GameplayTagUtility.WarnNotExplictlyAddedTagRemoval(tag);
+                GameplayTagUtility.WarnNotExplicitlyAddedTagRemoval(tag);
                 return;
             }
 
             indices.Explicit.RemoveAt(index);
-            FillImplictTags();
+            FillImplicitTags();
+            UpdateSerializedTagNames();
         }
 
         /// <inheritdoc />
         public void RemoveTags<T>(in T other)
             where T : IReadOnlyGameplayTagContainer
         {
+            EnsureCurrentGeneration();
             if (!indices.IsCreated)
                 return;
 
@@ -410,14 +475,15 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                 int index = BinarySearchUtility.Search(indices.Explicit, tag.RuntimeIndex);
                 if (index < 0)
                 {
-                    GameplayTagUtility.WarnNotExplictlyAddedTagRemoval(tag);
-                    return;
+                    GameplayTagUtility.WarnNotExplicitlyAddedTagRemoval(tag);
+                    continue;
                 }
 
                 indices.Explicit.RemoveAt(index);
             }
 
-            FillImplictTags();
+            FillImplicitTags();
+            UpdateSerializedTagNames();
         }
 
         private void AddImplicitTagsFor(GameplayTag tag)
@@ -434,7 +500,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             }
         }
 
-        private void FillImplictTags()
+        private void FillImplicitTags()
         {
             indices.Implicit.Clear();
 
@@ -452,26 +518,54 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             }
         }
 
-        public void FillSerializedTags()
-        {
-            serializedExplicitTags ??= new List<string>();
 
-            serializedExplicitTags.Clear();
-            for (int i = 0; i < indices.Explicit.Count; i++)
+        private void EnsureCurrentGeneration()
+        {
+            int currentGeneration = GameplayTagManager.Generation;
+            if (generation == currentGeneration)
+                return;
+
+            if (!indices.IsCreated || indices.Explicit.Count == 0)
             {
-                GameplayTagDefinition definition = GameplayTagManager.GetDefinitionFromRuntimeIndex(indices.Explicit[i]);
-                serializedExplicitTags.Add(definition.TagName);
+                generation = currentGeneration;
+                return;
             }
+
+            if (generation <= 0 || !GameplayTagManager.HasRuntimeIndexRemap(generation))
+            {
+                RebuildFromSerializedTags();
+                generation = currentGeneration;
+                return;
+            }
+
+            int writeIndex = 0;
+            for (int readIndex = 0; readIndex < indices.Explicit.Count; readIndex++)
+            {
+                if (!GameplayTagManager.TryRemapRuntimeIndex(
+                        generation,
+                        indices.Explicit[readIndex],
+                        out int remappedIndex))
+                {
+                    continue;
+                }
+
+                if (writeIndex == 0 || indices.Explicit[writeIndex - 1] != remappedIndex)
+                    indices.Explicit[writeIndex++] = remappedIndex;
+            }
+
+            if (writeIndex < indices.Explicit.Count)
+                indices.Explicit.RemoveRange(writeIndex, indices.Explicit.Count - writeIndex);
+
+            generation = currentGeneration;
+            FillImplicitTags();
+            UpdateSerializedTagNames();
         }
 
-        void ISerializationCallbackReceiver.OnBeforeSerialize()
+        private void RebuildFromSerializedTags()
         {
-        }
-
-        void ISerializationCallbackReceiver.OnAfterDeserialize()
-        {
-            indices = GameplayTagContainerIndices.Create();
-            if (serializedExplicitTags == null || serializedExplicitTags.Count == 0)
+            GameplayTagContainerIndices.Create(ref indices);
+            indices.Clear();
+            if (serializedExplicitTags == null)
                 return;
 
             for (int i = 0; i < serializedExplicitTags.Count; i++)
@@ -485,7 +579,39 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                     indices.Explicit.Insert(~index, tag.RuntimeIndex);
             }
 
-            FillImplictTags();
+            FillImplicitTags();
+            UpdateSerializedTagNames();
+        }
+
+        public void FillSerializedTags()
+        {
+            EnsureCurrentGeneration();
+            UpdateSerializedTagNames();
+        }
+
+        private void UpdateSerializedTagNames()
+        {
+            serializedExplicitTags ??= new List<string>();
+            serializedExplicitTags.Clear();
+            if (!indices.IsCreated)
+                return;
+
+            for (int i = 0; i < indices.Explicit.Count; i++)
+            {
+                GameplayTagDefinition definition =
+                    GameplayTagManager.GetDefinitionFromRuntimeIndex(indices.Explicit[i]);
+                serializedExplicitTags.Add(definition.TagName);
+            }
+        }
+
+        void ISerializationCallbackReceiver.OnBeforeSerialize()
+        {
+        }
+
+        void ISerializationCallbackReceiver.OnAfterDeserialize()
+        {
+            generation = GameplayTagManager.Generation;
+            RebuildFromSerializedTags();
         }
 
         /// <summary>컬렉션 초기화 구문을 지원하기 위한 메서드입니다.</summary>

@@ -1,33 +1,28 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 {
-    /// <summary>필수·금지 태그 조건을 표현합니다.</summary>
+    /// <summary>필수 태그와 금지 태그 조건을 묶어 표현합니다.</summary>
     [Serializable]
     public struct GameplayTagRequirements
     {
-        /// <summary>금지된 태그 컨테이너입니다.</summary>
-        public GameplayTagContainer ForbiddenTags => forbiddenTags;
+        /// <summary>보유하면 조건이 실패하는 태그입니다.</summary>
+        public readonly GameplayTagContainer ForbiddenTags => forbiddenTags;
 
-        /// <summary>필수 태그 컨테이너입니다.</summary>
-        public GameplayTagContainer RequiredTags => requiredTags;
+        /// <summary>조건을 통과하려면 모두 보유해야 하는 태그입니다.</summary>
+        public readonly GameplayTagContainer RequiredTags => requiredTags;
 
         [SerializeField]
-        [FormerlySerializedAs("m_ForbiddenTags")]
         private GameplayTagContainer forbiddenTags;
 
         [SerializeField]
-        [FormerlySerializedAs("m_RequiredTags")]
         private GameplayTagContainer requiredTags;
 
-        /// <summary>필수·금지 태그가 모두 비어 있는지 여부입니다.</summary>
-        public bool IsEmpty
-        {
-            get => (forbiddenTags == null || forbiddenTags.IsEmpty) &&
-                  (requiredTags == null || requiredTags.IsEmpty);
-        }
+        /// <summary>필수 태그와 금지 태그가 모두 비어 있는지 확인합니다.</summary>
+        public readonly bool IsEmpty => (forbiddenTags == null || forbiddenTags.IsEmpty) &&
+                                        (requiredTags == null || requiredTags.IsEmpty);
 
         public GameplayTagRequirements(GameplayTagContainer forbiddenTags, GameplayTagContainer requiredTags)
         {
@@ -35,28 +30,37 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             this.requiredTags = requiredTags;
         }
 
-        /// <summary>컨테이너가 요구 조건을 만족하는지 확인합니다.</summary>
+        /// <summary>컨테이너 하나가 조건을 만족하는지 확인합니다.</summary>
         public readonly bool Matches<T>(in T container) where T : IGameplayTagContainer
         {
             return !container.HasAny(forbiddenTags) && container.HasAll(requiredTags);
         }
 
-        /// <summary>정적·동적 컨테이너를 합쳐 요구 조건을 만족하는지 확인합니다.</summary>
-        public readonly bool Matches<T, U>(in T staticContainer, in U dynamicContainer) where T : IGameplayTagContainer where U : IGameplayTagContainer
+        /// <summary>두 컨테이너를 합친 태그가 조건을 만족하는지 확인합니다.</summary>
+        public readonly bool Matches<T, U>(in T first, in U second)
+            where T : IGameplayTagContainer
+            where U : IGameplayTagContainer
         {
-            bool hasAnyForbiddenTag = staticContainer.HasAny(forbiddenTags) || dynamicContainer.HasAny(forbiddenTags);
-            if (hasAnyForbiddenTag)
+            if (first.HasAny(forbiddenTags) || second.HasAny(forbiddenTags))
                 return false;
 
             if (requiredTags == null || requiredTags.IsEmpty)
                 return true;
 
-            using (GameplayTagPools.Rent(out GameplayTagContainer combined))
+            List<int> firstTags = first.Indices.Implicit;
+            List<int> secondTags = second.Indices.Implicit;
+            List<int> required = requiredTags.Indices.Explicit;
+
+            for (int i = 0; i < required.Count; i++)
             {
-                combined.AddTags(staticContainer);
-                combined.AddTags(dynamicContainer);
-                return combined.HasAll(requiredTags);
+                int runtimeIndex = required[i];
+                bool existsInFirst = firstTags != null && BinarySearchUtility.Search(firstTags, runtimeIndex) >= 0;
+                bool existsInSecond = secondTags != null && BinarySearchUtility.Search(secondTags, runtimeIndex) >= 0;
+                if (!existsInFirst && !existsInSecond)
+                    return false;
             }
+
+            return true;
         }
     }
 }

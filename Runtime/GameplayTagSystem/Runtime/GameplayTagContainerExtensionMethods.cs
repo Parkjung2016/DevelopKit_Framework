@@ -133,31 +133,6 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             return HasAllInternal(container.Indices.Implicit, other?.Indices.Explicit);
         }
 
-        /// <summary>두 컨테이너의 교집합이 요구 태그를 모두 만족하는지 확인합니다.</summary>
-        public static bool HasAll<T, U, V>(this T container, in U otherA, in V otherB)
-            where T : IReadOnlyGameplayTagContainer
-            where U : IReadOnlyGameplayTagContainer
-            where V : IReadOnlyGameplayTagContainer
-        {
-            if (otherA.IsEmpty && otherB.IsEmpty)
-                return true;
-
-            if (otherA.IsEmpty)
-                return HasAll(container, otherB);
-
-            if (otherB.IsEmpty)
-                return HasAll(container, otherA);
-
-            using (GameplayTagPools.Rent(out GameplayTagContainer intersection))
-            {
-                intersection.AddIntersection(otherA, otherB);
-                bool hasAll = HasAll(container, intersection);
-                intersection.Clear();
-
-                return hasAll;
-            }
-        }
-
         /// <summary>다른 컨테이너의 모든 태그를 명시적으로 보유하는지 확인합니다.</summary>
         public static bool HasAllExact<T, U>(this T container, in U other)
             where T : IReadOnlyGameplayTagContainer

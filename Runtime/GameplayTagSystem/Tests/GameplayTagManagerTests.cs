@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
@@ -72,5 +72,46 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
 
       Assert.IsTrue(GameplayTagManager.HasBeenReloaded);
     }
-  }
+
+    [Test]
+    public void Reload_ExistingTagResolvesCurrentDefinition()
+    {
+      GameplayTag beforeReload = GameplayTagTestFixtures.Tag("Test.Ability.Jump");
+      int previousIndex = beforeReload.RuntimeIndex;
+      FileGameplayTagSource source = GameplayTagTestFixtures.CreateFileSource(
+        @"{
+  ""BeforeTest"": {},
+  ""Test"": {},
+  ""Test.Ability"": {},
+  ""Test.Ability.Jump"": { ""Comment"": ""Reloaded"" }
+}");
+
+      GameplayTagManager.ReloadForTests(source);
+      GameplayTag current = GameplayTagTestFixtures.Tag("Test.Ability.Jump");
+
+      Assert.IsTrue(beforeReload.IsValid);
+      Assert.AreEqual(current, beforeReload);
+      Assert.AreEqual(current.RuntimeIndex, beforeReload.RuntimeIndex);
+      Assert.AreNotEqual(previousIndex, beforeReload.RuntimeIndex);
+      Assert.AreEqual("Reloaded", beforeReload.Description);
+    }
+
+    [Test]
+    public void Reload_RemovedTagBecomesInvalidWithoutChangingItsName()
+    {
+      GameplayTag removed = GameplayTagTestFixtures.Tag("Test.Ability.Roll");
+      FileGameplayTagSource source = GameplayTagTestFixtures.CreateFileSource(
+        @"{
+  ""Test"": {},
+  ""Test.Ability"": {},
+  ""Test.Ability.Jump"": {}
+}");
+
+      GameplayTagManager.ReloadForTests(source);
+
+      Assert.IsFalse(removed.IsValid);
+      Assert.IsFalse(removed.IsNone);
+      Assert.AreEqual("Test.Ability.Roll", removed.Name);
+      Assert.AreEqual(-1, removed.RuntimeIndex);
+    }  }
 }

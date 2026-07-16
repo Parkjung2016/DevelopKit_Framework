@@ -1,82 +1,87 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 {
-    /// <summary>게임플레이 태그를 나타내는 값 형식입니다.</summary>
+    /// <summary>계층형 이름으로 식별되는 게임플레이 태그 값입니다.</summary>
     [Serializable]
     [DebuggerDisplay("{serializedTagName,nq}")]
     public struct GameplayTag : IEquatable<GameplayTag>, ISerializationCallbackReceiver
     {
-        /// <summary>유효하지 않은 태그를 나타냅니다.</summary>
-        public static readonly GameplayTag None = new() { definition = GameplayTagDefinition.NoneTagDefinition };
+        /// <summary>태그가 없음을 나타내는 값입니다.</summary>
+        public static readonly GameplayTag None = new(GameplayTagDefinition.NoneTagDefinition);
 
-        public readonly bool IsNone => definition == null || definition == GameplayTagDefinition.NoneTagDefinition;
+        /// <summary>태그가 없는 값인지 확인합니다.</summary>
+        public readonly bool IsNone => definition == GameplayTagDefinition.NoneTagDefinition ||
+                                       (definition == null && string.IsNullOrEmpty(serializedTagName));
 
-        public readonly bool IsValid => definition != null && definition.IsValid;
+        /// <summary>현재 등록된 태그인지 확인합니다.</summary>
+        public readonly bool IsValid
+        {
+            get
+            {
+                GameplayTagDefinition current = Definition;
+                return current != GameplayTagDefinition.NoneTagDefinition && current.IsValid;
+            }
+        }
 
-        public readonly bool IsLeaf => definition != null && definition.Children.Length == 0;
+        public readonly bool IsLeaf => IsValid && Definition.Children.Length == 0;
 
-        public readonly int RuntimeIndex => definition.RuntimeIndex;
+        /// <summary>런타임 조회용 인덱스입니다. 유효하지 않은 태그는 -1입니다.</summary>
+        public readonly int RuntimeIndex => IsValid ? Definition.RuntimeIndex : -1;
 
-        internal readonly GameplayTagDefinition Definition => definition ?? GameplayTagDefinition.NoneTagDefinition;
+        internal readonly GameplayTagDefinition Definition
+        {
+            get
+            {
+                if (definition == null || definition == GameplayTagDefinition.NoneTagDefinition)
+                    return GameplayTagDefinition.NoneTagDefinition;
 
-        /// <inheritdoc cref="GameplayTagDefinition.ParentTags" />
+                if (definition.Generation == 0 || definition.Generation == GameplayTagManager.Generation)
+                    return definition;
+
+                return GameplayTagManager.TryGetCurrentDefinition(Name, out GameplayTagDefinition current)
+                    ? current
+                    : GameplayTagDefinition.NoneTagDefinition;
+            }
+        }
+
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public readonly ReadOnlySpan<GameplayTag> ParentTags => Definition.ParentTags;
 
-        /// <inheritdoc cref="GameplayTagDefinition.ChildTags" />
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public readonly ReadOnlySpan<GameplayTag> ChildTags => Definition.ChildTags;
 
-        /// <inheritdoc cref="GameplayTagDefinition.HierarchyTags" />
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public readonly ReadOnlySpan<GameplayTag> HierarchyTags => Definition.HierarchyTags;
 
-        /// <inheritdoc cref="GameplayTagDefinition.Label" />
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public readonly string Label => Definition.Label;
 
-        /// <inheritdoc cref="GameplayTagDefinition.HierarchyLevel" />
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public readonly int HierarchyLevel => Definition.HierarchyLevel;
 
-        /// <inheritdoc cref="GameplayTagDefinition.Description" />
         public readonly string Description => Definition.Description;
 
-        /// <summary>이 태그의 부모 태그입니다. 예: "A.B.C"의 부모는 "A.B"입니다.</summary>
+        /// <summary>바로 위 부모 태그입니다. 부모가 없으면 None입니다.</summary>
         public readonly GameplayTag ParentTag
         {
             get
             {
                 GameplayTagDefinition parentDefinition = Definition.ParentTagDefinition;
-
-                if (parentDefinition == null)
-                    return None;
-
-                return parentDefinition.Tag;
+                return parentDefinition == null ? None : parentDefinition.Tag;
             }
         }
 
-        /// <inheritdoc cref="GameplayTagDefinition.Flags" />
         public readonly GameplayTagFlags Flags => Definition.Flags;
 
-        /// <summary>태그의 전체 이름입니다(부모 포함).</summary>
-        public readonly string Name
-        {
-            get
-            {
-                ValidateIsNotNone();
-                return serializedTagName;
-            }
-        }
+        /// <summary>태그의 전체 이름입니다. None은 빈 문자열입니다.</summary>
+        public readonly string Name => serializedTagName ?? string.Empty;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         [SerializeField]
-        [FormerlySerializedAs("m_Name")]
         private string serializedTagName;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
@@ -85,50 +90,60 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         internal GameplayTag(GameplayTagDefinition definition)
         {
             this.definition = definition ?? GameplayTagDefinition.NoneTagDefinition;
-            serializedTagName = this.definition.TagName;
+            serializedTagName = this.definition == GameplayTagDefinition.NoneTagDefinition
+                ? null
+                : this.definition.TagName;
         }
 
-        /// <inheritdoc cref="GameplayTagDefinition.IsChildOf(GameplayTag)"/>
+        private GameplayTag(string name)
+        {
+            definition = null;
+            serializedTagName = name;
+        }
+
+        internal static GameplayTag CreateInvalid(string name)
+        {
+            return new GameplayTag(name);
+        }
+
         public readonly bool IsParentOf(in GameplayTag tag)
         {
-            ValidateIsNotNone();
+            ValidateIsValid();
             return Definition.IsParentOf(tag);
         }
 
-        /// <inheritdoc cref="GameplayTagDefinition.IsChildOf(GameplayTag)"/>
         public readonly bool IsChildOf(in GameplayTag parentTag)
         {
-            ValidateIsNotNone();
+            ValidateIsValid();
             return Definition.IsChildOf(parentTag);
         }
 
         public readonly bool Equals(GameplayTag other)
         {
-            return definition == other.definition;
+            return string.Equals(Name, other.Name, StringComparison.Ordinal);
         }
 
         public readonly override bool Equals(object obj)
         {
             if (obj is GameplayTag other)
-                return definition == other.definition;
+                return Equals(other);
 
-            if (obj is string otherStr)
-                return serializedTagName == otherStr;
-
-            return false;
+            return obj is string otherName && string.Equals(Name, otherName, StringComparison.Ordinal);
         }
 
         public readonly override int GetHashCode()
         {
-            return Definition.GetHashCode();
+            if (IsNone)
+                return StringComparer.Ordinal.GetHashCode(string.Empty);
+
+            return definition != null
+                ? definition.GetHashCode()
+                : StringComparer.Ordinal.GetHashCode(Name);
         }
 
         public readonly override string ToString()
         {
-            if (IsNone)
-                return "<None>";
-
-            return serializedTagName;
+            return IsNone ? "<None>" : Name;
         }
 
         void ISerializationCallbackReceiver.OnAfterDeserialize()
@@ -139,9 +154,9 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                 return;
             }
 
-            this = GameplayTagManager.RequestTag(serializedTagName);
+            this = GameplayTagManager.RequestTag(serializedTagName, logWarningIfNotFound: false);
             if (!IsValid)
-                CDebug.LogWarning($"등록되지 않은 태그 이름입니다: \"{serializedTagName}\".");
+                CDebug.LogWarning($"등록되지 않은 게임플레이 태그입니다: \"{serializedTagName}\".");
         }
 
         void ISerializationCallbackReceiver.OnBeforeSerialize()
@@ -152,24 +167,18 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                 return;
             }
 
-            serializedTagName = Definition.TagName;
-        }
-
-        [Conditional("DEBUG")]
-        private readonly void ValidateIsNotNone()
-        {
-            if (IsNone)
-                throw new InvalidOperationException("Cannot perform operation on GameplayTag.None.");
+            if (IsValid)
+                serializedTagName = definition.TagName;
         }
 
         [Conditional("DEBUG")]
         internal readonly void ValidateIsValid()
         {
             if (IsNone)
-                throw new InvalidOperationException("Cannot perform operation on GameplayTag.None.");
+                throw new InvalidOperationException("GameplayTag.None에는 이 작업을 수행할 수 없습니다.");
 
             if (!IsValid)
-                throw new InvalidOperationException($"GameplayTag \"{serializedTagName}\" is not valid.");
+                throw new InvalidOperationException($"등록되지 않은 게임플레이 태그입니다: \"{Name}\".");
         }
 
         public static implicit operator GameplayTag(string tagName)
@@ -179,24 +188,12 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
         public static bool operator ==(in GameplayTag lhs, in GameplayTag rhs)
         {
-            if (!lhs.IsValid && !rhs.IsValid)
-                return lhs.Name == rhs.Name;
-
-            if (lhs.IsValid != rhs.IsValid)
-                return false;
-
-            return lhs.Definition == rhs.Definition;
+            return lhs.Equals(rhs);
         }
 
         public static bool operator !=(in GameplayTag lhs, in GameplayTag rhs)
         {
-            if (!lhs.IsValid && !rhs.IsValid)
-                return lhs.Name != rhs.Name;
-
-            if (lhs.IsValid != rhs.IsValid)
-                return true;
-
-            return lhs.Definition != rhs.Definition;
+            return !lhs.Equals(rhs);
         }
     }
 }

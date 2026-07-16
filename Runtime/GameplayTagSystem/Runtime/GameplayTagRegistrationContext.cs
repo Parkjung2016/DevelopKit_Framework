@@ -1,6 +1,5 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine.Assertions;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
@@ -21,17 +20,23 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
     internal sealed class GameplayTagRegistrationContext
     {
-        private List<GameplayTagDefinition> definitions = new();
-        private Dictionary<string, GameplayTagDefinition> tagsByName = new();
-        private List<GameplayTagRegistrationError> registrationErrors = new();
+        private readonly List<GameplayTagDefinition> definitions = new();
+        private readonly Dictionary<string, GameplayTagDefinition> tagsByName = new(StringComparer.Ordinal);
+        private readonly List<GameplayTagRegistrationError> registrationErrors = new();
+        private bool definitionsGenerated;
 
         public bool RegisterTag(string name, string description, GameplayTagFlags flags, IGameplayTagSource source)
         {
-            Assert.IsNotNull(source, "Source cannot be null when registering a tag.");
+            Assert.IsFalse(definitionsGenerated, "태그 정의를 생성한 뒤에는 새 태그를 등록할 수 없습니다.");
+            Assert.IsNotNull(source, "태그를 등록하려면 소스가 필요합니다.");
             return RegisterTagInternal(name, description, flags, source);
         }
 
-        private bool RegisterTagInternal(string name, string description, GameplayTagFlags flags, IGameplayTagSource source)
+        private bool RegisterTagInternal(
+            string name,
+            string description,
+            GameplayTagFlags flags,
+            IGameplayTagSource source)
         {
             if (!GameplayTagUtility.IsNameValid(name, out string errorMessage))
             {
@@ -42,122 +47,104 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             if (tagsByName.TryGetValue(name, out GameplayTagDefinition existingDefinition))
             {
                 existingDefinition.Description ??= description;
-
-                if (source != null)
-                    existingDefinition.AddSource(source);
-
+                existingDefinition.AddSource(source);
                 return true;
             }
 
             GameplayTagDefinition definition = new(name, description, flags);
-
-            if (source != null)
-                definition.AddSource(source);
-
+            definition.AddSource(source);
             tagsByName.Add(name, definition);
             definitions.Add(definition);
-
             return true;
         }
 
         public GameplayTagDefinition[] GenerateDefinitions()
         {
+            if (definitionsGenerated)
+                throw new InvalidOperationException("태그 정의는 한 번만 생성할 수 있습니다.");
+
+            definitionsGenerated = true;
             RegisterMissingParents();
-            SortDefinitionsAlphabetically();
-            RegisterNoneTag();
-            SetTagRuntimeIndices();
-            FillParentsAndChildren();
-            SetHierarchyTags();
-
-            return definitions.ToArray();
-        }
-
-        private void RegisterNoneTag()
-        {
+            definitions.Sort(static (a, b) => string.Compare(a.TagName, b.TagName, StringComparison.Ordinal));
             definitions.Insert(0, GameplayTagDefinition.NoneTagDefinition);
+            SetRuntimeIndices();
+            BuildRelationships();
+            BuildHierarchyTags();
+            return definitions.ToArray();
         }
 
         private void RegisterMissingParents()
         {
-            List<GameplayTagDefinition> definitionList = new(definitions);
-            foreach (GameplayTagDefinition definition in definitionList)
+            GameplayTagDefinition[] registeredDefinitions = definitions.ToArray();
+            for (int i = 0; i < registeredDefinitions.Length; i++)
             {
-                string[] parentTagNames = GameplayTagUtility.GetHeirarchyNames(definition.TagName);
+                GameplayTagDefinition definition = registeredDefinitions[i];
+                string[] hierarchyNames = GameplayTagUtility.GetHierarchyNames(definition.TagName);
+                GameplayTagFlags inheritedFlags = definition.Flags;
 
-                GameplayTagFlags flags = definition.Flags;
-                foreach (string parentTagName in Enumerable.Reverse(parentTagNames))
+                for (int j = hierarchyNames.Length - 1; j >= 0; j--)
                 {
-                    if (tagsByName.TryGetValue(parentTagName, out GameplayTagDefinition parentTag))
+                    string name = hierarchyNames[j];
+                    if (tagsByName.TryGetValue(name, out GameplayTagDefinition parent))
                     {
-                        flags |= parentTag.Flags;
+                        inheritedFlags |= parent.Flags;
                         continue;
                     }
 
-                    RegisterTagInternal(parentTagName, string.Empty, flags, null);
+                    RegisterTagInternal(name, string.Empty, inheritedFlags, null);
                 }
             }
         }
 
-        private void SortDefinitionsAlphabetically()
+        private void BuildRelationships()
         {
-            definitions.Sort((a, b) => string.Compare(a.TagName, b.TagName, StringComparison.OrdinalIgnoreCase));
-        }
+            Dictionary<GameplayTagDefinition, List<GameplayTagDefinition>> childrenByParent = new();
 
-        private void FillParentsAndChildren()
-        {
-            Dictionary<GameplayTagDefinition, List<GameplayTagDefinition>> childrenLists = new();
-
-            // 첫 번째 정의(None 태그)는 건너뜁니다.
+            // 인덱스 0은 None 태그입니다.
             for (int i = 1; i < definitions.Count; i++)
             {
                 GameplayTagDefinition definition = definitions[i];
-
-                if (!GameplayTagUtility.TryGetParentName(definition.TagName, out string parentTagName))
-                    continue;
-
-                if (!tagsByName.TryGetValue(parentTagName, out GameplayTagDefinition parentDefinition))
-                    continue;
-
-                if (!GameplayTagSourceUtility.SharesFileSource(parentDefinition, definition))
-                    continue;
-
-                if (!childrenLists.TryGetValue(parentDefinition, out List<GameplayTagDefinition> children))
+                if (!GameplayTagUtility.TryGetParentName(definition.TagName, out string parentName) ||
+                    !tagsByName.TryGetValue(parentName, out GameplayTagDefinition parent) ||
+                    !GameplayTagSourceUtility.SharesFileSource(parent, definition))
                 {
-                    children = new();
-                    childrenLists.Add(parentDefinition, children);
+                    continue;
+                }
+
+                if (!childrenByParent.TryGetValue(parent, out List<GameplayTagDefinition> children))
+                {
+                    children = new List<GameplayTagDefinition>();
+                    childrenByParent.Add(parent, children);
                 }
 
                 children.Add(definition);
-                definition.SetParent(parentDefinition);
+                definition.SetParent(parent);
             }
 
-            foreach ((GameplayTagDefinition definition, List<GameplayTagDefinition> children) in childrenLists)
-                definition.SetChildren(children);
+            foreach (KeyValuePair<GameplayTagDefinition, List<GameplayTagDefinition>> pair in childrenByParent)
+                pair.Key.SetChildren(pair.Value);
         }
 
-        private void SetHierarchyTags()
+        private void BuildHierarchyTags()
         {
             for (int i = 1; i < definitions.Count; i++)
             {
                 GameplayTagDefinition definition = definitions[i];
-
-                List<GameplayTag> hierarcyTags = new();
-
-                if (definition.ParentTagDefinition != null)
-                    hierarcyTags.AddRange(definition.ParentTagDefinition.HierarchyTags.ToArray());
-
-                hierarcyTags.Add(definition.Tag);
-                definition.SetHierarchyTags(hierarcyTags.ToArray());
+                ReadOnlySpan<GameplayTag> parents = definition.ParentTags;
+                GameplayTag[] hierarchy = new GameplayTag[parents.Length + 1];
+                parents.CopyTo(hierarchy);
+                hierarchy[^1] = definition.Tag;
+                definition.SetHierarchyTags(hierarchy);
             }
         }
 
-        private void SetTagRuntimeIndices()
+        private void SetRuntimeIndices()
         {
             for (int i = 0; i < definitions.Count; i++)
                 definitions[i].SetRuntimeIndex(i);
         }
 
-        public IEnumerable<GameplayTagRegistrationError> GetRegistrationErrors()
+        public IReadOnlyList<GameplayTagRegistrationError> GetRegistrationErrors()
         {
             return registrationErrors;
         }

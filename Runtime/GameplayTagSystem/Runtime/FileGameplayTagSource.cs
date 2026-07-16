@@ -1,7 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using Newtonsoft.Json.Linq;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
@@ -13,6 +12,11 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
     /// </summary>
     internal sealed class FileGameplayTagSource : IGameplayTagSource, IDeleteTagHandler, IGameplayTagEditHandler
     {
+        private static readonly Dictionary<string, FileGameplayTagSource> SourcesByPath =
+            new(StringComparer.OrdinalIgnoreCase);
+        private static readonly List<FileGameplayTagSource> SourceBuffer = new();
+        private static readonly HashSet<string> SeenPaths = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly List<string> RemovedPathBuffer = new();
         private struct TagInFile
         {
             public string Name;
@@ -23,7 +27,10 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         public static readonly string DirectoryPath = Path.GetFullPath(
             Path.Combine(Application.dataPath, "..", "ProjectSettings", "GameplayTags"));
 
+        private readonly List<TagInFile> tags = new();
         private JObject root;
+        private long loadedWriteTicks;
+        private long loadedLength;
 
         public string Name { get; private set; }
 
@@ -45,10 +52,15 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                 if (!File.Exists(FilePath))
                 {
                     root = new JObject();
+                    tags.Clear();
+                    loadedWriteTicks = 0;
+                    loadedLength = 0;
                     return true;
                 }
 
                 root = LoadRoot();
+                RebuildTagCache();
+                UpdateFileStamp();
                 return true;
             }
             catch (Exception ex)
@@ -58,37 +70,65 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             }
         }
 
-        /// <summary>디렉터리에 있는 모든 JSON 태그 소스를 열거합니다.</summary>
-        public static IEnumerable<FileGameplayTagSource> GetAllFileSources()
+        private bool ReloadIfChanged()
         {
+            if (!File.Exists(FilePath))
+                return false;
+
+            FileInfo info = new(FilePath);
+            if (root != null && info.LastWriteTimeUtc.Ticks == loadedWriteTicks && info.Length == loadedLength)
+                return true;
+
+            return TryLoad();
+        }
+
+        /// <summary>디렉터리에 있는 JSON 태그 소스를 캐시해 반환합니다.</summary>
+        public static IReadOnlyList<FileGameplayTagSource> GetAllFileSources()
+        {
+            SourceBuffer.Clear();
+            SeenPaths.Clear();
+
             if (!Directory.Exists(DirectoryPath))
-                yield break;
-
-            foreach (string filePath in Directory.EnumerateFiles(DirectoryPath, "*.json"))
             {
-                FileGameplayTagSource source = new(filePath);
-
-                if (source.TryLoad())
-                    yield return source;
+                SourcesByPath.Clear();
+                return SourceBuffer;
             }
+
+            foreach (string rawPath in Directory.EnumerateFiles(DirectoryPath, "*.json"))
+            {
+                string path = Path.GetFullPath(rawPath);
+                SeenPaths.Add(path);
+
+                if (!SourcesByPath.TryGetValue(path, out FileGameplayTagSource source))
+                {
+                    source = new FileGameplayTagSource(path);
+                    SourcesByPath.Add(path, source);
+                }
+
+                if (source.ReloadIfChanged())
+                    SourceBuffer.Add(source);
+            }
+
+            RemovedPathBuffer.Clear();
+            foreach (string cachedPath in SourcesByPath.Keys)
+            {
+                if (!SeenPaths.Contains(cachedPath))
+                    RemovedPathBuffer.Add(cachedPath);
+            }
+
+            for (int i = 0; i < RemovedPathBuffer.Count; i++)
+                SourcesByPath.Remove(RemovedPathBuffer[i]);
+
+            SourceBuffer.Sort(static (a, b) =>
+                string.Compare(a.FilePath, b.FilePath, StringComparison.OrdinalIgnoreCase));
+            return SourceBuffer;
         }
 
         public void RegisterTags(GameplayTagRegistrationContext context)
         {
-            TagInFile[] tagsInFile;
-            try
+            for (int i = 0; i < tags.Count; i++)
             {
-                tagsInFile = GetAllTags().ToArray();
-            }
-            catch (Exception ex)
-            {
-                CDebug.LogError($"태그 파일 '{FilePath}'에서 태그를 가져오지 못했습니다.");
-                CDebug.LogError(ex);
-                return;
-            }
-
-            foreach (TagInFile tag in tagsInFile)
-            {
+                TagInFile tag = tags[i];
                 try
                 {
                     context.RegisterTag(tag.Name, tag.Comment, GameplayTagFlags.None, this);
@@ -100,7 +140,6 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                 }
             }
         }
-
         /// <summary>이 파일에 지정한 이름의 태그가 있는지 확인합니다.</summary>
         public bool ContainsTag(string tagName) =>
             root != null && root.ContainsKey(tagName);
@@ -142,7 +181,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             if (!GameplayTagUtility.IsNameValid(tagName, out errorMessage))
                 return false;
 
-            if (GetAllTags().Any(tag => tag.Name == tagName))
+            if (root.ContainsKey(tagName))
             {
                 errorMessage = $"TAG_ALREADY_EXISTS:{tagName}:{Name}";
                 return false;
@@ -215,9 +254,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
             if (mode == GameplayTagDeleteMode.Hierarchy)
             {
-                if (!root.Properties().Any(property =>
-                        property.Name == tagName ||
-                        property.Name.StartsWith(tagName + ".", StringComparison.Ordinal)))
+                if (!ContainsTagHierarchy(tagName))
                 {
                     return true;
                 }
@@ -320,7 +357,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             string newPrefix = newName + ".";
             List<(string from, string to, JToken value)> renames = new();
 
-            foreach (JProperty property in root.Properties().ToList())
+            foreach (JProperty property in root.Properties())
             {
                 string name = property.Name;
                 if (name == oldName)
@@ -374,18 +411,43 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             }
         }
 
-        private IEnumerable<TagInFile> GetAllTags()
+        private void RebuildTagCache()
         {
+            tags.Clear();
             if (root == null)
-                yield break;
+                return;
 
             foreach (JProperty property in root.Properties())
             {
-                JToken commentToken = property.Value["Comment"];
-                string comment = commentToken?.ToString();
-
-                yield return new TagInFile { Name = property.Name, Comment = comment };
+                string comment = property.Value["Comment"]?.ToString();
+                tags.Add(new TagInFile { Name = property.Name, Comment = comment });
             }
+        }
+
+        private bool ContainsTagHierarchy(string tagName)
+        {
+            string prefix = tagName + ".";
+            foreach (JProperty property in root.Properties())
+            {
+                if (property.Name == tagName || property.Name.StartsWith(prefix, StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private void UpdateFileStamp()
+        {
+            if (!File.Exists(FilePath))
+            {
+                loadedWriteTicks = 0;
+                loadedLength = 0;
+                return;
+            }
+
+            FileInfo info = new(FilePath);
+            loadedWriteTicks = info.LastWriteTimeUtc.Ticks;
+            loadedLength = info.Length;
         }
 
         private bool TryImportTagHierarchy(
@@ -428,7 +490,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
         private void EnsureMissingParents(string tagName)
         {
-            string[] hierarchy = GameplayTagUtility.GetHeirarchyNames(tagName);
+            string[] hierarchy = GameplayTagUtility.GetHierarchyNames(tagName);
 
             for (int i = 0; i < hierarchy.Length - 1; i++)
             {
@@ -451,6 +513,8 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             string fileContent = root.ToString();
             Directory.CreateDirectory(Path.GetDirectoryName(FilePath));
             File.WriteAllText(FilePath, fileContent);
+            RebuildTagCache();
+            UpdateFileStamp();
         }
 
         private bool TryValidateDeleteTagOnly(string tagName, out string errorMessage)
@@ -501,7 +565,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             string descendantPrefix = tagName + ".";
             List<(string oldName, string newName, JToken value)> promotions = new();
 
-            foreach (JProperty property in root.Properties().ToList())
+            foreach (JProperty property in root.Properties())
             {
                 string name = property.Name;
                 if (!name.StartsWith(descendantPrefix, StringComparison.Ordinal))
@@ -526,7 +590,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             string descendantPrefix = tagName + ".";
             List<string> namesToRemove = new();
 
-            foreach (JProperty property in root.Properties().ToList())
+            foreach (JProperty property in root.Properties())
             {
                 string name = property.Name;
                 if (name == tagName || name.StartsWith(descendantPrefix, StringComparison.Ordinal))
@@ -551,7 +615,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             }
 
             string prefix = tagName + ".";
-            foreach (JProperty property in root.Properties().ToList())
+            foreach (JProperty property in root.Properties())
             {
                 string name = property.Name;
                 if (name == tagName || name.StartsWith(prefix, StringComparison.Ordinal))

@@ -1,7 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 {
@@ -11,59 +10,39 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         public static GameplayTagDefinition NoneTagDefinition { get; } = new();
 
         public GameplayTag Tag => new(this);
-
         public bool IsValid => RuntimeIndex >= 0;
-
         public int SourceCount => sources.Count;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        public ReadOnlySpan<GameplayTagDefinition> Children => new(children);
+        public ReadOnlySpan<GameplayTagDefinition> Children => children;
 
-        /// <summary>
-        /// 이 태그의 부모 태그입니다. 예: "A.B.C"이면 ["A", "A.B", "A.B.C"]입니다.
-        /// </summary>
+        /// <summary>루트부터 바로 위 부모까지의 태그입니다.</summary>
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        public ReadOnlySpan<GameplayTag> ParentTags => new(parentTags);
+        public ReadOnlySpan<GameplayTag> ParentTags => parentTags;
 
-        /// <summary>
-        /// 이 태그의 자식 태그입니다. 예: "A.B.C"이면 ["A.B.C.D", "A.B.C.E"]입니다.
-        /// </summary>
+        /// <summary>이 태그 아래에 등록된 모든 자식 태그입니다.</summary>
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        public ReadOnlySpan<GameplayTag> ChildTags => new(childTags);
+        public ReadOnlySpan<GameplayTag> ChildTags => childTags;
 
-        /// <summary>
-        /// 이 태그 계층에 포함된 태그입니다. 예: "A.B.C"이면 ["A", "A.B", "A.B.C"]입니다.
-        /// </summary>
+        /// <summary>루트부터 자기 자신까지의 태그입니다.</summary>
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-        public ReadOnlySpan<GameplayTag> HierarchyTags => new(hierarchyTags);
+        public ReadOnlySpan<GameplayTag> HierarchyTags => hierarchyTags;
 
-        /// <summary>태그 전체 이름(부모 포함)입니다.</summary>
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public string TagName { get; }
-
-        /// <summary>개발 중 태그에 대한 추가 설명입니다.</summary>
         public string Description { get; internal set; }
-
-        /// <summary>태그 플래그입니다.</summary>
         public GameplayTagFlags Flags { get; }
-
-        /// <summary>부모를 제외한 태그 라벨입니다.</summary>
-        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public string Label { get; }
-
-        /// <summary>태그 계층 깊이(부모 태그 개수)입니다.</summary>
         public int HierarchyLevel { get; }
-
-        public int RuntimeIndex { get; internal set; }
-
+        public int RuntimeIndex { get; private set; }
+        public int Generation { get; private set; }
         public GameplayTagDefinition ParentTagDefinition { get; private set; }
 
         private GameplayTag[] parentTags = Array.Empty<GameplayTag>();
         private GameplayTag[] childTags = Array.Empty<GameplayTag>();
         private GameplayTag[] hierarchyTags = Array.Empty<GameplayTag>();
         private GameplayTagDefinition[] children = Array.Empty<GameplayTagDefinition>();
-        private List<IGameplayTagSource> sources = new();
-        private int nameHash;
+        private readonly List<IGameplayTagSource> sources = new();
+        private readonly int nameHash;
 
         private GameplayTagDefinition()
         {
@@ -72,12 +51,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             Label = "None";
             HierarchyLevel = 0;
             RuntimeIndex = 0;
-            ParentTagDefinition = null;
-            parentTags = Array.Empty<GameplayTag>();
-            childTags = Array.Empty<GameplayTag>();
-            hierarchyTags = Array.Empty<GameplayTag>();
-            children = Array.Empty<GameplayTagDefinition>();
-            nameHash = TagName.GetHashCode();
+            nameHash = StringComparer.Ordinal.GetHashCode(TagName);
         }
 
         public GameplayTagDefinition(string name, string description, GameplayTagFlags flags = GameplayTagFlags.None)
@@ -85,21 +59,11 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             TagName = name;
             Description = description;
             Flags = flags;
-            nameHash = name.GetHashCode();
-
             Label = GameplayTagUtility.GetLabel(name);
-            HierarchyLevel = GameplayTagUtility.GetHeirarchyLevelFromName(name);
+            HierarchyLevel = GameplayTagUtility.GetHierarchyLevelFromName(name);
+            nameHash = StringComparer.Ordinal.GetHashCode(name);
         }
 
-        public static GameplayTagDefinition CreateInvalidDefinition(string name)
-        {
-            GameplayTagDefinition invalidDefinition = new(name, "Invalid Tag");
-            invalidDefinition.SetRuntimeIndex(-1);
-            return invalidDefinition;
-        }
-
-        /// <summary>지정한 태그의 자식인지 여부를 반환합니다.</summary>
-        /// <param name="tag">부모 후보 태그입니다.</param>
         public bool IsChildOf(GameplayTag tag)
         {
             if (RuntimeIndex <= tag.RuntimeIndex)
@@ -117,8 +81,6 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             return false;
         }
 
-        /// <summary>지정한 태그의 부모인지 여부를 반환합니다.</summary>
-        /// <param name="tag">자식 후보 태그입니다.</param>
         public bool IsParentOf(GameplayTag tag)
         {
             if (RuntimeIndex >= tag.RuntimeIndex)
@@ -139,28 +101,48 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         public void SetParent(GameplayTagDefinition parent)
         {
             ParentTagDefinition = parent;
-            List<GameplayTag> tags = new();
-
-            GameplayTagDefinition current = parent;
-            while (current != null)
+            if (parent == null)
             {
-                tags.Add(current.Tag);
-                current = current.ParentTagDefinition;
+                parentTags = Array.Empty<GameplayTag>();
+                return;
             }
 
-            tags.Reverse();
-            parentTags = tags.ToArray();
+            int parentCount = 0;
+            for (GameplayTagDefinition current = parent; current != null; current = current.ParentTagDefinition)
+                parentCount++;
+
+            parentTags = new GameplayTag[parentCount];
+            GameplayTagDefinition currentParent = parent;
+            for (int i = parentTags.Length - 1; i >= 0; i--)
+            {
+                parentTags[i] = currentParent.Tag;
+                currentParent = currentParent.ParentTagDefinition;
+            }
         }
 
-        public void SetChildren(List<GameplayTagDefinition> children)
+        public void SetChildren(List<GameplayTagDefinition> childDefinitions)
         {
-            this.children = children.ToArray();
-            childTags = children.Select(c => c.Tag).ToArray();
+            int count = childDefinitions?.Count ?? 0;
+            if (count == 0)
+            {
+                children = Array.Empty<GameplayTagDefinition>();
+                childTags = Array.Empty<GameplayTag>();
+                return;
+            }
+
+            children = new GameplayTagDefinition[count];
+            childTags = new GameplayTag[count];
+            for (int i = 0; i < count; i++)
+            {
+                GameplayTagDefinition child = childDefinitions[i];
+                children[i] = child;
+                childTags[i] = child.Tag;
+            }
         }
 
-        public void SetHierarchyTags(GameplayTag[] hierarchyTags)
+        public void SetHierarchyTags(GameplayTag[] tags)
         {
-            this.hierarchyTags = hierarchyTags;
+            hierarchyTags = tags ?? Array.Empty<GameplayTag>();
         }
 
         public void SetRuntimeIndex(int index)
@@ -168,9 +150,14 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             RuntimeIndex = index;
         }
 
+        public void SetGeneration(int generation)
+        {
+            Generation = generation;
+        }
+
         public void AddSource(IGameplayTagSource source)
         {
-            if (!sources.Contains(source))
+            if (source != null && !sources.Contains(source))
                 sources.Add(source);
         }
 
@@ -181,15 +168,15 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
         public IGameplayTagSource GetSource(int index)
         {
-            if (index < 0 || index >= sources.Count)
-                throw new ArgumentOutOfRangeException(nameof(index), "Index is out of range.");
+            if ((uint)index >= (uint)sources.Count)
+                throw new ArgumentOutOfRangeException(nameof(index));
 
             return sources[index];
         }
 
-        public IEnumerable<IGameplayTagSource> GetAllSources()
+        public IReadOnlyList<IGameplayTagSource> GetAllSources()
         {
-            return sources.AsReadOnly();
+            return sources;
         }
     }
 }
