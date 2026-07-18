@@ -6,7 +6,7 @@
         public bool OverrideBaseValue { get; }
         public float BaseValue { get; }
 
-        public string StatName => Definition.StatName;
+        public StatId Id => Definition.Id;
         public bool IsValid => Definition.IsValid;
 
         public StatOverrideEntry(

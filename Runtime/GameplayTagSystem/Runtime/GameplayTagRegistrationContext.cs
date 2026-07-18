@@ -44,15 +44,19 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                 return false;
             }
 
-            if (tagsByName.TryGetValue(name, out GameplayTagDefinition existingDefinition))
+            if (tagsByName.TryGetValue(name, out GameplayTagDefinition existing))
             {
-                existingDefinition.Description ??= description;
-                existingDefinition.AddSource(source);
-                return true;
+                string existingSource = existing.Source?.Name ?? "Generated";
+                string duplicateSource = source?.Name ?? "Generated";
+                registrationErrors.Add(new GameplayTagRegistrationError(
+                    $"태그 '{name}'은(는) '{existingSource}'에 이미 등록되어 있어 " +
+                    $"'{duplicateSource}'에서 다시 등록할 수 없습니다.",
+                    source,
+                    name));
+                return false;
             }
 
-            GameplayTagDefinition definition = new(name, description, flags);
-            definition.AddSource(source);
+            GameplayTagDefinition definition = new(name, description, flags, source);
             tagsByName.Add(name, definition);
             definitions.Add(definition);
             return true;
@@ -91,7 +95,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                         continue;
                     }
 
-                    RegisterTagInternal(name, string.Empty, inheritedFlags, null);
+                    RegisterTagInternal(name, string.Empty, inheritedFlags, definition.Source);
                 }
             }
         }
@@ -105,8 +109,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             {
                 GameplayTagDefinition definition = definitions[i];
                 if (!GameplayTagUtility.TryGetParentName(definition.TagName, out string parentName) ||
-                    !tagsByName.TryGetValue(parentName, out GameplayTagDefinition parent) ||
-                    !GameplayTagSourceUtility.SharesFileSource(parent, definition))
+                    !tagsByName.TryGetValue(parentName, out GameplayTagDefinition parent))
                 {
                     continue;
                 }

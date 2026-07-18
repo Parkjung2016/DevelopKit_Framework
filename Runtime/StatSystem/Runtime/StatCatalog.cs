@@ -23,8 +23,8 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 
         public static IStatCatalog Resolve(IStatCatalog catalog = null) => catalog ?? Current;
 
-        public static bool TryGetDefinition(string statName, out StatDefinition definition) =>
-            Current.TryGetDefinition(statName, out definition);
+        public static bool TryGetDefinition(StatId id, out StatDefinition definition) =>
+            Current.TryGetDefinition(id, out definition);
     }
 
     internal sealed class EmptyStatCatalog : IStatCatalog
@@ -33,7 +33,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 
         public IReadOnlyList<StatDefinition> Definitions => Array.Empty<StatDefinition>();
 
-        public bool TryGetDefinition(string statName, out StatDefinition definition)
+        public bool TryGetDefinition(StatId id, out StatDefinition definition)
         {
             definition = default;
             return false;

@@ -207,13 +207,13 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             {
                 GameplayTag parentTag = GameplayTagManager.RequestTag(parent, logWarningIfNotFound: false);
                 if (parentTag.IsValid && string.IsNullOrEmpty(sourceFile))
-                    sourceFile = GameplayTagSourceUtility.GetPrimaryFileSourceName(parentTag);
+                    sourceFile = GameplayTagSourceUtility.GetFileSourceName(parentTag);
             }
             else if (selectedTags.Count == 1)
             {
                 parent = selectedTags[0].Name;
                 if (string.IsNullOrEmpty(sourceFile))
-                    sourceFile = GameplayTagSourceUtility.GetPrimaryFileSourceName(selectedTags[0]);
+                    sourceFile = GameplayTagSourceUtility.GetFileSourceName(selectedTags[0]);
             }
 
             addTagForm = new GameplayTagAddTagPanel(parent, sourceFile);
@@ -422,7 +422,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
 
         private void AddEditableTagDetail(GameplayTag tag)
         {
-            string sourceFile = GameplayTagSourceUtility.GetPrimaryFileSourceName(tag);
+            string sourceFile = GameplayTagSourceUtility.GetFileSourceName(tag);
             GameplayTagNameComposer.SplitTagName(tag.Name, out string initialParent, out string initialSegment);
 
             List<string> parentOptions = GameplayTagNameComposer.BuildParentOptionsForSource(sourceFile, tag.Name);
@@ -537,15 +537,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             bool rename = !string.Equals(newName, tag.Name, StringComparison.Ordinal);
             string originalName = tag.Name;
 
-            FileGameplayTagSource targetSource = null;
-            for (int i = 0; i < tag.Definition.SourceCount; i++)
-            {
-                if (tag.Definition.GetSource(i) is FileGameplayTagSource fileSource)
-                {
-                    targetSource = fileSource;
-                    break;
-                }
-            }
+            FileGameplayTagSource targetSource = tag.Definition.Source as FileGameplayTagSource;
 
             if (targetSource == null)
             {
@@ -610,48 +602,27 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             }
 
             bool createMissingParents = missingParents.Count > 0;
-            bool applied = false;
-
-            for (int i = 0; i < tag.Definition.SourceCount; i++)
-            {
-                if (tag.Definition.GetSource(i) is not IGameplayTagEditHandler handler)
-                    continue;
-
-                if (rename)
-                {
-                    if (!handler.TryRenameTag(
-                            originalName,
-                            newName,
-                            out string renameError,
-                            createMissingParents))
-                    {
-                        if (IsTagNotInFileError(renameError))
-                            continue;
-
-                        errorLabel.text = GameplayTagEditorUtility.LocalizeRuntimeMessage(renameError);
-                        errorLabel.style.display = DisplayStyle.Flex;
-                        return;
-                    }
-
-                    applied = true;
-                }
-
-                if (!handler.TryUpdateComment(newName, newComment, out string commentError))
-                {
-                    if (IsTagNotInFileError(commentError))
-                        continue;
-
-                    errorLabel.text = GameplayTagEditorUtility.LocalizeRuntimeMessage(commentError);
-                    errorLabel.style.display = DisplayStyle.Flex;
-                    return;
-                }
-
-                applied = true;
-            }
-
-            if (!applied)
+            if (tag.Definition.Source is not IGameplayTagEditHandler handler)
             {
                 errorLabel.text = GameplayTagEditorLocalization.TagEditReadOnly;
+                errorLabel.style.display = DisplayStyle.Flex;
+                return;
+            }
+
+            if (rename && !handler.TryRenameTag(
+                    originalName,
+                    newName,
+                    out string renameError,
+                    createMissingParents))
+            {
+                errorLabel.text = GameplayTagEditorUtility.LocalizeRuntimeMessage(renameError);
+                errorLabel.style.display = DisplayStyle.Flex;
+                return;
+            }
+
+            if (!handler.TryUpdateComment(newName, newComment, out string commentError))
+            {
+                errorLabel.text = GameplayTagEditorUtility.LocalizeRuntimeMessage(commentError);
                 errorLabel.style.display = DisplayStyle.Flex;
                 return;
             }
@@ -672,9 +643,6 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             RebuildAll();
             ShowDetail(selectedTags);
         }
-
-        private static bool IsTagNotInFileError(string error) =>
-            error != null && error.StartsWith("TAG_NOT_IN_FILE:", StringComparison.Ordinal);
 
         private static IEnumerable<string> GetChildNames(GameplayTag tag)
         {
@@ -763,44 +731,32 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
 
             foreach (GameplayTag tag in ordered)
             {
-                if (!GameplayTagTreeBuilder.CanDelete(tag))
+                if (tag.Definition.Source is not IDeleteTagHandler handler)
                     continue;
 
-                for (int i = 0; i < tag.Definition.SourceCount; i++)
+                if (!handler.TryValidateDelete(tag.Name, mode, out string validateError))
                 {
-                    if (tag.Definition.GetSource(i) is not IDeleteTagHandler handler)
-                        continue;
-
-                    if (!handler.TryValidateDelete(tag.Name, mode, out string validateError))
-                    {
-                        EditorUtility.DisplayDialog(
-                            title,
-                            GameplayTagEditorUtility.LocalizeRuntimeMessage(validateError),
-                            GameplayTagEditorLocalization.Ok);
-                        return;
-                    }
+                    EditorUtility.DisplayDialog(
+                        title,
+                        GameplayTagEditorUtility.LocalizeRuntimeMessage(validateError),
+                        GameplayTagEditorLocalization.Ok);
+                    return;
                 }
             }
 
             foreach (GameplayTag tag in ordered)
             {
-                if (!GameplayTagTreeBuilder.CanDelete(tag))
+                if (tag.Definition.Source is not IDeleteTagHandler handler)
                     continue;
 
-                for (int i = 0; i < tag.Definition.SourceCount; i++)
-                {
-                    if (tag.Definition.GetSource(i) is not IDeleteTagHandler handler)
-                        continue;
+                if (handler.TryDeleteTag(tag.Name, mode, out string deleteError))
+                    continue;
 
-                    if (handler.TryDeleteTag(tag.Name, mode, out string deleteError))
-                        continue;
-
-                    EditorUtility.DisplayDialog(
-                        title,
-                        GameplayTagEditorUtility.LocalizeRuntimeMessage(deleteError),
-                        GameplayTagEditorLocalization.Ok);
-                    return;
-                }
+                EditorUtility.DisplayDialog(
+                    title,
+                    GameplayTagEditorUtility.LocalizeRuntimeMessage(deleteError),
+                    GameplayTagEditorLocalization.Ok);
+                return;
             }
 
             GameplayTagManager.ReloadTags();
@@ -856,7 +812,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
                 if (!candidate.Name.StartsWith(prefix, StringComparison.Ordinal))
                     continue;
 
-                if (GameplayTagSourceUtility.SharesFileSource(tag, candidate))
+                if (GameplayTagSourceUtility.HasSameFileSource(tag, candidate))
                     count++;
             }
 
@@ -872,7 +828,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
                 if (!candidate.Name.StartsWith(prefix, StringComparison.Ordinal))
                     continue;
 
-                if (GameplayTagSourceUtility.SharesFileSource(tag, candidate))
+                if (GameplayTagSourceUtility.HasSameFileSource(tag, candidate))
                     return true;
             }
 

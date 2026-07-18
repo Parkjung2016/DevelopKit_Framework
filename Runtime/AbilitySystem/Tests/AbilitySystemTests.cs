@@ -43,7 +43,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime.Tests
         public void StatEffect_AddsTargetBaseValue()
         {
             var effect = new StatAbilityEffect(Health, StatEffectMode.BaseValue, -15f);
-            var context = new AbilityContext(null, null, null, sourceStats.StatCollection, targetStats.StatCollection);
+            var context = new AbilityContext(null, null, null, sourceStats.Stats, targetStats.Stats);
 
             Assert.IsTrue(effect.CanApply(context, out _));
             effect.Apply(context);
@@ -63,7 +63,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime.Tests
                 percent: 50f,
                 target: AbilityStatTarget.Self);
             SetList(ability, "effects", new List<AbilityEffect> { effect });
-            var context = new AbilityContext(null, ability, null, sourceStats.StatCollection, targetStats.StatCollection);
+            var context = new AbilityContext(null, ability, null, sourceStats.Stats, targetStats.Stats);
 
             ability.ActivateInternal(context, null);
             Assert.AreEqual(30f, sourceStats.GetStat(Attack).Value);
@@ -85,7 +85,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime.Tests
                     new(Health, 20f),
                     new(Health, 20f)
                 });
-            var context = new AbilityContext(null, ability, null, sourceStats.StatCollection, targetStats.StatCollection);
+            var context = new AbilityContext(null, ability, null, sourceStats.Stats, targetStats.Stats);
 
             Assert.IsTrue(ability.CanStart(context, out _));
             ability.ActivateInternal(context, null);
@@ -106,7 +106,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime.Tests
                     new(Health, amount: 5f, percent: 10f),
                     new(Health, amount: 0f, percent: 10f)
                 });
-            var context = new AbilityContext(null, ability, null, sourceStats.StatCollection, targetStats.StatCollection);
+            var context = new AbilityContext(null, ability, null, sourceStats.Stats, targetStats.Stats);
 
             Assert.IsTrue(ability.CanStart(context, out _));
             ability.ActivateInternal(context, null);
@@ -126,7 +126,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime.Tests
                     new(Health, 30f),
                     new(Health, 30f)
                 });
-            var context = new AbilityContext(null, ability, null, sourceStats.StatCollection, targetStats.StatCollection);
+            var context = new AbilityContext(null, ability, null, sourceStats.Stats, targetStats.Stats);
 
             Assert.IsFalse(ability.CanStart(context, out string reason));
             Assert.IsNotEmpty(reason);

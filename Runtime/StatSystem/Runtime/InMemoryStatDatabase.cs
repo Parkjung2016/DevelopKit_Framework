@@ -9,7 +9,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
     public class InMemoryStatDatabase : IStatCatalog
     {
         private readonly List<StatDefinition> definitions = new();
-        private readonly Dictionary<string, int> indices = new(StringComparer.Ordinal);
+        private readonly Dictionary<StatId, int> indices = new();
 
         public IReadOnlyList<StatDefinition> Definitions => definitions;
 
@@ -24,13 +24,13 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             if (!definition.IsValid)
                 return false;
 
-            if (indices.TryGetValue(definition.StatName, out int index))
+            if (indices.TryGetValue(definition.Id, out int index))
             {
                 definitions[index] = definition;
                 return false;
             }
 
-            indices.Add(definition.StatName, definitions.Count);
+            indices.Add(definition.Id, definitions.Count);
             definitions.Add(definition);
             return true;
         }
@@ -44,9 +44,9 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
                 Register(definition);
         }
 
-        public bool TryGetDefinition(string statName, out StatDefinition definition)
+        public bool TryGetDefinition(StatId id, out StatDefinition definition)
         {
-            if (!string.IsNullOrEmpty(statName) && indices.TryGetValue(statName, out int index))
+            if (id.IsValid && indices.TryGetValue(id, out int index))
             {
                 definition = definitions[index];
                 return true;

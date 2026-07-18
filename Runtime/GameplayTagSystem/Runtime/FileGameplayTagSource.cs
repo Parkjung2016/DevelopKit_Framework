@@ -187,6 +187,13 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                 return false;
             }
 
+            FileGameplayTagSource existingSource = FindSourceContainingTag(tagName, Name);
+            if (existingSource != null)
+            {
+                errorMessage = $"TAG_ALREADY_EXISTS:{tagName}:{existingSource.Name}";
+                return false;
+            }
+
             try
             {
                 EnsureMissingParents(tagName);

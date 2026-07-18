@@ -10,37 +10,37 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
     [Serializable]
     public struct StatValueSnapshot
     {
-        [SerializeField] private string statName;
+        [SerializeField] private StatId id;
         [SerializeField] private float baseValue;
 
-        public string StatName => statName;
+        public StatId Id => id;
         public float BaseValue => baseValue;
 
-        public StatValueSnapshot(string statName, float baseValue)
+        public StatValueSnapshot(StatId id, float baseValue)
         {
-            this.statName = statName;
+            this.id = id;
             this.baseValue = baseValue;
         }
     }
 
     /// <summary>
-    /// 저장할 수 있는 Stat Modifier 하나를 나타냅니다.
+    /// 저장할 수 있는 스탯 Modifier 하나를 나타냅니다.
     /// </summary>
     [Serializable]
     public struct StatModifierSnapshot
     {
-        [SerializeField] private string statName;
+        [SerializeField] private StatId id;
         [SerializeField] private string key;
         [SerializeField] private float flat;
         [SerializeField] private float percent;
 
-        public string StatName => statName;
+        public StatId Id => id;
         public string Key => key;
         public StatModifier Modifier => new(flat, percent);
 
-        public StatModifierSnapshot(string statName, string key, in StatModifier modifier)
+        public StatModifierSnapshot(StatId id, string key, in StatModifier modifier)
         {
-            this.statName = statName;
+            this.id = id;
             this.key = key;
             flat = modifier.Flat;
             percent = modifier.Percent;
@@ -75,7 +75,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 
             foreach (Stat stat in source)
             {
-                stats.Add(new StatValueSnapshot(stat.StatName, stat.BaseValue));
+                stats.Add(new StatValueSnapshot(stat.Id, stat.BaseValue));
                 if (includePersistentModifiers)
                     stat.CapturePersistentModifiers(modifiers);
             }

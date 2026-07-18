@@ -17,12 +17,12 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         AddPercent
     }
 
-    /// <summary>대상의 Stat 기본값을 변경하거나 활성 Modifier를 적용합니다.</summary>
+    /// <summary>대상의 스탯 기본값을 변경하거나 활성 Modifier를 적용합니다.</summary>
     [Serializable]
     public sealed class StatAbilityEffect : AbilityEffect
     {
         [SerializeField] private AbilityStatTarget target = AbilityStatTarget.Target;
-        [SerializeField] private AbilityStatReference stat = new();
+        [SerializeField] private StatId statId = default;
         [SerializeField] private StatEffectMode mode = StatEffectMode.BaseValue;
         [SerializeField] private BaseValueChange baseValueChange = BaseValueChange.Add;
         [SerializeField] private float amount = 0f;
@@ -35,14 +35,14 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         }
 
         public StatAbilityEffect(
-            string statName,
+            StatId statId,
             StatEffectMode mode,
             float amount,
             float percent = 0f,
             AbilityStatTarget target = AbilityStatTarget.Target,
             BaseValueChange baseValueChange = BaseValueChange.Add)
         {
-            stat = new AbilityStatReference(statName);
+            this.statId = statId;
             this.mode = mode;
             this.baseValueChange = baseValueChange;
             this.amount = amount;
@@ -51,7 +51,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         }
 
         public AbilityStatTarget Target => target;
-        public AbilityStatReference Stat => stat;
+        public StatId StatId => statId;
         public StatEffectMode Mode => mode;
         public BaseValueChange BaseValueChange => baseValueChange;
         public float Amount => amount;
@@ -60,19 +60,19 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 
         public override bool CanApply(in AbilityContext context, out string failureReason)
         {
-            if (stat != null && stat.TryGet(context.GetStats(target), out _))
+            if (TryGetStat(context, out _))
             {
                 failureReason = null;
                 return true;
             }
 
-            failureReason = $"Stat '{stat?.StatName ?? "<None>"}' was not found on {target}.";
+            failureReason = $"Stat '{statId.Value}' was not found on {target}.";
             return false;
         }
 
         public override void Apply(in AbilityContext context)
         {
-            if (!stat.TryGet(context.GetStats(target), out Stat resolved))
+            if (!TryGetStat(context, out Stat stat))
                 return;
 
             if (mode == StatEffectMode.Modifier)
@@ -80,20 +80,20 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
                 if (!modifierKey.IsValid)
                     modifierKey = StatModifierKey.CreateRuntime();
 
-                resolved.SetModifier(modifierKey, new StatModifier(amount, percent));
+                stat.SetModifier(modifierKey, new StatModifier(amount, percent));
                 return;
             }
 
             switch (baseValueChange)
             {
                 case BaseValueChange.Add:
-                    resolved.AddBaseValue(amount);
+                    stat.AddBaseValue(amount);
                     break;
                 case BaseValueChange.Set:
-                    resolved.BaseValue = amount;
+                    stat.BaseValue = amount;
                     break;
                 case BaseValueChange.AddPercent:
-                    resolved.AddBasePercent(percent);
+                    stat.AddBasePercent(percent);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();
@@ -104,10 +104,17 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         {
             if (mode == StatEffectMode.Modifier &&
                 modifierKey.IsValid &&
-                stat.TryGet(context.GetStats(target), out Stat resolved))
+                TryGetStat(context, out Stat stat))
             {
-                resolved.RemoveModifiers(modifierKey);
+                stat.RemoveModifiers(modifierKey);
             }
+        }
+
+        private bool TryGetStat(in AbilityContext context, out Stat stat)
+        {
+            StatCollection stats = context.GetStats(target);
+            stat = null;
+            return stats != null && statId.IsValid && stats.TryGetStat(statId, out stat);
         }
     }
 }

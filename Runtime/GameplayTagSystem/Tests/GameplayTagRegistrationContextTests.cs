@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using NUnit.Framework;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 
@@ -35,22 +35,40 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
     }
 
     [Test]
-    public void RegisterTag_DuplicateName_MergesDescription()
+    public void RegisterTag_DuplicateName_IsRejected()
     {
       GameplayTagRegistrationContext context = new();
       TestGameplayTagSource sourceA = new("A");
       TestGameplayTagSource sourceB = new("B");
 
-      context.RegisterTag("Tag.One", null, GameplayTagFlags.None, sourceA);
-      context.RegisterTag("Tag.One", "merged", GameplayTagFlags.None, sourceB);
+      Assert.IsTrue(context.RegisterTag("Tag.One", "first", GameplayTagFlags.None, sourceA));
+      Assert.IsFalse(context.RegisterTag("Tag.One", "duplicate", GameplayTagFlags.None, sourceB));
 
       GameplayTagDefinition[] definitions = context.GenerateDefinitions();
       GameplayTagDefinition definition = definitions.First(def => def.TagName == "Tag.One");
 
-      Assert.AreEqual("merged", definition.Description);
-      Assert.AreEqual(2, definition.SourceCount);
+      Assert.AreEqual("first", definition.Description);
+      Assert.AreSame(sourceA, definition.Source);
+      Assert.AreEqual(1, context.GetRegistrationErrors().Count);
     }
 
+    [Test]
+    public void GenerateDefinitions_ConnectsHierarchyAcrossDifferentSources()
+    {
+      GameplayTagRegistrationContext context = new();
+      TestGameplayTagSource parentSource = new("Parent");
+      TestGameplayTagSource childSource = new("Child");
+
+      context.RegisterTag("Tag", null, GameplayTagFlags.None, parentSource);
+      context.RegisterTag("Tag.Child", null, GameplayTagFlags.None, childSource);
+
+      GameplayTagDefinition[] definitions = context.GenerateDefinitions();
+      GameplayTagDefinition parent = definitions.First(def => def.TagName == "Tag");
+      GameplayTagDefinition child = definitions.First(def => def.TagName == "Tag.Child");
+
+      Assert.AreSame(parent, child.ParentTagDefinition);
+      Assert.AreSame(childSource, child.Source);
+    }
     private sealed class TestGameplayTagSource : IGameplayTagSource
     {
       public string Name { get; }

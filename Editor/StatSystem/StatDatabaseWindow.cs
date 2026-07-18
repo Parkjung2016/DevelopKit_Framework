@@ -33,6 +33,9 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
         private VisualElement inspectorHost;
         private Label dataStatus;
         private Label runtimeStatus;
+        private Button newStatButton;
+        private Button removeStatButton;
+        private Button generateEnumButton;
 
         private StatDatabaseSO database;
         private StatSO selectedStat;
@@ -175,21 +178,58 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
                 SetDatabase(evt.newValue as StatDatabaseSO));
             databaseRow.Add(databaseField);
             databaseRow.Add(CreateButton("New Database", CreateDatabase));
-            databaseRow.Add(CreateButton("New Stat", CreateStat));
             controls.Add(databaseRow);
 
-            var searchRow = new VisualElement();
-            searchRow.AddToClassList("stat-row");
+            var actionRow = new VisualElement();
+            actionRow.AddToClassList("stat-row");
+
             searchField = new ToolbarSearchField();
             searchField.AddToClassList("stat-search");
             searchField.RegisterValueChangedCallback(_ => ApplyFilter());
-            searchRow.Add(searchField);
-            searchRow.Add(CreateButton("Remove", RemoveSelectedStat));
+            actionRow.Add(searchField);
+
+            newStatButton = CreateButton("New Stat", CreateStat);
+            removeStatButton = CreateButton("Remove", RemoveSelectedStat);
+            actionRow.Add(newStatButton);
+            actionRow.Add(removeStatButton);
 
             dataStatus = new Label();
             dataStatus.AddToClassList("stat-status");
-            searchRow.Add(dataStatus);
-            controls.Add(searchRow);
+            actionRow.Add(dataStatus);
+            controls.Add(actionRow);
+
+            var enumRow = new VisualElement();
+            enumRow.AddToClassList("stat-enum-row");
+
+            var enumBadge = new Label("C#");
+            enumBadge.AddToClassList("stat-enum-badge");
+            enumRow.Add(enumBadge);
+
+            var enumDetails = new VisualElement();
+            enumDetails.AddToClassList("stat-enum-details");
+
+            var enumCaption = new Label("Generated Enum");
+            enumCaption.AddToClassList("stat-enum-caption");
+            enumDetails.Add(enumCaption);
+
+            var enumName = new Label(StatEnumScriptGenerator.GeneratedEnumFullName);
+            enumName.AddToClassList("stat-enum-name");
+            enumDetails.Add(enumName);
+
+            var enumPath = new Label(StatEnumScriptGenerator.GeneratedEnumPath)
+            {
+                tooltip = StatEnumScriptGenerator.GeneratedEnumPath
+            };
+            enumPath.AddToClassList("stat-enum-path");
+            enumDetails.Add(enumPath);
+            enumRow.Add(enumDetails);
+
+            generateEnumButton = CreateButton("Generate", GenerateStatEnum);
+            generateEnumButton.AddToClassList("stat-enum-generate");
+            enumRow.Add(generateEnumButton);
+            controls.Add(enumRow);
+
+            UpdateDataControlState();
             return controls;
         }
 
@@ -258,7 +298,7 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
                 stat.StatIcon != null ? Visibility.Visible : Visibility.Hidden;
 
             row.Q<Label>("name").text =
-                string.IsNullOrEmpty(stat.DisplayName) ? stat.StatName : stat.DisplayName;
+                string.IsNullOrEmpty(stat.DisplayName) ? stat.Id.Value : stat.DisplayName;
             row.Q<Label>("range").text =
                 $"{stat.StatName}  |  {stat.BaseValue:0.###}  [{stat.MinValue:0.###}, {stat.MaxValue:0.###}]";
             row.tooltip = AssetDatabase.GetAssetPath(stat);
@@ -274,6 +314,7 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
             }
 
             ShowSelectedInspector();
+            UpdateDataControlState();
         }
 
         private void ShowSelectedInspector()
@@ -340,6 +381,7 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
                     ? "Select or create a database."
                     : $"{filteredStats.Count} / {allStats.Count} Stats";
             }
+            UpdateDataControlState();
         }
 
         private void SetDatabase(StatDatabaseSO value, bool rebuild = true)
@@ -347,10 +389,23 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
             database = value;
             databaseField?.SetValueWithoutNotify(value);
             SaveLastDatabase(value);
+            UpdateDataControlState();
 
             if (rebuild && !showingRuntime)
                 RefreshData();
         }
+
+        private void UpdateDataControlState()
+        {
+            bool hasDatabase = database != null;
+            searchField?.SetEnabled(hasDatabase);
+            newStatButton?.SetEnabled(hasDatabase);
+            generateEnumButton?.SetEnabled(hasDatabase);
+            removeStatButton?.SetEnabled(hasDatabase && selectedStat != null);
+        }
+
+        private void GenerateStatEnum() =>
+            StatEnumScriptGenerator.Generate(database);
 
         private void CreateDatabase()
         {
@@ -584,7 +639,7 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
 
             ObjectStatSystem system = runtimeSystems[index];
             ((Label)element).text =
-                $"{system.name}  ({system.StatCollection.Count})";
+                $"{system.name}  ({system.Stats.Count})";
             element.tooltip = GetHierarchyPath(system.transform);
         }
 
@@ -602,13 +657,13 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
 
         private void RefreshSelectedRuntimeStats()
         {
-            int expectedCount = selectedSystem != null ? selectedSystem.StatCollection.Count : 0;
+            int expectedCount = selectedSystem != null ? selectedSystem.Stats.Count : 0;
             bool structureChanged = runtimeStats.Count != expectedCount;
 
             if (!structureChanged && selectedSystem != null)
             {
                 int index = 0;
-                foreach (Stat stat in selectedSystem.StatCollection)
+                foreach (Stat stat in selectedSystem.Stats)
                 {
                     if (!ReferenceEquals(runtimeStats[index], stat))
                     {
@@ -625,7 +680,7 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
                 runtimeStats.Clear();
                 if (selectedSystem != null)
                 {
-                    foreach (Stat stat in selectedSystem.StatCollection)
+                    foreach (Stat stat in selectedSystem.Stats)
                         runtimeStats.Add(stat);
                 }
 
@@ -669,7 +724,7 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
                 stat.StatIcon != null ? Visibility.Visible : Visibility.Hidden;
 
             row.Q<Label>("name").text =
-                string.IsNullOrEmpty(stat.DisplayName) ? stat.StatName : stat.DisplayName;
+                string.IsNullOrEmpty(stat.DisplayName) ? stat.Id.Value : stat.DisplayName;
             row.Q<Label>("value").text =
                 $"Value {stat.Value:0.###}  |  Base {stat.BaseValue:0.###}  |  Modifiers {stat.ModifierCount}";
         }

@@ -8,17 +8,17 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
     /// </summary>
     public readonly struct StatDefinition
     {
-        public string StatName { get; }
+        public StatId Id { get; }
         public string DisplayName { get; }
         public float MinValue { get; }
         public float MaxValue { get; }
         public float BaseValue { get; }
         public Sprite StatIcon { get; }
 
-        public bool IsValid => !string.IsNullOrWhiteSpace(StatName);
+        public bool IsValid => Id.IsValid;
 
         public StatDefinition(
-            string statName,
+            StatId id,
             string displayName = null,
             float minValue = 0f,
             float maxValue = 0f,
@@ -28,8 +28,8 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             if (maxValue < minValue)
                 throw new ArgumentOutOfRangeException(nameof(maxValue), "MaxValue must be greater than or equal to MinValue.");
 
-            StatName = statName?.Trim();
-            DisplayName = string.IsNullOrWhiteSpace(displayName) ? StatName : displayName.Trim();
+            Id = id;
+            DisplayName = string.IsNullOrWhiteSpace(displayName) ? id.Value : displayName.Trim();
             MinValue = minValue;
             MaxValue = maxValue;
             BaseValue = Math.Clamp(baseValue, minValue, maxValue);

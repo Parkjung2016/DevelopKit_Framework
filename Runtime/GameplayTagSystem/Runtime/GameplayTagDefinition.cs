@@ -11,7 +11,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
         public GameplayTag Tag => new(this);
         public bool IsValid => RuntimeIndex >= 0;
-        public int SourceCount => sources.Count;
+        public IGameplayTagSource Source { get; }
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public ReadOnlySpan<GameplayTagDefinition> Children => children;
@@ -29,7 +29,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         public ReadOnlySpan<GameplayTag> HierarchyTags => hierarchyTags;
 
         public string TagName { get; }
-        public string Description { get; internal set; }
+        public string Description { get; }
         public GameplayTagFlags Flags { get; }
         public string Label { get; }
         public int HierarchyLevel { get; }
@@ -41,7 +41,6 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         private GameplayTag[] childTags = Array.Empty<GameplayTag>();
         private GameplayTag[] hierarchyTags = Array.Empty<GameplayTag>();
         private GameplayTagDefinition[] children = Array.Empty<GameplayTagDefinition>();
-        private readonly List<IGameplayTagSource> sources = new();
         private readonly int nameHash;
 
         private GameplayTagDefinition()
@@ -54,11 +53,16 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             nameHash = StringComparer.Ordinal.GetHashCode(TagName);
         }
 
-        public GameplayTagDefinition(string name, string description, GameplayTagFlags flags = GameplayTagFlags.None)
+        public GameplayTagDefinition(
+            string name,
+            string description,
+            GameplayTagFlags flags,
+            IGameplayTagSource source)
         {
             TagName = name;
             Description = description;
             Flags = flags;
+            Source = source;
             Label = GameplayTagUtility.GetLabel(name);
             HierarchyLevel = GameplayTagUtility.GetHierarchyLevelFromName(name);
             nameHash = StringComparer.Ordinal.GetHashCode(name);
@@ -155,28 +159,9 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             Generation = generation;
         }
 
-        public void AddSource(IGameplayTagSource source)
-        {
-            if (source != null && !sources.Contains(source))
-                sources.Add(source);
-        }
-
         public override int GetHashCode()
         {
             return nameHash;
-        }
-
-        public IGameplayTagSource GetSource(int index)
-        {
-            if ((uint)index >= (uint)sources.Count)
-                throw new ArgumentOutOfRangeException(nameof(index));
-
-            return sources[index];
-        }
-
-        public IReadOnlyList<IGameplayTagSource> GetAllSources()
-        {
-            return sources;
         }
     }
 }

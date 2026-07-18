@@ -11,7 +11,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
     public abstract class AbilitySO : ScriptableObject
     {
         [SerializeField] private GameplayTag abilityTag = default;
-        [SerializeField] private GameplayTag blockedByTag = default;
+        [SerializeField] private GameplayTagContainer blockedByTags = new();
         [SerializeField] private bool activateWhenGranted = false;
         [SerializeField] private List<AbilityStatCost> statCosts = new();
         [SerializeReference] private List<AbilityEffect> effects = new();
@@ -24,7 +24,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         public event Action<AbilityContext> OnEnded;
 
         public GameplayTag AbilityTag => abilityTag;
-        public GameplayTag BlockedByTag => blockedByTag;
+        public GameplayTagContainer BlockedByTags => blockedByTags;
         public bool ActivateWhenGranted => activateWhenGranted;
         public IReadOnlyList<AbilityStatCost> StatCosts => statCosts;
         public IReadOnlyList<AbilityEffect> Effects => effects;
@@ -156,7 +156,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 
                 if (!cost.TryGetStat(statCollection, out Stat stat))
                 {
-                    failureReason = $"Cost Stat '{cost.Stat?.StatName ?? "<None>"}' was not found.";
+                    failureReason = $"Cost Stat '{cost.StatId.Value}' was not found.";
                     return false;
                 }
 
@@ -175,7 +175,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 
                 if (stat.BaseValue - totalCost < stat.MinValue)
                 {
-                    failureReason = $"Not enough {stat.StatName}.";
+                    failureReason = $"Not enough {stat.Id.Value}.";
                     return false;
                 }
             }

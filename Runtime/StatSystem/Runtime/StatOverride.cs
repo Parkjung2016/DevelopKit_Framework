@@ -1,4 +1,5 @@
 ﻿using System;
+using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
@@ -6,18 +7,33 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
     [Serializable]
     public sealed class StatOverride
     {
-        [SerializeField] private StatSO stat = null;
-        [SerializeField] private bool isUseOverride = false;
-        [SerializeField] private float overrideValue = 0f;
+        [SerializeField] private StatId id = default;
+        [SerializeField] private string displayName = null;
+        [SerializeField] private float minValue = 0f;
+        [SerializeField] private float maxValue = 100f;
+        [SerializeField] private float defaultValue = 0f;
+        [SerializeField] private Sprite icon = null;
+        [SerializeField] private bool overrideBaseValue = false;
 
-        public StatSO Stat => stat;
-        public bool OverrideBaseValue => isUseOverride;
-        public float BaseValue => overrideValue;
-        public bool IsValid => stat != null;
+        [SerializeField, ShowIf("overrideBaseValue")]
+        private float baseValue = 0f;
 
-        public StatOverrideEntry CreateEntry() =>
-            IsValid
-                ? new StatOverrideEntry(stat.CreateDefinition(), isUseOverride, overrideValue)
-                : default;
+        public StatId Id => id;
+        public bool IsValid => id.IsValid;
+
+        public StatOverrideEntry CreateEntry()
+        {
+            if (!IsValid)
+                return default;
+
+            var definition = new StatDefinition(
+                id,
+                displayName,
+                minValue,
+                maxValue,
+                defaultValue,
+                icon);
+            return new StatOverrideEntry(definition, overrideBaseValue, baseValue);
+        }
     }
 }

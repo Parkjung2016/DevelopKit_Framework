@@ -9,7 +9,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
     /// </summary>
     public sealed class StatCollection : IReadOnlyCollection<Stat>
     {
-        private readonly Dictionary<string, Stat> stats = new(StringComparer.Ordinal);
+        private readonly Dictionary<StatId, Stat> stats = new();
 
         public int Count => stats.Count;
 
@@ -27,12 +27,15 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             ApplyOverrides(overrides);
         }
 
-        public void Initialize(IReadOnlyList<StatOverrideEntry> overrides)
+        public void Initialize(IReadOnlyList<StatDefinition> definitions)
         {
             stats.Clear();
-            ApplyOverrides(overrides);
-        }
+            if (definitions == null)
+                return;
 
+            for (int i = 0; i < definitions.Count; i++)
+                AddOrReplace(definitions[i]);
+        }
         public void ApplyOverrides(IReadOnlyList<StatOverrideEntry> overrides)
         {
             if (overrides == null)
@@ -42,58 +45,58 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             {
                 StatOverrideEntry entry = overrides[i];
                 if (entry.IsValid)
-                    stats[entry.StatName] = entry.CreateStat();
+                    stats[entry.Id] = entry.CreateStat();
             }
         }
 
-        public Stat GetStat(string statName)
+        public Stat GetStat(StatId id)
         {
-            if (TryGetStat(statName, out Stat stat))
+            if (TryGetStat(id, out Stat stat))
                 return stat;
 
-            throw new KeyNotFoundException($"Stat '{statName}' was not found.");
+            throw new KeyNotFoundException($"Stat '{id.Value}' was not found.");
         }
 
-        public bool TryGetStat(string statName, out Stat stat)
+        public bool TryGetStat(StatId id, out Stat stat)
         {
-            if (!string.IsNullOrEmpty(statName))
-                return stats.TryGetValue(statName, out stat);
+            if (id.IsValid)
+                return stats.TryGetValue(id, out stat);
 
             stat = null;
             return false;
         }
 
-        public bool HasStat(string statName) => TryGetStat(statName, out _);
+        public bool HasStat(StatId id) => TryGetStat(id, out _);
 
-        public float GetBaseValue(string statName) => GetStat(statName).BaseValue;
+        public float GetBaseValue(StatId id) => GetStat(id).BaseValue;
 
-        public void SetBaseValue(string statName, float value) =>
-            GetStat(statName).BaseValue = value;
+        public void SetBaseValue(StatId id, float value) =>
+            GetStat(id).BaseValue = value;
 
-        public float AddBaseValue(string statName, float amount)
+        public float AddBaseValue(StatId id, float amount)
         {
-            Stat stat = GetStat(statName);
+            Stat stat = GetStat(id);
             stat.AddBaseValue(amount);
             return stat.BaseValue;
         }
 
-        public void SetModifier(string statName, StatModifierKey key, in StatModifier modifier) =>
-            GetStat(statName).SetModifier(key, modifier);
+        public void SetModifier(StatId id, StatModifierKey key, in StatModifier modifier) =>
+            GetStat(id).SetModifier(key, modifier);
 
-        public void SetFlatModifier(string statName, StatModifierKey key, float amount) =>
-            GetStat(statName).SetFlatModifier(key, amount);
+        public void SetFlatModifier(StatId id, StatModifierKey key, float amount) =>
+            GetStat(id).SetFlatModifier(key, amount);
 
-        public void SetPercentModifier(string statName, StatModifierKey key, float percent) =>
-            GetStat(statName).SetPercentModifier(key, percent);
+        public void SetPercentModifier(StatId id, StatModifierKey key, float percent) =>
+            GetStat(id).SetPercentModifier(key, percent);
 
-        public bool RemoveFlatModifier(string statName, StatModifierKey key) =>
-            GetStat(statName).RemoveFlatModifier(key);
+        public bool RemoveFlatModifier(StatId id, StatModifierKey key) =>
+            GetStat(id).RemoveFlatModifier(key);
 
-        public bool RemovePercentModifier(string statName, StatModifierKey key) =>
-            GetStat(statName).RemovePercentModifier(key);
+        public bool RemovePercentModifier(StatId id, StatModifierKey key) =>
+            GetStat(id).RemovePercentModifier(key);
 
-        public bool RemoveModifiers(string statName, StatModifierKey key) =>
-            GetStat(statName).RemoveModifiers(key);
+        public bool RemoveModifiers(StatId id, StatModifierKey key) =>
+            GetStat(id).RemoveModifiers(key);
 
         public void ClearModifiers()
         {
@@ -123,7 +126,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             for (int i = 0; i < values.Count; i++)
             {
                 StatValueSnapshot savedStat = values[i];
-                if (TryGetStat(savedStat.StatName, out Stat stat))
+                if (TryGetStat(savedStat.Id, out Stat stat))
                 {
                     stat.BaseValue = savedStat.BaseValue;
                     restoredCount++;
@@ -131,14 +134,14 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
                 }
 
                 if (!ignoreMissingStats)
-                    throw new KeyNotFoundException($"Stat '{savedStat.StatName}' was not found.");
+                    throw new KeyNotFoundException($"Stat '{savedStat.Id.Value}' was not found.");
             }
 
             IReadOnlyList<StatModifierSnapshot> modifiers = snapshot.Modifiers;
             for (int i = 0; i < modifiers.Count; i++)
             {
                 StatModifierSnapshot savedModifier = modifiers[i];
-                if (TryGetStat(savedModifier.StatName, out Stat stat))
+                if (TryGetStat(savedModifier.Id, out Stat stat))
                 {
                     if (!string.IsNullOrWhiteSpace(savedModifier.Key))
                     {
@@ -151,7 +154,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
                 }
 
                 if (!ignoreMissingStats)
-                    throw new KeyNotFoundException($"Stat '{savedModifier.StatName}' was not found.");
+                    throw new KeyNotFoundException($"Stat '{savedModifier.Id.Value}' was not found.");
             }
 
             return restoredCount;
@@ -164,7 +167,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
         private void AddOrReplace(in StatDefinition definition)
         {
             if (definition.IsValid)
-                stats[definition.StatName] = new Stat(definition);
+                stats[definition.Id] = new Stat(definition);
         }
     }
 }

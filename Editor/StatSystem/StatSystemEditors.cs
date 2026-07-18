@@ -7,6 +7,23 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.Editors.StatSystem
 {
+    [CustomPropertyDrawer(typeof(StatId))]
+    internal sealed class StatIdPropertyDrawer : PropertyDrawer
+    {
+        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+        {
+            SerializedProperty value = property.FindPropertyRelative("value");
+            if (value == null)
+            {
+                EditorGUI.LabelField(position, label.text, "Invalid StatId");
+                return;
+            }
+
+            EditorGUI.BeginProperty(position, label, property);
+            value.stringValue = EditorGUI.DelayedTextField(position, label, value.stringValue);
+            EditorGUI.EndProperty();
+        }
+    }
     [CustomEditor(typeof(StatSO))]
     internal sealed class StatSOEditor : Editor
     {
@@ -61,11 +78,11 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
             var stat = (StatSO)target;
             if (confirmName)
             {
-                string confirmedName = stat.StatName;
+                string confirmedName = stat.Id.Value;
                 EditorApplication.delayCall += () => RenameAsset(stat, confirmedName);
             }
 
-            if (string.IsNullOrWhiteSpace(stat.StatName))
+            if (string.IsNullOrWhiteSpace(stat.Id.Value))
                 EditorGUILayout.HelpBox("Stat Name is required.", MessageType.Warning);
 
             if (stat.MaxValue < stat.MinValue)
@@ -142,13 +159,13 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
                     continue;
                 }
 
-                if (string.IsNullOrWhiteSpace(stat.StatName))
+                if (string.IsNullOrWhiteSpace(stat.Id.Value))
                 {
                     invalidNameCount++;
                     continue;
                 }
 
-                if (!names.Add(stat.StatName))
+                if (!names.Add(stat.Id.Value))
                     duplicateCount++;
             }
 
@@ -197,7 +214,7 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
             EditorGUILayout.Space(8f);
             showRuntimeStats = EditorGUILayout.Foldout(
                 showRuntimeStats,
-                $"Runtime Stats ({system.StatCollection.Count})",
+                $"Runtime Stats ({system.Stats.Count})",
                 true);
 
             if (!showRuntimeStats)
@@ -209,14 +226,14 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
                 return;
             }
 
-            foreach (Stat stat in system.StatCollection)
+            foreach (Stat stat in system.Stats)
             {
                 using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
                 {
                     EditorGUILayout.LabelField(
-                        string.IsNullOrEmpty(stat.DisplayName) ? stat.StatName : stat.DisplayName,
+                        string.IsNullOrEmpty(stat.DisplayName) ? stat.Id.Value : stat.DisplayName,
                         EditorStyles.boldLabel);
-                    EditorGUILayout.LabelField("Name", stat.StatName);
+                    EditorGUILayout.LabelField("Name", stat.Id.Value);
                     EditorGUILayout.LabelField("Value", stat.Value.ToString("0.###"));
                     EditorGUILayout.LabelField("Base Value", stat.BaseValue.ToString("0.###"));
                     EditorGUILayout.LabelField("Modifiers", stat.ModifierCount.ToString());

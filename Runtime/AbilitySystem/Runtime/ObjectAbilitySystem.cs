@@ -122,7 +122,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
             ability.Register(this, owner);
 
             if (ability.ActivateWhenGranted)
-                TryActivateInternal(ability, stats.StatCollection, null);
+                TryActivateInternal(ability, stats.Stats, null);
 
             return true;
         }
@@ -149,7 +149,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
             if (!TryGetAbility(ability, out AbilitySO runtimeAbility))
                 return false;
 
-            return TryActivateInternal(runtimeAbility, targetStats?.StatCollection, null);
+            return TryActivateInternal(runtimeAbility, targetStats?.Stats, null);
         }
 
         public bool TryActivateAbility(
@@ -256,15 +256,13 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
             if (!IsInitialized || ability == null || ability.IsActive)
                 return false;
 
-            if (ability.BlockedByTag.IsValid &&
-                tags != null &&
-                tags.Container.GetTagCount(ability.BlockedByTag) > 0)
+            if (tags != null && tags.Container.HasAny(ability.BlockedByTags))
             {
                 return false;
             }
 
-            context = new AbilityContext(this, ability, owner, stats.StatCollection,
-                targetStatCollection ?? stats.StatCollection);
+            context = new AbilityContext(this, ability, owner, stats.Stats,
+                targetStatCollection ?? stats.Stats);
             return ability.CanStart(context, out _);
         }
 

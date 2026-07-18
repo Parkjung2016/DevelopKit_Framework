@@ -1,4 +1,4 @@
-namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
+﻿namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
 {
     /// <summary>에디터 UI에 표시할 문자열(라벨·메시지·다이얼로그)을 모아 둡니다.</summary>
     internal static class GameplayTagEditorLocalization
@@ -22,7 +22,6 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
         public const string Leaf = "(leaf)";
         public const string NewFile = "New File";
         public const string NoSourceFiles = "(없음)";
-        public const string MultipleSources = "(Multiple)";
         public const string AutoCreate = "자동 생성";
         public const string TreeLocationRoot = "루트에 '{0}'(으)로 표시됩니다.";
         public const string TreeLocationUnderParent = "'{0}' 아래에 '{1}'(으)로 표시됩니다.";

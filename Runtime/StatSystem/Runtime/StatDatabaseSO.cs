@@ -11,8 +11,8 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
         private StatSO[] stats = Array.Empty<StatSO>();
 
         private readonly List<StatDefinition> definitions = new();
-        private readonly Dictionary<string, StatDefinition> definitionsByName = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, StatSO> assetsByName = new(StringComparer.Ordinal);
+        private readonly Dictionary<StatId, StatDefinition> definitionsById = new();
+        private readonly Dictionary<StatId, StatSO> assetsById = new();
 
         public StatSO[] Stats => stats;
         public IReadOnlyList<StatDefinition> Definitions => definitions;
@@ -26,8 +26,8 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
         public void RebuildCache()
         {
             definitions.Clear();
-            definitionsByName.Clear();
-            assetsByName.Clear();
+            definitionsById.Clear();
+            assetsById.Clear();
 
             for (int i = 0; i < stats.Length; i++)
             {
@@ -36,28 +36,28 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
                     continue;
 
                 StatDefinition definition = statAsset.CreateDefinition();
-                if (!definition.IsValid || definitionsByName.ContainsKey(definition.StatName))
+                if (!definition.IsValid || definitionsById.ContainsKey(definition.Id))
                     continue;
 
                 definitions.Add(definition);
-                definitionsByName.Add(definition.StatName, definition);
-                assetsByName.Add(definition.StatName, statAsset);
+                definitionsById.Add(definition.Id, definition);
+                assetsById.Add(definition.Id, statAsset);
             }
         }
 
-        public bool TryGetDefinition(string statName, out StatDefinition definition)
+        public bool TryGetDefinition(StatId id, out StatDefinition definition)
         {
-            if (!string.IsNullOrEmpty(statName))
-                return definitionsByName.TryGetValue(statName, out definition);
+            if (id.IsValid)
+                return definitionsById.TryGetValue(id, out definition);
 
             definition = default;
             return false;
         }
 
-        public bool TryGetAsset(string statName, out StatSO statAsset)
+        public bool TryGetAsset(StatId id, out StatSO statAsset)
         {
-            if (!string.IsNullOrEmpty(statName))
-                return assetsByName.TryGetValue(statName, out statAsset);
+            if (id.IsValid)
+                return assetsById.TryGetValue(id, out statAsset);
 
             statAsset = null;
             return false;

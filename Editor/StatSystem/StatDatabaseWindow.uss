@@ -1,4 +1,4 @@
-.stat-window {
+﻿.stat-window {
     flex-grow: 1;
     background-color: rgb(42, 42, 42);
 }
@@ -106,4 +106,65 @@
 .stat-item-text {
     flex-grow: 1;
     justify-content: center;
+}
+.stat-enum-row {
+    flex-direction: row;
+    align-items: center;
+    min-height: 54px;
+    margin-top: 3px;
+    padding: 6px 8px;
+    background-color: rgb(38, 40, 42);
+    border-top-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+    border-top-color: rgb(65, 68, 71);
+    border-right-color: rgb(65, 68, 71);
+    border-bottom-color: rgb(65, 68, 71);
+    border-left-color: rgb(65, 68, 71);
+    border-radius: 3px;
+}
+
+.stat-enum-badge {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    margin-right: 9px;
+    background-color: rgb(48, 82, 72);
+    border-radius: 3px;
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    color: rgb(210, 235, 226);
+}
+
+.stat-enum-details {
+    flex-grow: 1;
+    min-width: 0;
+    justify-content: center;
+}
+
+.stat-enum-caption {
+    font-size: 9px;
+    color: rgb(145, 150, 154);
+}
+
+.stat-enum-name {
+    -unity-font-style: bold;
+    color: rgb(224, 226, 228);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stat-enum-path {
+    font-size: 9px;
+    color: rgb(132, 138, 143);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stat-enum-generate {
+    min-width: 86px;
+    margin-left: 10px;
 }

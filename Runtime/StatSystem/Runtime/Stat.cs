@@ -19,7 +19,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
 
         public event Action<Stat, float, float> OnValueChanged;
 
-        public string StatName { get; }
+        public StatId Id { get; }
         public string DisplayName { get; }
         public Sprite StatIcon { get; }
         public float MinValue { get; }
@@ -52,7 +52,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             if (!definition.IsValid)
                 throw new ArgumentException("A stat name is required.", nameof(definition));
 
-            StatName = definition.StatName;
+            Id = definition.Id;
             DisplayName = definition.DisplayName;
             StatIcon = definition.StatIcon;
             MinValue = definition.MinValue;
@@ -154,7 +154,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             foreach (KeyValuePair<StatModifierKey, StatModifier> pair in modifiers)
             {
                 if (pair.Key.IsPersistent)
-                    destination.Add(new StatModifierSnapshot(StatName, pair.Key.PersistentId, pair.Value));
+                    destination.Add(new StatModifierSnapshot(Id, pair.Key.PersistentId, pair.Value));
             }
         }
 

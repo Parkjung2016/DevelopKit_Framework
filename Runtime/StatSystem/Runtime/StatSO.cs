@@ -23,6 +23,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
         [SerializeField]
         private Sprite statIcon = null;
 
+        public StatId Id => new(statName);
         public string StatName => statName;
         public string DisplayName => displayName;
         public float MinValue => minValue;
@@ -31,7 +32,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
         public Sprite StatIcon => statIcon;
 
         public StatDefinition CreateDefinition() =>
-            new(statName, displayName, minValue, maxValue, baseValue, statIcon);
+            new(Id, displayName, minValue, maxValue, baseValue, statIcon);
 
         public Stat CreateStat() => new(CreateDefinition());
 

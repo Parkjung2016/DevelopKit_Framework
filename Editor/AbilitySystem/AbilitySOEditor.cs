@@ -99,32 +99,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AbilitySystem
         }
     }
 
-    [CustomPropertyDrawer(typeof(AbilityStatReference))]
-    internal sealed class AbilityStatReferenceDrawer : PropertyDrawer
-    {
-        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
-        {
-            SerializedProperty stat = property.FindPropertyRelative("stat");
-            SerializedProperty statName = property.FindPropertyRelative("statName");
-
-            position.height = EditorGUIUtility.singleLineHeight;
-            EditorGUI.PropertyField(position, stat, label);
-            if (stat.objectReferenceValue != null)
-                return;
-
-            position.y += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
-            EditorGUI.PropertyField(position, statName, new GUIContent("Stat Name"));
-        }
-
-        public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
-        {
-            SerializedProperty stat = property.FindPropertyRelative("stat");
-            return stat.objectReferenceValue != null
-                ? EditorGUIUtility.singleLineHeight
-                : EditorGUIUtility.singleLineHeight * 2f + EditorGUIUtility.standardVerticalSpacing;
-        }
-    }
-
     [CustomPropertyDrawer(typeof(AbilityStatCost))]
     internal sealed class AbilityStatCostDrawer : PropertyDrawer
     {
@@ -140,7 +114,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AbilitySystem
             }
 
             EditorGUI.indentLevel++;
-            AbilityDrawerUtility.DrawNext(ref position, property.FindPropertyRelative("stat"), true);
+            AbilityDrawerUtility.DrawNext(ref position, property.FindPropertyRelative("statId"), true);
             AbilityDrawerUtility.DrawNext(ref position, property.FindPropertyRelative("amount"));
             SerializedProperty percent = property.FindPropertyRelative("percent");
             AbilityDrawerUtility.DrawNext(ref position, percent);
@@ -156,7 +130,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AbilitySystem
                 return EditorGUIUtility.singleLineHeight;
 
             float height = EditorGUIUtility.singleLineHeight;
-            height = AbilityDrawerUtility.AddHeight(height, property.FindPropertyRelative("stat"), true);
+            height = AbilityDrawerUtility.AddHeight(height, property.FindPropertyRelative("statId"), true);
             height = AbilityDrawerUtility.AddHeight(height, property.FindPropertyRelative("amount"));
             SerializedProperty percent = property.FindPropertyRelative("percent");
             height = AbilityDrawerUtility.AddHeight(height, percent);
@@ -183,7 +157,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AbilitySystem
 
             EditorGUI.indentLevel++;
             AbilityDrawerUtility.DrawNext(ref position, property.FindPropertyRelative("target"));
-            AbilityDrawerUtility.DrawNext(ref position, property.FindPropertyRelative("stat"), true);
+            AbilityDrawerUtility.DrawNext(ref position, property.FindPropertyRelative("statId"), true);
             SerializedProperty mode = property.FindPropertyRelative("mode");
             AbilityDrawerUtility.DrawNext(ref position, mode);
 
@@ -216,7 +190,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AbilitySystem
 
             float height = EditorGUIUtility.singleLineHeight;
             height = AbilityDrawerUtility.AddHeight(height, property.FindPropertyRelative("target"));
-            height = AbilityDrawerUtility.AddHeight(height, property.FindPropertyRelative("stat"), true);
+            height = AbilityDrawerUtility.AddHeight(height, property.FindPropertyRelative("statId"), true);
             SerializedProperty mode = property.FindPropertyRelative("mode");
             height = AbilityDrawerUtility.AddHeight(height, mode);
 

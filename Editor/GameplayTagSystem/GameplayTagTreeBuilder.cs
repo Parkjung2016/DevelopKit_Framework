@@ -64,8 +64,7 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
             {
                 GameplayTag parentTag = node.Tag.ParentTag;
                 if (!parentTag.IsNone &&
-                    nodesByRuntimeIndex.TryGetValue(parentTag.RuntimeIndex, out GameplayTagTreeNode parentNode) &&
-                    GameplayTagSourceUtility.SharesFileSource(parentNode.Tag, node.Tag))
+                    nodesByRuntimeIndex.TryGetValue(parentTag.RuntimeIndex, out GameplayTagTreeNode parentNode))
                 {
                     parentNode.Children.Add(node);
                     node.Parent = parentNode;
@@ -129,33 +128,13 @@ namespace PJDev.DevelopKit.Framework.Editors.GameplayTagSystem
 
         public static string GetSourceLabel(GameplayTag tag)
         {
-            if (tag.Definition.SourceCount == 0)
-                return string.Empty;
-            if (tag.Definition.SourceCount == 1)
-                return tag.Definition.GetSource(0).Name;
-            return GameplayTagEditorLocalization.MultipleSources;
+            return tag.Definition.Source?.Name ?? string.Empty;
         }
 
-        public static bool CanDelete(GameplayTag tag)
-        {
-            for (int i = 0; i < tag.Definition.SourceCount; i++)
-            {
-                if (tag.Definition.GetSource(i) is IDeleteTagHandler)
-                    return true;
-            }
+        public static bool CanDelete(GameplayTag tag) =>
+            tag.Definition.Source is IDeleteTagHandler;
 
-            return false;
-        }
-
-        public static bool CanEdit(GameplayTag tag)
-        {
-            for (int i = 0; i < tag.Definition.SourceCount; i++)
-            {
-                if (tag.Definition.GetSource(i) is IGameplayTagEditHandler)
-                    return true;
-            }
-
-            return false;
-        }
+        public static bool CanEdit(GameplayTag tag) =>
+            tag.Definition.Source is IGameplayTagEditHandler;
     }
 }

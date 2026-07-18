@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
@@ -7,11 +7,11 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
   public sealed class GameplayTagSourceUtilityTests : GameplayTagTestBase
   {
     [Test]
-    public void GetPrimaryFileSourceName_ReturnsJsonFileName()
+    public void GetFileSourceName_ReturnsJsonFileName()
     {
       GameplayTag tag = GameplayTagTestFixtures.Tag("Test.Ability.Jump");
 
-      string fileName = GameplayTagSourceUtility.GetPrimaryFileSourceName(tag);
+      string fileName = GameplayTagSourceUtility.GetFileSourceName(tag);
 
       Assert.AreEqual("TestTags.json", fileName);
     }
@@ -37,12 +37,12 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
     }
 
     [Test]
-    public void SharesFileSource_SameFileTags_ReturnsTrue()
+    public void HasSameFileSource_SameFileTags_ReturnsTrue()
     {
       GameplayTag jump = GameplayTagTestFixtures.Tag("Test.Ability.Jump");
       GameplayTag roll = GameplayTagTestFixtures.Tag("Test.Ability.Roll");
 
-      Assert.IsTrue(GameplayTagSourceUtility.SharesFileSource(jump, roll));
+      Assert.IsTrue(GameplayTagSourceUtility.HasSameFileSource(jump, roll));
     }
   }
 }
