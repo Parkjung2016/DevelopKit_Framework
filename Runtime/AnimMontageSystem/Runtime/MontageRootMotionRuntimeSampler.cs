@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Playables;
@@ -234,7 +234,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     internal sealed class MontageRootMotionDeltaReceiver : MonoBehaviour
     {
         private Animator animator;
+        private Vector3 previousRootPosition;
         private Quaternion previousRootRotation = Quaternion.identity;
+        private bool hasPreviousRootPosition;
         private bool hasPreviousRootRotation;
 
         public Vector3 DeltaPosition { get; private set; }
@@ -244,7 +246,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public void Bind(Animator target)
         {
             animator = target;
-            CaptureRootRotation();
+            CaptureRootTransform();
         }
 
         public void Clear()
@@ -252,19 +254,23 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             DeltaPosition = Vector3.zero;
             DeltaRotation = Quaternion.identity;
             HasDelta = false;
-            CaptureRootRotation();
+            CaptureRootTransform();
         }
 
-        private void CaptureRootRotation()
+        private void CaptureRootTransform()
         {
             if (animator == null)
             {
+                previousRootPosition = Vector3.zero;
                 previousRootRotation = Quaternion.identity;
+                hasPreviousRootPosition = false;
                 hasPreviousRootRotation = false;
                 return;
             }
 
+            previousRootPosition = animator.rootPosition;
             previousRootRotation = animator.rootRotation;
+            hasPreviousRootPosition = true;
             hasPreviousRootRotation = true;
         }
 
@@ -276,18 +282,43 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (animator == null)
                 return;
 
+            Vector3 frameDeltaPosition = animator.deltaPosition;
+            if (hasPreviousRootPosition)
+            {
+                Vector3 rootPositionDelta = animator.rootPosition - previousRootPosition;
+                frameDeltaPosition = RestoreMissingAxes(
+                    frameDeltaPosition,
+                    rootPositionDelta);
+            }
+
             Quaternion frameDeltaRotation = animator.deltaRotation;
             if (Quaternion.Angle(Quaternion.identity, frameDeltaRotation) <= 0.0001f
                 && hasPreviousRootRotation)
             {
-                frameDeltaRotation = Quaternion.Inverse(previousRootRotation) * animator.rootRotation;
+                frameDeltaRotation =
+                    Quaternion.Inverse(previousRootRotation) * animator.rootRotation;
             }
 
-            DeltaPosition += animator.deltaPosition;
+            DeltaPosition += frameDeltaPosition;
             DeltaRotation *= frameDeltaRotation;
+            previousRootPosition = animator.rootPosition;
             previousRootRotation = animator.rootRotation;
+            hasPreviousRootPosition = true;
             hasPreviousRootRotation = true;
             HasDelta = true;
+        }
+
+        private static Vector3 RestoreMissingAxes(Vector3 delta, Vector3 rootDelta)
+        {
+            const float epsilon = 0.000001f;
+            if (Mathf.Abs(delta.x) <= epsilon)
+                delta.x = rootDelta.x;
+            if (Mathf.Abs(delta.y) <= epsilon)
+                delta.y = rootDelta.y;
+            if (Mathf.Abs(delta.z) <= epsilon)
+                delta.z = rootDelta.z;
+
+            return delta;
         }
     }
 }
