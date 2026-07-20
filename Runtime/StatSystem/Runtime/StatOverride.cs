@@ -7,33 +7,25 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
     [Serializable]
     public sealed class StatOverride
     {
-        [SerializeField] private StatId id = default;
-        [SerializeField] private string displayName = null;
-        [SerializeField] private float minValue = 0f;
-        [SerializeField] private float maxValue = 100f;
-        [SerializeField] private float defaultValue = 0f;
-        [SerializeField] private Sprite icon = null;
+        [SerializeField] private StatSO stat = null;
         [SerializeField] private bool overrideBaseValue = false;
 
         [SerializeField, ShowIf("overrideBaseValue")]
         private float baseValue = 0f;
 
-        public StatId Id => id;
-        public bool IsValid => id.IsValid;
+        public StatSO Stat => stat;
+        public StatId Id => stat != null ? stat.Id : default;
+        public bool IsValid => stat != null;
 
         public StatOverrideEntry CreateEntry()
         {
             if (!IsValid)
                 return default;
 
-            var definition = new StatDefinition(
-                id,
-                displayName,
-                minValue,
-                maxValue,
-                defaultValue,
-                icon);
-            return new StatOverrideEntry(definition, overrideBaseValue, baseValue);
+            return new StatOverrideEntry(
+                stat.CreateDefinition(),
+                overrideBaseValue,
+                baseValue);
         }
     }
 }
