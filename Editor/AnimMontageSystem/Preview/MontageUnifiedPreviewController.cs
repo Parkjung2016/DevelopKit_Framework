@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -43,10 +43,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private Quaternion initialMotionRootLocalRotation;
         private Vector3 initialMotionRootLocalScale;
         private bool hasInitialPreviewTransform;
-        private float lockedPreviewRootY;
-        private float lockedMotionRootLocalY;
         private float previewGroundPlaneY;
         private bool hasPreviewHeightLock;
+        private AnimMontageSO rootMotionSettingsMontage;
+        private bool cachedHorizontalRootMotion;
+        private bool cachedVerticalRootMotion;
+        private bool cachedRotationRootMotion;
+        private bool hasCachedRootMotionSettings;
         private readonly MontagePreviewEffectSimulator previewEffects = new();
 
         public GameObject NotifyOwner => previewInstance;
@@ -134,6 +137,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void SamplePreviewPose(MontageEditorContext context)
         {
             RevertTimelineElementPreviewTransform();
+            RefreshRootMotionSettings(context);
             float sampleTime = GetPreviewAnimationSampleTime(context);
             MontagePreviewSampling.TrySample(previewInstance, context, sampleTime);
             bool timelineTransformComposedWithRootMotion =
@@ -181,8 +185,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (previewInstance == null || !hasInitialPreviewTransform)
                 return;
 
+            rootMotionSampler.Dispose();
             MontagePreviewSampling.Reset();
             previewAnimationSampleTime = 0f;
+            lastPreviewPlayheadTime = 0f;
             previousPreviewNotifyEvaluation = MontageNotifyEvaluation.Default;
             previewInstance.transform.SetPositionAndRotation(initialPreviewPosition, initialPreviewRotation);
             previewInstance.transform.localScale = initialPreviewScale;
@@ -196,6 +202,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             StorePreviewHeightLock();
             CacheBounds();
+            CacheRootMotionSettings(boundContext?.Montage);
         }
 
         public void DrawPreview(Rect rect, System.Action requestRepaint)
@@ -392,14 +399,14 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 or PlayModeStateChange.EnteredPlayMode
                 or PlayModeStateChange.ExitingPlayMode)
             {
-                ResetPreviewRuntimeState(clearInstance: true);
+                ResetPreviewRuntimeState(clearInstance: true, clearPreviewScene: true);
                 return;
             }
 
             if (state != PlayModeStateChange.EnteredEditMode)
                 return;
 
-            ResetPreviewRuntimeState(clearInstance: true);
+            ResetPreviewRuntimeState(clearInstance: true, clearPreviewScene: true);
 
             if (boundContext?.PreviewModel == null)
                 return;
@@ -411,16 +418,19 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private static bool IsPlayModePreviewBlocked() =>
             EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode;
 
-        private void ResetPreviewRuntimeState(bool clearInstance)
+        private void ResetPreviewRuntimeState(bool clearInstance, bool clearPreviewScene = false)
         {
             rootMotionSampler.Dispose();
             MontagePreviewSampling.Dispose();
             previousPreviewNotifyEvaluation = MontageNotifyEvaluation.Default;
             previewAnimationSampleTime = 0f;
+            lastPreviewPlayheadTime = 0f;
             previewEffects.Reset();
             hasBounds = false;
             hasPreviewHeightLock = false;
             hasInitialPreviewTransform = false;
+            hasCachedRootMotionSettings = false;
+            rootMotionSettingsMontage = null;
 
             if (previewTexture != null)
             {
@@ -430,6 +440,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (clearInstance)
                 ClearInstance();
+
+            if (!clearPreviewScene || preview == null)
+                return;
+
+            ClearGrid();
+            ClearGizmos();
+            ClearShadowReceiver();
+            ClearProjectedMeshShadow();
+            ClearPreviewSkybox();
+            preview.Cleanup();
+            preview = null;
         }
 
         public void Dispose()
@@ -869,8 +890,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
 
             previewGroundPlaneY = 0f;
-            lockedPreviewRootY = previewInstance.transform.position.y;
-            lockedMotionRootLocalY = previewMotionRoot != null ? previewMotionRoot.localPosition.y : 0f;
             hasPreviewHeightLock = true;
         }
 
@@ -906,6 +925,56 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             (boundContext?.Montage?.ApplyHorizontalRootMotion ?? false)
             || (boundContext?.Montage?.ApplyVerticalRootMotion ?? false)
             || (boundContext?.Montage?.ApplyRotationRootMotion ?? false);
+
+        private void RefreshRootMotionSettings(MontageEditorContext context)
+        {
+            AnimMontageSO montage = context?.Montage;
+            bool horizontal = montage != null && montage.ApplyHorizontalRootMotion;
+            bool vertical = montage != null && montage.ApplyVerticalRootMotion;
+            bool rotation = montage != null && montage.ApplyRotationRootMotion;
+            if (hasCachedRootMotionSettings
+                && rootMotionSettingsMontage == montage
+                && cachedHorizontalRootMotion == horizontal
+                && cachedVerticalRootMotion == vertical
+                && cachedRotationRootMotion == rotation)
+            {
+                return;
+            }
+
+            rootMotionSampler.Dispose();
+            MontagePreviewSampling.Reset();
+            previousPreviewNotifyEvaluation = MontageNotifyEvaluation.Default;
+
+            if (previewInstance != null && hasInitialPreviewTransform)
+            {
+                previewInstance.transform.SetPositionAndRotation(initialPreviewPosition, initialPreviewRotation);
+                previewInstance.transform.localScale = initialPreviewScale;
+                RestoreMotionRootTransform();
+                StorePreviewHeightLock();
+            }
+
+            lastPreviewPlayheadTime = context?.PlayheadTime ?? 0f;
+            CacheRootMotionSettings(montage);
+        }
+
+        private void CacheRootMotionSettings(AnimMontageSO montage)
+        {
+            rootMotionSettingsMontage = montage;
+            cachedHorizontalRootMotion = montage != null && montage.ApplyHorizontalRootMotion;
+            cachedVerticalRootMotion = montage != null && montage.ApplyVerticalRootMotion;
+            cachedRotationRootMotion = montage != null && montage.ApplyRotationRootMotion;
+            hasCachedRootMotionSettings = true;
+        }
+
+        private void RestoreMotionRootTransform()
+        {
+            if (previewMotionRoot == null || previewMotionRoot == previewInstance.transform)
+                return;
+
+            previewMotionRoot.localPosition = initialMotionRootLocalPosition;
+            previewMotionRoot.localRotation = initialMotionRootLocalRotation;
+            previewMotionRoot.localScale = initialMotionRootLocalScale;
+        }
 
         private bool ApplyRootMotionPreviewTransform(MontageEditorContext context, float sampleTime)
         {
@@ -1024,16 +1093,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (!hasPreviewHeightLock || previewInstance == null)
                 return;
 
-            Vector3 rootPosition = previewInstance.transform.position;
-            rootPosition.y = lockedPreviewRootY;
-            previewInstance.transform.position = rootPosition;
-
-            if (previewMotionRoot == null || previewMotionRoot == previewInstance.transform)
-                return;
-
-            Vector3 localPosition = previewMotionRoot.localPosition;
-            localPosition.y = lockedMotionRootLocalY;
-            previewMotionRoot.localPosition = localPosition;
+            previewInstance.transform.SetPositionAndRotation(initialPreviewPosition, initialPreviewRotation);
+            previewInstance.transform.localScale = initialPreviewScale;
+            RestoreMotionRootTransform();
         }
 
         private static void DrawEmptyState(Rect rect, string message)
@@ -1057,6 +1119,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             hasBounds = false;
             hasPreviewHeightLock = false;
             hasInitialPreviewTransform = false;
+            hasCachedRootMotionSettings = false;
+            rootMotionSettingsMontage = null;
         }
 
         private void ClearGrid()
