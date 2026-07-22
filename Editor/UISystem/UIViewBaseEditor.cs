@@ -8,7 +8,7 @@ using UnityEngine.UIElements;
 namespace PJDev.DevelopKit.Framework.Editors.UISystem
 {
     [CustomEditor(typeof(UIViewBase), true)]
-    public sealed class UIViewBaseEditor : Editor
+    public class UIViewBaseEditor : Editor
     {
         public override VisualElement CreateInspectorGUI()
         {
@@ -27,12 +27,28 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             });
 
             root.Add(UISystemEditorUI.BuildToolbar(
-                ("UI 설정 창", () => UISystemEditorUI.OpenSettingsFor(UISystemEditorAssets.LoadOrFindLayerSettings()))));
+                ("UI 설정", () => UISystemEditorUI.OpenSettingsFor(
+                    UISystemEditorAssets.LoadOrFindLayerSettings()))));
             root.Add(BuildViewSettingsSection(view));
             root.Add(BuildAutoSetupSection(view));
+
+            VisualElement derivedFields = BuildDerivedFieldsSection();
+            if (derivedFields != null)
+                root.Add(derivedFields);
+
+            AddCustomSections(root);
+
             root.Add(UISystemEditorUI.BuildSection("동작"));
             root.Add(BuildBehaviorSection());
             return root;
+        }
+
+        /// <summary>
+        /// 파생 View 전용 에디터에서 별도 섹션을 추가할 때 사용합니다.
+        /// 일반적인 SerializeField는 자동으로 표시되므로 직접 추가할 필요가 없습니다.
+        /// </summary>
+        protected virtual void AddCustomSections(VisualElement root)
+        {
         }
 
         private void OnLayerIdChanged() => Repaint();
@@ -44,7 +60,7 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
             section.Add(UISystemEditorUI.BuildInfoRow(
                 "viewId",
                 view.gameObject.name,
-                "GameObject 이름이 viewId입니다."));
+                "GameObject 이름을 기본 viewId로 사용합니다."));
 
             var layerField = new IMGUIContainer(DrawLayerIdField);
             layerField.style.marginTop = 4;
@@ -80,14 +96,41 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
         {
             var rows = new System.Collections.Generic.List<(string label, string value, string description)>
             {
-                ("canvasGroup", "자동", "루트에 없으면 CanvasGroup을 추가합니다.")
+                ("canvasGroup", "자동", "루트에 없으면 CanvasGroup을 자동으로 추가합니다.")
             };
 
             if (view is UIPopupBase)
-                rows.Add(("dimmer", "자동", "Dimmer 자식이 없으면 만듭니다."));
+                rows.Add(("dimmer", "자동", "Dimmer 자식이 없으면 자동으로 만듭니다."));
 
             return UISystemEditorUI.BuildAutoConfigPanel("자동 구성", rows.ToArray());
         }
+
+        protected virtual VisualElement BuildDerivedFieldsSection()
+        {
+            var section = UISystemEditorUI.BuildFieldGroup(
+                $"{ObjectNames.NicifyVariableName(target.GetType().Name)} 설정");
+            int fieldCount = 0;
+
+            serializedObject.Update();
+            SerializedProperty property = serializedObject.GetIterator();
+            bool enterChildren = true;
+            while (property.NextVisible(enterChildren))
+            {
+                enterChildren = false;
+                if (IsBuiltInProperty(property.propertyPath))
+                    continue;
+
+                var field = new PropertyField(property.Copy());
+                field.Bind(serializedObject);
+                section.Add(field);
+                fieldCount++;
+            }
+
+            return fieldCount > 0 ? section : null;
+        }
+
+        private static bool IsBuiltInProperty(string propertyPath) =>
+            propertyPath is "m_Script" or "layerId" or "priority" or "backBehavior";
 
         private VisualElement BuildBehaviorSection()
         {
@@ -128,8 +171,10 @@ namespace PJDev.DevelopKit.Framework.Editors.UISystem
                 EditorUtility.SetDirty(serializedObject.targetObject);
 
                 if (backHelp is HelpBox box)
+                {
                     box.text = UISystemEditorViewPrefabFields.DescribeBackBehavior(
                         UISystemEditorViewPrefabFields.BackBehaviorValues[index]);
+                }
             });
 
             return section;

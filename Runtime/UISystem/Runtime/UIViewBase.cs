@@ -51,6 +51,10 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
         protected virtual string ResolveDefaultLayerId() => UILayers.Popup;
 
+        protected virtual bool InteractableWhenVisible => true;
+
+        protected virtual bool BlocksRaycastsWhenVisible => true;
+
         protected virtual void Reset()
         {
             EnsureCanvasGroup();
@@ -269,6 +273,16 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             rect.offsetMax = Vector2.zero;
         }
 
+        protected void RefreshInteractionState()
+        {
+            if (!IsVisible)
+                return;
+
+            EnsureCanvasGroup();
+            canvasGroup.interactable = InteractableWhenVisible;
+            canvasGroup.blocksRaycasts = BlocksRaycastsWhenVisible;
+        }
+
         private void SetActiveHidden()
         {
             gameObject.SetActive(true);
@@ -288,8 +302,8 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 OnBeforeVisible();
                 EnsureCanvasGroup();
                 canvasGroup.alpha = 1f;
-                canvasGroup.interactable = true;
-                canvasGroup.blocksRaycasts = true;
+                canvasGroup.interactable = InteractableWhenVisible;
+                canvasGroup.blocksRaycasts = BlocksRaycastsWhenVisible;
                 return;
             }
 

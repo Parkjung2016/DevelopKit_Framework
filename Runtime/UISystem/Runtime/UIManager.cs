@@ -47,6 +47,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         /// <summary>카탈로그와 (선택) 레이어 설정으로 UI 시스템을 초기화합니다. 캔버스 루트는 자동으로 찾거나 생성합니다.</summary>
         public void Initialize(UIViewCatalog catalog, UILayerSettings settings = null)
         {
+            ClearLoadingOperations(closeViews: true);
             instanceGeneration++;
             viewCatalog = catalog;
             layerSettings = settings;
@@ -284,6 +285,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         /// <summary>열려 있는 UI를 숨깁니다. 풀링된 인스턴스는 유지됩니다.</summary>
         public void ClearAll(bool includeScreens = true)
         {
+            ClearLoadingOperations(closeViews: false);
             instanceGeneration++;
             ClearVisibleViews(includeScreens, releaseInstances: true);
         }
