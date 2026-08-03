@@ -142,20 +142,19 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Tests
         [Test]
         public void ClearOnVisit_ShowsOnlyValuesAddedAfterVisit()
         {
-            using NotificationDotHandle handle =
-                system.CreateHandle(MetadataNotification.OneShot, 3);
+            system.SetCount(MetadataNotification.OneShot, 3);
 
             Assert.That(system.Visit(MetadataNotification.OneShot), Is.True);
             Assert.That(system.GetCount(MetadataNotification.OneShot), Is.Zero);
 
-            handle.Add(1);
+            system.Add(MetadataNotification.OneShot);
 
             Assert.That(system.GetCount(MetadataNotification.OneShot), Is.EqualTo(1));
         }
         [Test]
         public void Dependencies_CanFollowAnotherEnumAsActiveOrCount()
         {
-            system.EnsureEnum<MetadataNotification>();
+            Assert.That(system.GetCount(MetadataNotification.ActiveDependency), Is.Zero);
             system.SetCount(OtherNotification.Source, 3);
 
             Assert.That(system.GetCount(MetadataNotification.ActiveDependency), Is.EqualTo(1));
@@ -169,7 +168,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Tests
         [Test]
         public void RuntimeDefinition_CanBeInjectedAndRemoved()
         {
-            using NotificationDotRegistration registration = system.Register(
+            using IDisposable registration = system.Register(
                 new NotificationDotDefinition("Runtime/Target")
                     .ClearOnVisit()
                     .UseView("RuntimeBadge")
@@ -192,25 +191,22 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Tests
         }
 
         [Test]
-        public void Handles_KeepContributionsIndependent()
+        public void AddAndRemove_ChangeTheCurrentCount()
         {
             system.SetCount("Quest/Daily", 2);
-            using NotificationDotHandle first = system.CreateHandle("Quest/Daily", 3);
-            NotificationDotHandle second = system.CreateHandle("Quest/Daily", 4);
+            system.Add("Quest/Daily", 4);
+            system.Remove("Quest/Daily", 3);
 
-            Assert.That(system.GetCount("Quest/Daily"), Is.EqualTo(9));
-
-            second.Dispose();
-            Assert.That(system.GetCount("Quest/Daily"), Is.EqualTo(5));
-
-            first.SetCount(1);
             Assert.That(system.GetCount("Quest/Daily"), Is.EqualTo(3));
+
+            system.Remove("Quest/Daily", 10);
+            Assert.That(system.GetCount("Quest/Daily"), Is.Zero);
         }
 
         [Test]
-        public void CountOverride_ChangesDisplayedValueWithoutChangingHandle()
+        public void CountOverride_ChangesDisplayedValueWithoutChangingCount()
         {
-            using NotificationDotHandle handle = system.CreateHandle("Quest/Daily", 3);
+            system.SetCount("Quest/Daily", 3);
 
             system.SetCountOverride("Quest/Daily", 1);
             Assert.That(system.GetCount("Quest/Daily"), Is.EqualTo(1));
@@ -218,7 +214,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Tests
             system.SetCountOverride("Quest/Daily", 0);
             Assert.That(system.IsActive("Quest/Daily"), Is.False);
 
-            handle.Add(2);
+            system.Add("Quest/Daily", 2);
             Assert.That(system.IsActive("Quest/Daily"), Is.False);
 
             system.ClearCountOverride("Quest/Daily");
@@ -247,16 +243,15 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Tests
         }
 
         [Test]
-        public void Reset_ClearsValuesAndInvalidatesOldHandles()
+        public void Reset_ClearsAllValues()
         {
-            NotificationDotHandle handle = system.CreateHandle("Shop/Free", 3);
+            system.SetCount("Shop/Free", 3);
+            system.SetCount("Mail/Inbox", 2);
 
             system.Reset();
-            handle.SetCount(5);
 
             Assert.That(system.GetCount("Shop/Free"), Is.Zero);
-            handle.Dispose();
-            Assert.That(system.GetCount("Shop/Free"), Is.Zero);
+            Assert.That(system.GetCount("Mail/Inbox"), Is.Zero);
         }
 
         [Test]

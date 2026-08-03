@@ -6,7 +6,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
     /// <summary>알림닷 개수가 변경된 결과입니다.</summary>
     public readonly struct NotificationDotChange
     {
-        public NotificationDotChange(string key, int previousCount, int count)
+        internal NotificationDotChange(string key, int previousCount, int count)
         {
             Key = key;
             PreviousCount = previousCount;
@@ -26,9 +26,9 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
         Count
     }
 
-    public readonly struct NotificationDotDependency
+    internal readonly struct NotificationDotDependency
     {
-        public NotificationDotDependency(
+        internal NotificationDotDependency(
             string sourceKey,
             NotificationDotDependencyMode mode = NotificationDotDependencyMode.Active)
         {
@@ -36,8 +36,8 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             Mode = mode;
         }
 
-        public string SourceKey { get; }
-        public NotificationDotDependencyMode Mode { get; }
+        internal string SourceKey { get; }
+        internal NotificationDotDependencyMode Mode { get; }
     }
 
     /// <summary>알림닷의 동작과 UI 표현 정보를 정의합니다.</summary>
@@ -54,7 +54,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
         public string Key { get; }
         public bool ClearsOnVisit { get; private set; }
         public string ViewKey { get; private set; } = string.Empty;
-        public IReadOnlyList<NotificationDotDependency> Dependencies => dependencies;
+        internal IReadOnlyList<NotificationDotDependency> Dependencies => dependencies;
 
         public NotificationDotDefinition ClearOnVisit(bool enabled = true)
         {

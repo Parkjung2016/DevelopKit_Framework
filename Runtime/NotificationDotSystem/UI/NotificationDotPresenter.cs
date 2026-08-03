@@ -15,7 +15,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.UI
     }
 
     /// <summary>알림 키와 표시할 프리팹을 연결합니다.</summary>
-    public static class NotificationDotViews
+    internal static class NotificationDotViews
     {
         private sealed class Registration : IDisposable
         {
@@ -46,9 +46,9 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.UI
         private static readonly Dictionary<string, GameObject> Prefabs =
             new(StringComparer.Ordinal);
 
-        public static event Action Changed;
+        internal static event Action Changed;
 
-        public static IDisposable Register(string key, GameObject prefab)
+        internal static IDisposable Register(string key, GameObject prefab)
         {
             if (string.IsNullOrWhiteSpace(key))
                 throw new ArgumentException("Notification key cannot be empty.", nameof(key));
@@ -63,11 +63,11 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.UI
             return new Registration(key, prefab);
         }
 
-        public static IDisposable Register<TEnum>(TEnum key, GameObject prefab)
+        internal static IDisposable Register<TEnum>(TEnum key, GameObject prefab)
             where TEnum : struct, Enum =>
             Register(NotificationDotEnum.GetKey(key), prefab);
 
-        public static bool TryGetPrefab(string key, out GameObject prefab)
+        internal static bool TryGetPrefab(string key, out GameObject prefab)
         {
             if (string.IsNullOrWhiteSpace(key))
             {
@@ -78,7 +78,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.UI
             return Prefabs.TryGetValue(NotificationDots.NormalizeKey(key), out prefab);
         }
 
-        public static void Clear()
+        internal static void Clear()
         {
             if (Prefabs.Count == 0)
                 return;
@@ -108,7 +108,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.UI
             this.priority = priority;
         }
 
-        public Type EnumType
+        internal Type EnumType
         {
             get
             {
@@ -117,7 +117,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.UI
             }
         }
 
-        public object EnumValue
+        internal object EnumValue
         {
             get
             {
@@ -126,7 +126,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.UI
             }
         }
 
-        public string Key
+        internal string Key
         {
             get
             {
@@ -135,7 +135,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.UI
             }
         }
 
-        public string DisplayName
+        internal string DisplayName
         {
             get
             {
@@ -146,14 +146,14 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.UI
             }
         }
 
-        public int Priority => priority;
-        public bool IsValid => !string.IsNullOrWhiteSpace(Key);
+        internal int Priority => priority;
+        internal bool IsValid => !string.IsNullOrWhiteSpace(Key);
 
         public static NotificationDotTarget Create<TEnum>(TEnum value, int priority = 0)
             where TEnum : struct, Enum =>
             new(typeof(TEnum), value, priority);
 
-        public static NotificationDotTarget Create(Type enumType, object value, int priority = 0)
+        internal static NotificationDotTarget Create(Type enumType, object value, int priority = 0)
         {
             if (enumType == null)
                 throw new ArgumentNullException(nameof(enumType));
@@ -245,12 +245,12 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.UI
         private bool editorRefreshQueued;
 #endif
 
-        public Transform SpawnPoint => spawnPoint;
-        public IReadOnlyList<NotificationDotTarget> Targets => targets;
-        public string CurrentKey => currentKey;
-        public string CurrentDisplayName => currentDisplayName;
-        public int CurrentCount => currentCount;
-        public bool HasVisibleDot =>
+        internal Transform SpawnPoint => spawnPoint;
+        internal IReadOnlyList<NotificationDotTarget> Targets => targets;
+        internal string CurrentKey => currentKey;
+        internal string CurrentDisplayName => currentDisplayName;
+        internal int CurrentCount => currentCount;
+        internal bool HasVisibleDot =>
             isActiveAndEnabled && gameObject.activeInHierarchy &&
             viewInstance != null && viewInstance.activeSelf;
 
@@ -285,7 +285,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.UI
                 Rebind();
         }
 
-        public void Refresh()
+        private void Refresh()
         {
             if (!isActiveAndEnabled || !gameObject.activeInHierarchy)
                 return;

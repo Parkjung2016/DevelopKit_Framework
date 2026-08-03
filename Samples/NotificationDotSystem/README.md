@@ -10,6 +10,20 @@
 
 `Inbox`는 `Mail`에, `FreeItem`과 `DailyReward`는 `Shop`에 자동 합산됩니다. 여러 알림이 활성화되더라도 Presenter는 Priority가 가장 높은 하나만 표시합니다.
 
+## 알림 개수 변경
+
+알림 로직은 `NotificationDots`만 사용하면 됩니다.
+
+```csharp
+NotificationDots.SetCount(GameNotification.Mail, 3);
+NotificationDots.Add(GameNotification.Mail);
+NotificationDots.Remove(GameNotification.Mail);
+NotificationDots.SetActive(GameNotification.Reward, true);
+NotificationDots.Clear(GameNotification.Mail);
+```
+
+`SetCount`는 현재 개수를 지정하고, `Add`와 `Remove`는 기존 개수에서 더하거나 뺍니다. 단순한 표시 여부만 필요하면 `SetActive`를 사용합니다.
+
 ## 커스텀 프리팹
 
 프리팹에 `INotificationDotView`를 구현한 컴포넌트를 붙이면 선택된 키와 개수를 받을 수 있습니다. 숫자만 표시하면 기본 `NotificationDotCountView`를 사용할 수 있습니다.

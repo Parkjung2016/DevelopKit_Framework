@@ -7,7 +7,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
     /// 경로 형태의 알림 키를 계층으로 관리하고 자식 개수를 부모에 자동으로 합산합니다.
     /// 게임의 메인 스레드에서 사용하도록 설계되었습니다.
     /// </summary>
-    public sealed class NotificationDotSystem
+    internal sealed class NotificationDotSystem
     {
         private sealed class Node
         {
@@ -20,14 +20,14 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             public readonly string Key;
             public readonly Node Parent;
             public int ManualCount;
-            public long HandleCount;
+
             public long DependencyCount;
             public int? CountOverride;
             public long TotalCount;
             public long AcknowledgedCount;
             public Action<NotificationDotChange> Changed;
 
-            public long RawDirectCount => ManualCount + HandleCount + DependencyCount;
+            public long RawDirectCount => ManualCount + DependencyCount;
             public long UnreadDirectCount => Math.Max(0, RawDirectCount - AcknowledgedCount);
             public long DirectCount => CountOverride ?? UnreadDirectCount;
         }
@@ -118,25 +118,25 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
         private readonly Node root = new(string.Empty, null);
         private Dictionary<Node, int> batchPreviousCounts;
         private int batchDepth;
-        private int generation;
+
         private int definitionGeneration;
         private long nextRegistrationId;
 
-        public event Action<NotificationDotChange> Changed;
+        internal event Action<NotificationDotChange> Changed;
 
-        public int RegisteredKeyCount => nodes.Count;
-        public int RegisteredDefinitionCount => definitions.Count;
+        internal int RegisteredKeyCount => nodes.Count;
+        internal int RegisteredDefinitionCount => definitions.Count;
 
-        public int GetCount(string key)
+        internal int GetCount(string key)
         {
             key = NormalizeKey(key);
             return nodes.TryGetValue(key, out Node node) ? ToPublicCount(node.TotalCount) : 0;
         }
 
-        public int GetCount<TEnum>(TEnum key) where TEnum : struct, Enum =>
+        internal int GetCount<TEnum>(TEnum key) where TEnum : struct, Enum =>
             GetCount(EnsureEnumKey(key));
 
-        public int GetCount<TEnum>() where TEnum : struct, Enum
+        internal int GetCount<TEnum>() where TEnum : struct, Enum
         {
             EnsureEnum<TEnum>();
             IReadOnlyList<string> rootKeys = NotificationDotEnum.GetRootKeys<TEnum>();
@@ -151,24 +151,24 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             return (int)total;
         }
 
-        public int GetDirectCount(string key)
+        internal int GetDirectCount(string key)
         {
             key = NormalizeKey(key);
             return nodes.TryGetValue(key, out Node node) ? ToPublicCount(node.DirectCount) : 0;
         }
 
-        public int GetDirectCount<TEnum>(TEnum key) where TEnum : struct, Enum =>
+        internal int GetDirectCount<TEnum>(TEnum key) where TEnum : struct, Enum =>
             GetDirectCount(EnsureEnumKey(key));
 
         /// <summary>현재 키에 표시값 override가 적용되어 있는지 확인합니다.</summary>
-        public bool HasCountOverride(string key)
+        internal bool HasCountOverride(string key)
         {
             key = NormalizeKey(key);
             return nodes.TryGetValue(key, out Node node) && node.CountOverride.HasValue;
         }
 
         /// <summary>원래 값은 유지하면서 현재 표시값만 바꿉니다.</summary>
-        public void SetCountOverride(string key, int count)
+        internal void SetCountOverride(string key, int count)
         {
             key = NormalizeKey(key);
             Node node = GetOrCreateNode(key);
@@ -180,7 +180,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
         }
 
         /// <summary>표시값 override를 해제하고 원래 런타임 값으로 돌아갑니다.</summary>
-        public void ClearCountOverride(string key)
+        internal void ClearCountOverride(string key)
         {
             key = NormalizeKey(key);
             if (!nodes.TryGetValue(key, out Node node) || !node.CountOverride.HasValue)
@@ -191,27 +191,27 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             ApplyDelta(node, node.DirectCount - previousDirect);
         }
 
-        public bool IsActive(string key) => GetCount(key) > 0;
+        internal bool IsActive(string key) => GetCount(key) > 0;
 
-        public bool IsActive<TEnum>(TEnum key) where TEnum : struct, Enum => GetCount(key) > 0;
+        internal bool IsActive<TEnum>(TEnum key) where TEnum : struct, Enum => GetCount(key) > 0;
 
-        public bool IsActive<TEnum>() where TEnum : struct, Enum => GetCount<TEnum>() > 0;
+        internal bool IsActive<TEnum>() where TEnum : struct, Enum => GetCount<TEnum>() > 0;
 
-        public void SetCount(string key, int count)
+        internal void SetCount(string key, int count)
         {
             key = NormalizeKey(key);
             SetManualCount(GetOrCreateNode(key), count);
         }
 
-        public void SetCount<TEnum>(TEnum key, int count) where TEnum : struct, Enum =>
+        internal void SetCount<TEnum>(TEnum key, int count) where TEnum : struct, Enum =>
             SetCount(EnsureEnumKey(key), count);
 
-        public void SetActive(string key, bool active) => SetCount(key, active ? 1 : 0);
+        internal void SetActive(string key, bool active) => SetCount(key, active ? 1 : 0);
 
-        public void SetActive<TEnum>(TEnum key, bool active) where TEnum : struct, Enum =>
+        internal void SetActive<TEnum>(TEnum key, bool active) where TEnum : struct, Enum =>
             SetCount(key, active ? 1 : 0);
 
-        public void Add(string key, int amount = 1)
+        internal void Add(string key, int amount = 1)
         {
             if (amount == 0)
                 return;
@@ -223,15 +223,26 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             SetManualCount(node, count);
         }
 
-        public void Add<TEnum>(TEnum key, int amount = 1) where TEnum : struct, Enum =>
+        internal void Add<TEnum>(TEnum key, int amount = 1) where TEnum : struct, Enum =>
             Add(EnsureEnumKey(key), amount);
 
-        public void Clear(string key) => SetCount(key, 0);
+        internal void Remove(string key, int amount = 1)
+        {
+            if (amount <= 0)
+                return;
 
-        public void Clear<TEnum>(TEnum key) where TEnum : struct, Enum => SetCount(key, 0);
+            Add(key, -amount);
+        }
+
+        internal void Remove<TEnum>(TEnum key, int amount = 1) where TEnum : struct, Enum =>
+            Remove(EnsureEnumKey(key), amount);
+
+        internal void Clear(string key) => SetCount(key, 0);
+
+        internal void Clear<TEnum>(TEnum key) where TEnum : struct, Enum => SetCount(key, 0);
 
         /// <summary>현재 개수를 확인 처리하고 이후에 추가되는 값만 다시 표시합니다.</summary>
-        public bool Visit(string key)
+        internal bool Visit(string key)
         {
             key = NormalizeKey(key);
             if (!definitions.TryGetValue(key, out DefinitionRecord record)
@@ -249,21 +260,11 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             return true;
         }
 
-        public bool Visit<TEnum>(TEnum key) where TEnum : struct, Enum =>
+        internal bool Visit<TEnum>(TEnum key) where TEnum : struct, Enum =>
             Visit(EnsureEnumKey(key));
 
-        public NotificationDotHandle CreateHandle(string key, int initialCount = 0)
-        {
-            key = NormalizeKey(key);
-            GetOrCreateNode(key);
-            return new NotificationDotHandle(this, key, generation, Math.Max(0, initialCount));
-        }
 
-        public NotificationDotHandle CreateHandle<TEnum>(TEnum key, int initialCount = 0)
-            where TEnum : struct, Enum =>
-            CreateHandle(EnsureEnumKey(key), initialCount);
-
-        public NotificationDotRegistration Register(NotificationDotDefinition definition)
+        internal NotificationDotRegistration Register(NotificationDotDefinition definition)
         {
             if (definition == null)
                 throw new ArgumentNullException(nameof(definition));
@@ -280,7 +281,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             return new NotificationDotRegistration(this, frozen.Key, id, definitionGeneration);
         }
 
-        public bool TryGetDefinition(string key, out NotificationDotDefinition definition)
+        internal bool TryGetDefinition(string key, out NotificationDotDefinition definition)
         {
             key = NormalizeKey(key);
             if (definitions.TryGetValue(key, out DefinitionRecord record))
@@ -293,19 +294,19 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             return false;
         }
 
-        public bool TryGetDefinition<TEnum>(TEnum key, out NotificationDotDefinition definition)
+        internal bool TryGetDefinition<TEnum>(TEnum key, out NotificationDotDefinition definition)
             where TEnum : struct, Enum =>
             TryGetDefinition(EnsureEnumKey(key), out definition);
 
-        public string GetViewKey(string key) =>
+        internal string GetViewKey(string key) =>
             TryGetDefinition(key, out NotificationDotDefinition definition)
                 ? definition.ViewKey
                 : string.Empty;
 
-        public string GetViewKey<TEnum>(TEnum key) where TEnum : struct, Enum =>
+        internal string GetViewKey<TEnum>(TEnum key) where TEnum : struct, Enum =>
             GetViewKey(EnsureEnumKey(key));
 
-        public void EnsureEnum<TEnum>() where TEnum : struct, Enum
+        private void EnsureEnum<TEnum>() where TEnum : struct, Enum
         {
             Type enumType = typeof(TEnum);
             if (!registeredEnumTypes.Add(enumType))
@@ -325,7 +326,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             }
         }
 
-        public IDisposable Subscribe(
+        internal IDisposable Subscribe(
             string key,
             Action<NotificationDotChange> callback,
             bool notifyImmediately = true)
@@ -346,14 +347,14 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             return new Subscription(node, callback);
         }
 
-        public IDisposable Subscribe<TEnum>(
+        internal IDisposable Subscribe<TEnum>(
             TEnum key,
             Action<NotificationDotChange> callback,
             bool notifyImmediately = true)
             where TEnum : struct, Enum =>
             Subscribe(EnsureEnumKey(key), callback, notifyImmediately);
 
-        public IDisposable Subscribe<TEnum>(
+        internal IDisposable Subscribe<TEnum>(
             Action<NotificationDotChange> callback,
             bool notifyImmediately = true)
             where TEnum : struct, Enum
@@ -388,19 +389,19 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
         }
 
         /// <summary>여러 변경을 묶어 최종 결과를 한 번만 알립니다.</summary>
-        public IDisposable BeginBatch() => new BatchScope(this);
+        internal IDisposable BeginBatch() => new BatchScope(this);
 
-        /// <summary>모든 직접 값과 Handle 값을 지우고 기존 Handle을 무효화합니다.</summary>
-        public void Reset()
+        /// <summary>모든 알림 개수를 지웁니다.</summary>
+        internal void Reset()
         {
-            generation++;
+
             using (BeginBatch())
             {
                 foreach (Node node in nodes.Values)
                 {
                     long previousDirect = node.DirectCount;
                     node.ManualCount = 0;
-                    node.HandleCount = 0;
+
                     node.CountOverride = null;
                     node.AcknowledgedCount = 0;
                     ApplyDelta(node, node.DirectCount - previousDirect);
@@ -408,7 +409,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             }
         }
 
-        public void GetSnapshot(List<NotificationDotSnapshot> results, bool includeInactive = false)
+        internal void GetSnapshot(List<NotificationDotSnapshot> results, bool includeInactive = false)
         {
             if (results == null)
                 throw new ArgumentNullException(nameof(results));
@@ -429,18 +430,6 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             results.Sort((a, b) => string.CompareOrdinal(a.Key, b.Key));
         }
 
-        internal void ChangeHandleCount(string key, int previous, int count, int handleGeneration)
-        {
-            if (generation != handleGeneration || previous == count)
-                return;
-
-            Node node = GetOrCreateNode(key);
-            long previousDirect = node.DirectCount;
-            node.HandleCount += (long)count - previous;
-            ClampAcknowledgedCount(node);
-
-            ApplyDelta(node, node.DirectCount - previousDirect);
-        }
 
         internal void UnregisterDefinition(string key, long id, int registrationGeneration)
         {

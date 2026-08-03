@@ -1,5 +1,4 @@
-﻿using System;
-using PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime;
+﻿using PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Example
@@ -13,80 +12,45 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Example
         [SerializeField, Min(0)] private int initialDailyRewardCount = 1;
         [SerializeField] private bool logChanges = true;
 
-        private NotificationDotHandle inbox;
-        private NotificationDotHandle freeItem;
-        private NotificationDotHandle freeItem2;
-        private NotificationDotHandle dailyReward;
-        private IDisposable subscription;
-
         private void OnEnable()
         {
-            NotificationDots.RegisterEnum<ExampleNotification>();
-
-            inbox = NotificationDots.CreateHandle(ExampleNotification.Inbox, initialInboxCount);
-            freeItem = NotificationDots.CreateHandle(ExampleNotification.FreeItem, initialFreeItemCount);
-            freeItem2 = NotificationDots.CreateHandle(ExampleNotification2.FreeItemRRf, initialFreeItem2Count);
-            dailyReward = NotificationDots.CreateHandle(ExampleNotification.DailyReward, initialDailyRewardCount);
-
+            ResetCounts();
             if (logChanges)
-                subscription = NotificationDots.Subscribe<ExampleNotification>(OnChanged);
+                NotificationDots.Changed += OnChanged;
         }
 
         private void OnDisable()
         {
-            subscription?.Dispose();
-            subscription = null;
+            NotificationDots.Changed -= OnChanged;
 
-            inbox?.Dispose();
-            freeItem?.Dispose();
-            dailyReward?.Dispose();
-            freeItem2?.Dispose();
-            inbox = null;
-            freeItem = null;
-            dailyReward = null;
-            freeItem2 = null;
+            NotificationDots.Clear(ExampleNotification.Inbox);
+            NotificationDots.Clear(ExampleNotification.FreeItem);
+            NotificationDots.Clear(ExampleNotification2.FreeItemRRf);
+            NotificationDots.Clear(ExampleNotification.DailyReward);
         }
 
         [ContextMenu("Test/Add Inbox")]
-        public void AddInbox()
-        {
-            inbox?.Add(1);
-        }
+        public void AddInbox() => NotificationDots.Add(ExampleNotification.Inbox);
 
         [ContextMenu("Test/Visit Inbox")]
-        public void VisitInbox()
-        {
-            NotificationDots.Visit(ExampleNotification.Inbox);
-        }
+        public void VisitInbox() => NotificationDots.Visit(ExampleNotification.Inbox);
 
         [ContextMenu("Test/Add Free Item")]
-        public void AddFreeItem()
-        {
-            freeItem?.Add(1);
-        }
+        public void AddFreeItem() => NotificationDots.Add(ExampleNotification.FreeItem);
+
         [ContextMenu("Test/Add Free Item2")]
-        public void AddFreeItem2()
-        {
-            freeItem2?.Add(1);
-        }
+        public void AddFreeItem2() => NotificationDots.Add(ExampleNotification2.FreeItemRRf);
+
         [ContextMenu("Test/Claim Daily Reward")]
-        public void ClaimDailyReward()
-        {
-            NotificationDots.Visit(ExampleNotification.DailyReward);
-        }
+        public void ClaimDailyReward() => NotificationDots.Visit(ExampleNotification.DailyReward);
 
         [ContextMenu("Test/Reset Counts")]
         public void ResetCounts()
         {
-            inbox?.Clear();
-            freeItem?.Clear();
-            freeItem2?.Clear();
-            dailyReward?.Clear();
-
-            inbox?.SetCount(initialInboxCount);
-            freeItem?.SetCount(initialFreeItemCount);
-            dailyReward?.SetCount(initialDailyRewardCount);
-            freeItem2?.SetCount(initialFreeItem2Count);
+            NotificationDots.SetCount(ExampleNotification.Inbox, initialInboxCount);
+            NotificationDots.SetCount(ExampleNotification.FreeItem, initialFreeItemCount);
+            NotificationDots.SetCount(ExampleNotification2.FreeItemRRf, initialFreeItem2Count);
+            NotificationDots.SetCount(ExampleNotification.DailyReward, initialDailyRewardCount);
         }
 
         [ContextMenu("Test/Print Current Counts")]

@@ -102,7 +102,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Editor
 
             EditorGUILayout.Space(4);
             EditorGUILayout.LabelField(
-                $"Active {active}  |  Keys {NotificationDots.Current.RegisteredKeyCount}  |  Definitions {NotificationDots.Current.RegisteredDefinitionCount}",
+                $"Active {active}  |  Keys {NotificationDots.RegisteredKeyCount}  |  Definitions {NotificationDots.RegisteredDefinitionCount}",
                 EditorStyles.miniLabel);
         }
 

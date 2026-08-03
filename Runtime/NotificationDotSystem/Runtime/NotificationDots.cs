@@ -11,9 +11,10 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
     {
         private static NotificationDotSystem current = new();
 
-        public static NotificationDotSystem Current => current;
+        internal static int RegisteredKeyCount => current.RegisteredKeyCount;
+        internal static int RegisteredDefinitionCount => current.RegisteredDefinitionCount;
 
-        public static string NormalizeKey(string key) => NotificationDotSystem.NormalizeKey(key);
+        internal static string NormalizeKey(string key) => NotificationDotSystem.NormalizeKey(key);
 
         public static event Action<NotificationDotChange> Changed
         {
@@ -25,13 +26,13 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
         public static int GetCount<TEnum>(TEnum key) where TEnum : struct, Enum => current.GetCount(key);
         public static int GetCount<TEnum>() where TEnum : struct, Enum => current.GetCount<TEnum>();
 
-        public static int GetDirectCount(string key) => current.GetDirectCount(key);
-        public static int GetDirectCount<TEnum>(TEnum key) where TEnum : struct, Enum =>
+        internal static int GetDirectCount(string key) => current.GetDirectCount(key);
+        internal static int GetDirectCount<TEnum>(TEnum key) where TEnum : struct, Enum =>
             current.GetDirectCount(key);
 
-        public static bool HasCountOverride(string key) => current.HasCountOverride(key);
-        public static void SetCountOverride(string key, int count) => current.SetCountOverride(key, count);
-        public static void ClearCountOverride(string key) => current.ClearCountOverride(key);
+        internal static bool HasCountOverride(string key) => current.HasCountOverride(key);
+        internal static void SetCountOverride(string key, int count) => current.SetCountOverride(key, count);
+        internal static void ClearCountOverride(string key) => current.ClearCountOverride(key);
 
         public static bool IsActive(string key) => current.IsActive(key);
         public static bool IsActive<TEnum>(TEnum key) where TEnum : struct, Enum => current.IsActive(key);
@@ -49,6 +50,10 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
         public static void Add<TEnum>(TEnum key, int amount = 1) where TEnum : struct, Enum =>
             current.Add(key, amount);
 
+        public static void Remove(string key, int amount = 1) => current.Remove(key, amount);
+        public static void Remove<TEnum>(TEnum key, int amount = 1) where TEnum : struct, Enum =>
+            current.Remove(key, amount);
+
         public static void Clear(string key) => current.Clear(key);
         public static void Clear<TEnum>(TEnum key) where TEnum : struct, Enum => current.Clear(key);
 
@@ -56,8 +61,8 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
         public static bool Visit<TEnum>(TEnum key) where TEnum : struct, Enum => current.Visit(key);
 
 
-        public static string GetViewKey(string key) => current.GetViewKey(key);
-        public static string GetViewKey<TEnum>(TEnum key) where TEnum : struct, Enum =>
+        internal static string GetViewKey(string key) => current.GetViewKey(key);
+        internal static string GetViewKey<TEnum>(TEnum key) where TEnum : struct, Enum =>
             current.GetViewKey(key);
 
         public static bool TryGetDefinition(
@@ -71,18 +76,10 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             where TEnum : struct, Enum =>
             current.TryGetDefinition(key, out definition);
 
-        public static void RegisterEnum<TEnum>() where TEnum : struct, Enum =>
-            current.EnsureEnum<TEnum>();
 
-        public static NotificationDotRegistration Register(NotificationDotDefinition definition) =>
+        public static IDisposable Register(NotificationDotDefinition definition) =>
             current.Register(definition);
 
-        public static NotificationDotHandle CreateHandle(string key, int initialCount = 0) =>
-            current.CreateHandle(key, initialCount);
-
-        public static NotificationDotHandle CreateHandle<TEnum>(TEnum key, int initialCount = 0)
-            where TEnum : struct, Enum =>
-            current.CreateHandle(key, initialCount);
 
         public static IDisposable Subscribe(
             string key,
@@ -106,7 +103,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
         public static IDisposable BeginBatch() => current.BeginBatch();
         public static void Reset() => current.Reset();
 
-        public static void GetSnapshot(List<NotificationDotSnapshot> results, bool includeInactive = false) =>
+        internal static void GetSnapshot(List<NotificationDotSnapshot> results, bool includeInactive = false) =>
             current.GetSnapshot(results, includeInactive);
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -198,7 +195,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             && DependencyEnumType != null;
     }
     /// <summary>Enum 타입과 값을 알림 정의로 변환하고 타입별로 캐시합니다.</summary>
-    public static class NotificationDotEnum
+    internal static class NotificationDotEnum
     {
         private sealed class TypeMap
         {
@@ -219,26 +216,26 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
         private static readonly Dictionary<Type, TypeMap> TypeMaps = new();
         private static readonly HashSet<Type> BuildingTypes = new();
 
-        public static string GetTypeKey<TEnum>() where TEnum : struct, Enum =>
+        internal static string GetTypeKey<TEnum>() where TEnum : struct, Enum =>
             NotificationDotEnumCache<TEnum>.TypeKey;
 
-        public static string GetKey<TEnum>(TEnum value) where TEnum : struct, Enum =>
+        internal static string GetKey<TEnum>(TEnum value) where TEnum : struct, Enum =>
             NotificationDotEnumCache<TEnum>.GetKey(value);
 
-        public static NotificationDotDefinition GetDefinition<TEnum>(TEnum value)
+        internal static NotificationDotDefinition GetDefinition<TEnum>(TEnum value)
             where TEnum : struct, Enum =>
             NotificationDotEnumCache<TEnum>.GetDefinition(value);
 
-        public static IReadOnlyList<NotificationDotDefinition> GetDefinitions<TEnum>()
+        internal static IReadOnlyList<NotificationDotDefinition> GetDefinitions<TEnum>()
             where TEnum : struct, Enum =>
             NotificationDotEnumCache<TEnum>.Definitions;
 
-        public static string GetTypeKey(Type enumType) => GetTypeMap(enumType).TypeKey;
+        internal static string GetTypeKey(Type enumType) => GetTypeMap(enumType).TypeKey;
 
         internal static IReadOnlyList<string> GetRootKeys<TEnum>() where TEnum : struct, Enum =>
             GetTypeMap(typeof(TEnum)).RootKeys;
 
-        public static string GetKey(Type enumType, object value)
+        internal static string GetKey(Type enumType, object value)
         {
             ValidateValue(enumType, value);
             TypeMap map = GetTypeMap(enumType);
@@ -248,7 +245,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             throw UndefinedValue(value);
         }
 
-        public static NotificationDotDefinition GetDefinition(Type enumType, object value)
+        internal static NotificationDotDefinition GetDefinition(Type enumType, object value)
         {
             ValidateValue(enumType, value);
             TypeMap map = GetTypeMap(enumType);
@@ -598,10 +595,10 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
         private static readonly Dictionary<TEnum, NotificationDotDefinition> DefinitionMap =
             BuildDefinitions();
 
-        public static string TypeKey => Data.TypeKey;
-        public static IReadOnlyList<NotificationDotDefinition> Definitions => Data.DefinitionList;
+        internal static string TypeKey => Data.TypeKey;
+        internal static IReadOnlyList<NotificationDotDefinition> Definitions => Data.DefinitionList;
 
-        public static string GetKey(TEnum value)
+        internal static string GetKey(TEnum value)
         {
             if (Keys.TryGetValue(value, out string key))
                 return key;
@@ -610,7 +607,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
                 nameof(value), value, "Defined enum values can be used as notification keys.");
         }
 
-        public static NotificationDotDefinition GetDefinition(TEnum value)
+        internal static NotificationDotDefinition GetDefinition(TEnum value)
         {
             if (DefinitionMap.TryGetValue(value, out NotificationDotDefinition definition))
                 return definition;
