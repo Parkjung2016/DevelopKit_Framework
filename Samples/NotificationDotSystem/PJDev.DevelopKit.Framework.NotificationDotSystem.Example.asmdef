@@ -1,0 +1,17 @@
+﻿{
+    "name": "PJDev.DevelopKit.Framework.NotificationDotSystem.Example",
+    "rootNamespace": "PJDev.DevelopKit.Framework.NotificationDotSystem.Example",
+    "references": [
+        "PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime",
+        "PJDev.DevelopKit.Framework.NotificationDotSystem.UI"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

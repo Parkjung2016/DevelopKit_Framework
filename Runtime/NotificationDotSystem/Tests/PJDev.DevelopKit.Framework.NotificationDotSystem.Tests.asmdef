@@ -1,0 +1,31 @@
+﻿{
+    "name":  "PJDev.DevelopKit.Framework.NotificationDotSystem.Tests",
+    "rootNamespace":  "PJDev.DevelopKit.Framework.NotificationDotSystem.Tests",
+    "references":  [
+                       "GUID:8a91f042625b48a9ab32de604eb3cf16",
+                       "GUID:44b97386ad214ee5be1c94a274a38625",
+                       "GUID:6f09b1a273c34b8ea6a1c42c7d5f9012"
+                   ],
+    "includePlatforms":  [
+                             "Editor"
+                         ],
+    "excludePlatforms":  [
+
+                         ],
+    "allowUnsafeCode":  false,
+    "overrideReferences":  false,
+    "precompiledReferences":  [
+
+                              ],
+    "autoReferenced":  false,
+    "defineConstraints":  [
+                              "UNITY_INCLUDE_TESTS"
+                          ],
+    "versionDefines":  [
+
+                       ],
+    "noEngineReferences":  false,
+    "optionalUnityReferences":  [
+                                    "TestAssemblies"
+                                ]
+}

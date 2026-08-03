@@ -1,13 +1,20 @@
-{
-  "name": "com.pjdev.developkit.framework",
-  "displayName": "DevelopKit Framework",
-  "version": "1.6.0",
-  "unity": "2021.0",
-  "unityRelease": "1f1",
-  "description": "Layered OOP game framework: Shared, Core bootstrap, Inventory, Equipment, Stat, Ability, Save, DeterministicSimulation.",
-  "author": {
-    "name": "PJDev",
-    "email": "bagj21563@gmail.com"
-  },
-  "_fingerprint": "11e892c21745ed80ec46ebf57105d44b5c69d306"
+﻿{
+    "name":  "com.pjdev.developkit.framework",
+    "displayName":  "DevelopKit Framework",
+    "version":  "1.6.0",
+    "unity":  "2021.0",
+    "unityRelease":  "1f1",
+    "description":  "Layered OOP game framework: Shared, Core bootstrap, Inventory, Equipment, Stat, Ability, Save, DeterministicSimulation.",
+    "author":  {
+                   "name":  "PJDev",
+                   "email":  "bagj21563@gmail.com"
+               },
+    "_fingerprint":  "11e892c21745ed80ec46ebf57105d44b5c69d306",
+    "samples":  [
+                    {
+                        "displayName":  "Notification Dot System Example",
+                        "description":  "Enum, parent aggregation, visit handling, and UI binding example.",
+                        "path":  "Samples/NotificationDotSystem"
+                    }
+                ]
 }

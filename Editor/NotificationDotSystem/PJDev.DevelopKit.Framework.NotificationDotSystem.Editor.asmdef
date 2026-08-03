@@ -1,0 +1,19 @@
+{
+    "name": "PJDev.DevelopKit.Framework.NotificationDotSystem.Editor",
+    "rootNamespace": "PJDev.DevelopKit.Framework.NotificationDotSystem.Editor",
+    "references": [
+        "GUID:8a91f042625b48a9ab32de604eb3cf16",
+        "GUID:44b97386ad214ee5be1c94a274a38625"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
