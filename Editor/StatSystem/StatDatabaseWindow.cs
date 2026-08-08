@@ -339,8 +339,8 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
             allStats.Clear();
             if (database != null)
             {
-                StatSO[] source = database.Stats;
-                for (int i = 0; i < source.Length; i++)
+                IReadOnlyList<StatSO> source = database.Stats;
+                for (int i = 0; i < source.Count; i++)
                 {
                     if (source[i] != null)
                         allStats.Add(source[i]);

@@ -8,14 +8,15 @@ namespace PJDev.DevelopKit.Framework.RandomSystem.Runtime
     {
         private T[] items = Array.Empty<T>();
         private double[] cumulativeWeights = Array.Empty<double>();
+        private int count;
         private double totalWeight;
-
-        public int Count => items.Length;
 
         public WeightedTable(IReadOnlyList<T> source, Func<T, double> getWeight)
         {
             Rebuild(source, getWeight);
         }
+
+        public int Count => count;
 
         public void Rebuild(IReadOnlyList<T> source, Func<T, double> getWeight)
         {
@@ -24,9 +25,9 @@ namespace PJDev.DevelopKit.Framework.RandomSystem.Runtime
             if (getWeight == null)
                 throw new ArgumentNullException(nameof(getWeight));
 
-            var validItems = new List<T>(source.Count);
-            var weights = new List<double>(source.Count);
-            double total = 0d;
+            EnsureCapacity(source.Count);
+            count = 0;
+            totalWeight = 0d;
 
             for (int i = 0; i < source.Count; i++)
             {
@@ -35,19 +36,18 @@ namespace PJDev.DevelopKit.Framework.RandomSystem.Runtime
                 if (!(weight > 0d) || double.IsNaN(weight) || double.IsInfinity(weight))
                     continue;
 
-                total += weight;
-                validItems.Add(item);
-                weights.Add(total);
+                totalWeight += weight;
+                items[count] = item;
+                cumulativeWeights[count] = totalWeight;
+                count++;
             }
 
-            items = validItems.ToArray();
-            cumulativeWeights = weights.ToArray();
-            totalWeight = total;
+            ClearUnusedItems();
         }
 
         public bool TryPick(out T item, IRandomSource random = null)
         {
-            if (items.Length == 0 || !(totalWeight > 0d))
+            if (count == 0 || !(totalWeight > 0d))
             {
                 item = default;
                 return false;
@@ -56,7 +56,7 @@ namespace PJDev.DevelopKit.Framework.RandomSystem.Runtime
             random ??= RandomProvider.Shared;
             double target = random.NextDouble() * totalWeight;
             int low = 0;
-            int high = cumulativeWeights.Length - 1;
+            int high = count - 1;
             while (low < high)
             {
                 int middle = low + ((high - low) >> 1);
@@ -74,5 +74,20 @@ namespace PJDev.DevelopKit.Framework.RandomSystem.Runtime
             TryPick(out T item, random)
                 ? item
                 : throw new InvalidOperationException("The weighted table has no selectable items.");
+
+        private void EnsureCapacity(int capacity)
+        {
+            if (items.Length >= capacity)
+                return;
+
+            items = new T[capacity];
+            cumulativeWeights = new double[capacity];
+        }
+
+        private void ClearUnusedItems()
+        {
+            if (count < items.Length)
+                Array.Clear(items, count, items.Length - count);
+        }
     }
 }

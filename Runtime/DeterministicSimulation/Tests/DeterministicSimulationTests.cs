@@ -1,5 +1,4 @@
-using System;
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using PJDev.DevelopKit.Framework.DeterministicSimulation.Runtime;
 
 namespace PJDev.DevelopKit.Framework.DeterministicSimulation.Tests
@@ -12,7 +11,6 @@ namespace PJDev.DevelopKit.Framework.DeterministicSimulation.Tests
             Fixed64 a = Fixed64.FromInt(3) + Fixed64.Half;
             Fixed64 b = Fixed64.FromInt(2);
             Fixed64 result = a * b;
-
             Assert.AreEqual(7L, result.ToIntFloor());
         }
 
@@ -36,8 +34,8 @@ namespace PJDev.DevelopKit.Framework.DeterministicSimulation.Tests
         [Test]
         public void SameSeed_ProducesSameSequence()
         {
-            DetRandom first = new DetRandom(12345);
-            DetRandom second = new DetRandom(12345);
+            DetRandom first = new(12345);
+            DetRandom second = new(12345);
 
             for (int i = 0; i < 32; i++)
                 Assert.AreEqual(first.NextUInt(), second.NextUInt());
@@ -46,8 +44,8 @@ namespace PJDev.DevelopKit.Framework.DeterministicSimulation.Tests
         [Test]
         public void DifferentSeed_ProducesDifferentSequence()
         {
-            DetRandom first = new DetRandom(1);
-            DetRandom second = new DetRandom(2);
+            DetRandom first = new(1);
+            DetRandom second = new(2);
 
             bool anyDifferent = false;
             for (int i = 0; i < 8; i++)
@@ -72,14 +70,8 @@ namespace PJDev.DevelopKit.Framework.DeterministicSimulation.Tests
             public int Value;
 
             public void OnSimulationReset(DeterministicSimulator simulation) => Value = 0;
-
-            public void BeforeTick(DeterministicSimulator simulation)
-            {
-            }
-
-            public void SimulateTick(DeterministicSimulator simulation)
-            {
-            }
+            public void BeforeTick(DeterministicSimulator simulation) { }
+            public void SimulateTick(DeterministicSimulator simulation) { }
         }
 
         private sealed class CommandSystem : ISimulationSystem
@@ -87,12 +79,42 @@ namespace PJDev.DevelopKit.Framework.DeterministicSimulation.Tests
             public int Value;
 
             public void OnSimulationReset(DeterministicSimulator simulation) => Value = 0;
+            public void BeforeTick(DeterministicSimulator simulation) { }
+            public void SimulateTick(DeterministicSimulator simulation) => Value += simulation.Random.NextInt(1, 4);
+        }
+
+        private sealed class CountingSystem : ISimulationSystem
+        {
+            public int BeforeCount;
+            public int TickCount;
+
+            public void OnSimulationReset(DeterministicSimulator simulation) { }
+            public void BeforeTick(DeterministicSimulator simulation) => BeforeCount++;
+            public void SimulateTick(DeterministicSimulator simulation) => TickCount++;
+        }
+
+        private sealed class SwapSystem : ISimulationSystem
+        {
+            private readonly ISimulationSystem replacement;
+            private bool swapped;
+
+            public SwapSystem(ISimulationSystem replacement) => this.replacement = replacement;
+
+            public int TickCount { get; private set; }
+
+            public void OnSimulationReset(DeterministicSimulator simulation) { }
 
             public void BeforeTick(DeterministicSimulator simulation)
             {
+                if (swapped)
+                    return;
+
+                swapped = true;
+                simulation.Unregister(this);
+                simulation.Register(replacement);
             }
 
-            public void SimulateTick(DeterministicSimulator simulation) => Value += simulation.Random.NextInt(1, 4);
+            public void SimulateTick(DeterministicSimulator simulation) => TickCount++;
         }
 
         [Test]
@@ -100,7 +122,6 @@ namespace PJDev.DevelopKit.Framework.DeterministicSimulation.Tests
         {
             ulong hashA = RunSimulation(999, 120);
             ulong hashB = RunSimulation(999, 120);
-
             Assert.AreEqual(hashA, hashB);
         }
 
@@ -121,6 +142,42 @@ namespace PJDev.DevelopKit.Framework.DeterministicSimulation.Tests
 
             simulation.Step(queue, command => counter.Value += command.Delta);
             Assert.AreEqual(5, counter.Value);
+        }
+
+        [Test]
+        public void SystemChanges_AreAppliedAfterCurrentTick()
+        {
+            CountingSystem replacement = new();
+            SwapSystem current = new(replacement);
+            DeterministicSimulator simulation = new();
+            simulation.Register(current);
+            simulation.Reset();
+
+            simulation.Step();
+
+            Assert.AreEqual(1, current.TickCount);
+            Assert.AreEqual(0, replacement.TickCount);
+            Assert.AreEqual(1, simulation.SystemCount);
+
+            simulation.Step();
+
+            Assert.AreEqual(1, replacement.BeforeCount);
+            Assert.AreEqual(1, replacement.TickCount);
+        }
+
+        [Test]
+        public void ClearFromTick_RemovesOnlyCurrentAndFutureCommands()
+        {
+            SimulationCommandQueue<MoveCommand> queue = new();
+            queue.Enqueue(1, new MoveCommand { Delta = 1 });
+            queue.Enqueue(2, new MoveCommand { Delta = 2 });
+            queue.Enqueue(3, new MoveCommand { Delta = 3 });
+
+            queue.ClearFromTick(2);
+
+            Assert.AreEqual(1, queue.TickCount);
+            Assert.AreEqual(1, queue.GetCommandCount(1));
+            Assert.AreEqual(0, queue.GetCommandCount(2));
         }
 
         private static ulong RunSimulation(ulong seed, int ticks)

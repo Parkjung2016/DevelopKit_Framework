@@ -12,13 +12,11 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         {
             public readonly string Name;
             public readonly string Description;
-            public readonly GameplayTagFlags Flags;
 
             public RegisteredTag(GameplayTagAttribute attribute)
             {
                 Name = attribute.TagName;
                 Description = attribute.Description;
-                Flags = attribute.Flags;
             }
         }
 
@@ -66,7 +64,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             for (int i = 0; i < tags.Length; i++)
             {
                 RegisteredTag tag = tags[i];
-                context.RegisterTag(tag.Name, tag.Description, tag.Flags, this);
+                context.RegisterTag(tag.Name, tag.Description, this);
             }
         }
 

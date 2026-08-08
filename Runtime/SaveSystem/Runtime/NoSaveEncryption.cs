@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 
 namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
 {
-    public sealed class NoSaveEncryption : ISaveEncryption
+    internal sealed class NoSaveEncryption : ISaveEncryption
     {
         public static readonly NoSaveEncryption Instance = new();
 

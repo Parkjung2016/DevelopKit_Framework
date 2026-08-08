@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace PJDev.DevelopKit.Framework.UISystem.Runtime
@@ -108,9 +108,6 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             return fallbackCanvasGroupId;
         }
 
-        public UICanvasGroup GetCanvasGroup(string layerId) =>
-            UICanvasGroupUtility.IdToEnum(GetCanvasGroupId(layerId));
-
         public bool IsScreenLayer(string layerId) =>
             !string.IsNullOrEmpty(layerId) && string.Equals(layerId, screenLayerId, StringComparison.Ordinal);
 
@@ -120,9 +117,6 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             if (layerIdsByGroupId.TryGetValue(groupId, out List<string> groupLayers))
                 buffer.AddRange(groupLayers);
         }
-
-        public void GetLayerIdsInGroup(UICanvasGroup group, List<string> buffer) =>
-            GetLayerIdsInGroup(UICanvasGroupUtility.EnumToId(group), buffer);
 
         private void EnsureCanvasGroupExists(string groupId)
         {

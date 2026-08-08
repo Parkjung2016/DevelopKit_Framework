@@ -1,4 +1,4 @@
-using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
+﻿using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
@@ -9,7 +9,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         void OnUnequipped(int equipSlotIndex, in ItemStack stack, in ItemDefinition definition);
     }
 
-    public sealed class NullEquipmentEffectApplier : IEquipmentEffectApplier
+    internal sealed class NullEquipmentEffectApplier : IEquipmentEffectApplier
     {
         public static readonly NullEquipmentEffectApplier Instance = new();
 

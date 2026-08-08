@@ -1,4 +1,4 @@
-using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
+﻿using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 using PJDev.DevelopKit.Framework.SocketSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
@@ -7,7 +7,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 
     public delegate void EquipmentVisualSpawnHandler(
         in EquipmentVisualSpawnRequest request,
-        EquipmentVisualSpawnCompletedHandler OnSpawnCompleted);
+        EquipmentVisualSpawnCompletedHandler onCompleted);
 
     public delegate void EquipmentVisualReleaseHandler(ISocketItem socketItem);
 

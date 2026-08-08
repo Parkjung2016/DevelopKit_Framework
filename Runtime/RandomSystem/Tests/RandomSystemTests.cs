@@ -105,6 +105,8 @@ namespace PJDev.DevelopKit.Framework.RandomSystem.Runtime.Tests
             };
             var table = new WeightedTable<WeightedValue>(entries, static item => item.Weight);
 
+            Assert.AreEqual(1, table.Count);
+
             for (int i = 0; i < 20; i++)
                 Assert.AreEqual("Always", table.Pick(new RandomGenerator((ulong)i + 1)).Name);
         }

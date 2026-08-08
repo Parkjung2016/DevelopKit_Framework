@@ -13,7 +13,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
       GameplayTagRegistrationContext context = new();
       TestGameplayTagSource source = new("TestSource");
 
-      context.RegisterTag("A.B.C", "leaf", GameplayTagFlags.None, source);
+      context.RegisterTag("A.B.C", "leaf", source);
       GameplayTagDefinition[] definitions = context.GenerateDefinitions();
 
       Assert.IsTrue(definitions.Any(definition => definition.TagName == "A"));
@@ -27,7 +27,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
       GameplayTagRegistrationContext context = new();
       TestGameplayTagSource source = new("TestSource");
 
-      context.RegisterTag("bad..tag", null, GameplayTagFlags.None, source);
+      context.RegisterTag("bad..tag", null, source);
       GameplayTagDefinition[] definitions = context.GenerateDefinitions();
 
       Assert.IsTrue(context.GetRegistrationErrors().Any());
@@ -41,8 +41,8 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
       TestGameplayTagSource sourceA = new("A");
       TestGameplayTagSource sourceB = new("B");
 
-      Assert.IsTrue(context.RegisterTag("Tag.One", "first", GameplayTagFlags.None, sourceA));
-      Assert.IsFalse(context.RegisterTag("Tag.One", "duplicate", GameplayTagFlags.None, sourceB));
+      Assert.IsTrue(context.RegisterTag("Tag.One", "first", sourceA));
+      Assert.IsFalse(context.RegisterTag("Tag.One", "duplicate", sourceB));
 
       GameplayTagDefinition[] definitions = context.GenerateDefinitions();
       GameplayTagDefinition definition = definitions.First(def => def.TagName == "Tag.One");
@@ -59,8 +59,8 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests
       TestGameplayTagSource parentSource = new("Parent");
       TestGameplayTagSource childSource = new("Child");
 
-      context.RegisterTag("Tag", null, GameplayTagFlags.None, parentSource);
-      context.RegisterTag("Tag.Child", null, GameplayTagFlags.None, childSource);
+      context.RegisterTag("Tag", null, parentSource);
+      context.RegisterTag("Tag.Child", null, childSource);
 
       GameplayTagDefinition[] definitions = context.GenerateDefinitions();
       GameplayTagDefinition parent = definitions.First(def => def.TagName == "Tag");

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
@@ -34,7 +34,6 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         public Canvas GetCanvas(string groupId) =>
             canvasesByGroupId.TryGetValue(groupId, out Canvas canvas) ? canvas : null;
 
-        public Canvas GetCanvas(UICanvasGroup group) => GetCanvas(UICanvasGroupUtility.EnumToId(group));
 
         public void EnsureDefaults(UILayerRegistry registry)
         {
@@ -86,8 +85,6 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 raycaster.enabled = enabled;
         }
 
-        public void SetRaycasterEnabled(UICanvasGroup group, bool enabled) =>
-            SetRaycasterEnabled(UICanvasGroupUtility.EnumToId(group), enabled);
 
         private void EnsureGroupCanvas(string groupId, string canvasName, int sortingOrder)
         {

@@ -1,4 +1,4 @@
-namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
+﻿namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
     public sealed class InventoryDataProvider : IInventoryDataProvider
     {
@@ -15,14 +15,5 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
             RecipeDatabase = recipeDatabase ?? NullRecipeDatabase.Instance;
             LootTableDatabase = lootTableDatabase ?? NullLootTableDatabase.Instance;
         }
-
-        public static InventoryDataProvider FromItems(IItemDatabase itemDatabase) =>
-            new(itemDatabase);
-
-        public static InventoryDataProvider FromCatalog(
-            IItemCatalog itemCatalog,
-            IRecipeDatabase recipeDatabase = null,
-            ILootTableDatabase lootTableDatabase = null) =>
-            new(itemCatalog, recipeDatabase, lootTableDatabase);
     }
 }

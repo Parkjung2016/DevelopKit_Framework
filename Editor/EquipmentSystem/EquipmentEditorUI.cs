@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.Editors.InventorySystem;
 using PJDev.DevelopKit.Framework.EquipmentSystem.Runtime;
@@ -452,7 +452,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
                 $"var equipContainer = {assetName}.CreateContainer();\n" +
                 $"inventoryGroup.RegisterContainer(equipContainer);\n\n" +
                 $"// EquipmentSystem 연결\n" +
-                $"objectEquipment.Init(owner, inventorySystem, {assetName}, effectApplier);\n\n" +
+                $"objectEquipment.Initialize(inventorySystem, {assetName}, effectApplier);\n\n" +
                 $"// 인벤 → 장비 슬롯 장착\n" +
                 $"objectEquipment.TryEquipFromInventory(bagSlotIndex, equipSlotIndex);";
 
@@ -477,7 +477,7 @@ namespace PJDev.DevelopKit.Framework.Editors.EquipmentSystem
             section.Add(new Label(
                 "1. CreateContainer() — 이 Setup으로 장비 컨테이너 생성\n" +
                 "2. RegisterContainer() — InventoryGroup에 등록\n" +
-                "3. ObjectEquipmentSystem.Init() — 장착/해제 연결")
+                "3. ObjectEquipmentSystem.Initialize() — 장착/해제 연결")
             {
                 style = { fontSize = 11, opacity = 0.85f, whiteSpace = WhiteSpace.Normal, marginBottom = 6 }
             });

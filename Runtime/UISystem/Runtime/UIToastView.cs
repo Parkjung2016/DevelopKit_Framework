@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 #if UNITASK_INSTALLED
 using System.Threading;
 using Cysharp.Threading.Tasks;
@@ -7,9 +7,10 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 {
+    /// <summary>Toast 요청을 대기열로 관리하고 항목 인스턴스를 재사용해 표시하는 기본 View입니다.</summary>
     public class UIToastView : UIViewBase
     {
-        private sealed class ActiveToast
+        private struct ActiveToast
         {
             public UIToastItem Item;
             public ToastRequest Request;
@@ -34,7 +35,9 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         private readonly Stack<UIToastItem> itemPool = new();
         private bool closeRequested;
 
+        /// <summary>표시를 기다리는 Toast 개수입니다.</summary>
         public int PendingCount => pending.Count;
+        /// <summary>현재 화면에 표시 중인 Toast 개수입니다.</summary>
         public int VisibleCount => active.Count;
 
         protected override string ResolveDefaultLayerId() => UILayers.System;
@@ -76,7 +79,10 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 toast.Elapsed += deltaTime;
                 toast.Item.SetAlpha(EvaluateAlpha(toast));
                 if (toast.Elapsed < toast.Duration)
+                {
+                    active[i] = toast;
                     continue;
+                }
 
                 Release(toast.Item);
                 active.RemoveAt(i);
@@ -86,6 +92,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             CloseWhenEmpty();
         }
 
+        /// <summary>Toast 표시를 요청합니다. 메시지나 프리팹이 유효하지 않으면 false를 반환합니다.</summary>
         public virtual bool Enqueue(in ToastRequest request)
         {
             if (string.IsNullOrWhiteSpace(request.Message) || itemPrefab == null)
@@ -114,12 +121,14 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             base.OnBeforeHidden();
         }
 
+        /// <summary>Pool에 사용할 Toast 항목을 만듭니다. 다른 생성 방식이 필요하면 재정의합니다.</summary>
         protected virtual UIToastItem CreateItem()
         {
             RectTransform parent = container != null ? container : transform as RectTransform;
             return Instantiate(itemPrefab, parent);
         }
 
+        /// <summary>Toast 타입에 맞는 스타일을 반환합니다. 등록된 스타일이 없으면 기본 색상을 사용합니다.</summary>
         protected virtual UIToastStyle ResolveStyle(ToastType type)
         {
             for (int i = 0; i < styles.Count; i++)
@@ -202,6 +211,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
                 toast.Elapsed = 0f;
                 toast.Duration = request.Duration > 0f ? request.Duration : defaultDuration;
+                active[i] = toast;
                 return true;
             }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using PJDev.DevelopKit.Framework.SocketSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
@@ -14,11 +14,11 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             EquipmentVisualReleaseHandler OnRelease = null)
         {
             this.OnSpawn = OnSpawn ?? throw new ArgumentNullException(nameof(OnSpawn));
-            this.OnRelease = OnRelease ?? SocketItemUtility.ReleaseDestroy;
+            this.OnRelease = OnRelease ?? SocketItemUtility.Destroy;
         }
 
-        public void Spawn(in EquipmentVisualSpawnRequest request, EquipmentVisualSpawnCompletedHandler OnSpawnCompleted) =>
-            OnSpawn(request, OnSpawnCompleted);
+        public void Spawn(in EquipmentVisualSpawnRequest request, EquipmentVisualSpawnCompletedHandler onCompleted) =>
+            OnSpawn(request, onCompleted);
 
         public void Release(ISocketItem socketItem) => OnRelease(socketItem);
     }

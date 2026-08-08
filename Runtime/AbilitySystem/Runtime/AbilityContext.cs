@@ -8,7 +8,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         public AbilityContext(
             ObjectAbilitySystem system,
             AbilitySO ability,
-            IAbilitySystemOwner owner,
+            UnityEngine.Object owner,
             StatCollection sourceStats,
             StatCollection targetStats)
         {
@@ -21,7 +21,9 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 
         public ObjectAbilitySystem System { get; }
         public AbilitySO Ability { get; }
-        public IAbilitySystemOwner Owner { get; }
+        public UnityEngine.Object Owner { get; }
+
+        public T GetOwner<T>() where T : UnityEngine.Object => Owner as T;
         private StatCollection SourceStats { get; }
         private StatCollection TargetStats { get; }
 

@@ -1,105 +1,80 @@
 ﻿# DevelopKit Framework Architecture
 
-Unity SO·Prefab 기반 **레이어드 OOP**.
+Framework는 기능별 asmdef로 나뉜 Unity 패키지이며, BasicTemplate은 여러 시스템이 함께 쓰는 작은 기반 기능을 제공합니다.
 
-## 레이어 (의존 방향 ↓)
+## 설계 원칙
 
-```
-Shared        GlobalRegistry, FrameworkInitOptions     (의존 없음)
-    ↑
-Domain        InventoryGroup, EquipmentSystem, StatCollection …  (Pure C#)
-    ↑
-Catalog       ItemCatalog, StatCatalog, ItemInstanceCatalog …   (GlobalRegistry<T>)
-    ↑
-Presentation  ObjectInventorySystem, ObjectEquipmentSystem, ObjectStatSystem, ObjectAbilitySystem …
-    ↑
-Game          Player : MonoBehaviour, IInventoryOwner …
-```
+- 런타임 도메인 코드는 가능한 한 Unity 오브젝트와 분리합니다.
+- MonoBehaviour 진입점은 Object*System 이름을 사용합니다.
+- 초기화 메서드는 Initialize, 정리는 Clear 또는 Shutdown으로 통일합니다.
+- 조회는 Try*, 상태는 Is*, 변경 명령은 동사로 시작합니다.
+- 반복 실행 경로에서는 임시 배열과 LINQ 사용을 피하고 재사용 버퍼를 사용합니다.
+- 전역 데이터가 필요한 시스템만 GlobalRegistry<T> 기반 Catalog를 사용합니다.
+- 확장 지점은 작은 인터페이스로 제공하고 기본 구현은 내부에 숨깁니다.
 
-각 모듈은 **자기 Init만** 책임집니다. Host/Orchestrator 레이어는 두지 않습니다.
+## 의존 방향
 
-## 코드 따라가기
+~~~text
+BasicTemplate
+  -> Shared
+    -> Inventory / Stat / GameplayTag / Random / Save / UI
+      -> Equipment / Ability / NotificationDot
+        -> AnimMontage 및 게임 코드
+~~~
 
-### 1. 세션 시작 (씬당 1회)
+구체적인 의존은 각 asmdef가 결정합니다. 상위 시스템이 하위 시스템을 참조하며, 반대 방향 참조는 두지 않습니다.
 
-```csharp
+## 일반적인 초기화
+
+Inspector에 설정 에셋을 연결한 컴포넌트는 실행 시 자동으로 초기화됩니다. 게임에서 구현을 주입하거나 순서를 직접 관리해야 할 때만 명시적으로 호출합니다.
+
+~~~csharp
+inventory.Initialize(inventorySetup, router, itemFactory);
+equipment.Initialize(inventory, equipmentSetup, effectApplier);
+stats.Initialize(statCatalog, statOverrides);
+abilities.Initialize(owner);
+~~~
+
+각 컴포넌트의 IsInitialized로 준비 여부를 확인할 수 있습니다.
+
+## Catalog
+
+Catalog는 프로젝트 전체에서 공유해야 하는 정의 데이터만 보관합니다.
+
+~~~csharp
 inventoryDatabaseSetup.RegisterGlobals();
 StatCatalog.Set(statDatabase);
-```
+~~~
 
-각 모듈은 필요한 Catalog만 직접 등록합니다. 통합 Bootstrap 에셋은 사용하지 않습니다.
+테스트나 세션 종료 시에는 사용한 Catalog의 Clear()를 호출합니다. Domain Reload가 꺼진 환경은 각 모듈의 정리 코드가 static 상태를 초기화합니다.
 
-### 2. 액터 Init (GameObject당, 순서만 지키면 됨)
+## 런타임 데이터
 
-```csharp
-inventory.Init(this, inventorySetup, router);
-equipment.Init(this, inventory);
-stat.Init();
-ability.Init(this);
-```
+| 컴포넌트 | 런타임 데이터 |
+|---|---|
+| ObjectInventorySystem | Group, PrimaryContainer |
+| ObjectEquipmentSystem | Equipment, ReadOnlyEquipment |
+| ObjectStatSystem | Stats |
+| ObjectAbilitySystem | 등록된 Ability 인스턴스와 입력 연결 |
+| ObjectAnimMontagePlayer | 현재 Montage, 재생 시간, 이벤트 |
 
-### 3. Domain API
+ScriptableObject는 설정과 정의에 사용합니다. 플레이 중 변경되는 값은 일반 C# 객체나 컴포넌트가 소유합니다.
 
-| MonoBehaviour (`Object*`) | Domain |
-|---------------------------|--------|
-| `ObjectInventorySystem` | `.Group` |
-| `ObjectEquipmentSystem` | `.Equipment` |
-| `ObjectStatSystem` | `.Stats` |
-| `ObjectAbilitySystem` | (AbilitySO 런타임 관리) |
+## 확장 기준
 
-## 네이밍
+- 아이템 생성: IItemInstanceFactory
+- 장비 효과: IEquipmentEffectApplier
+- Ability 입력: AbilityInputBridgeSO
+- Root Motion 적용: IMontageRootMotionController
+- UI View: UIViewBase
+- 알림닷 View: INotificationDotView
+- 저장 직렬화/암호화/경로: SaveSystem의 각 인터페이스
 
-| 패턴 | 의미 | 예 |
-|------|------|-----|
-| `Object*` | MonoBehaviour 어댑터 | `ObjectInventorySystem`, `ObjectEquipmentSystem` |
-| (없음) | Pure C# Domain | `InventoryGroup`, `EquipmentSystem` |
-| `*Catalog` | `GlobalRegistry<T>` 전역 DB | `ItemCatalog`, `StatCatalog` |
+새 구현은 기존 시스템을 수정하기보다 해당 인터페이스를 구현해 연결하는 방식을 우선합니다.
 
-모든 Unity 진입점 MB는 **`Object*` 접두사**를 사용합니다.
+## 성능 기준
 
-## Catalog 등록
-
-| Catalog | 등록 |
-|---------|------|
-| Item / Recipe / Loot | `InventoryDatabaseSetupSO.RegisterGlobals()` |
-| Stat | `StatDatabaseSO` → `StatCatalog.Set` |
-| ItemInstance | `ObjectInventorySystem.Init` → `ItemInstanceCatalog.Configure` |
-
-테스트 정리: 사용한 Catalog의 `Clear()`를 직접 호출합니다. Play Mode 종료 시에는 모듈별로 자동 정리됩니다.
-
-## Static 정리 (Domain Reload 비활성화)
-
-| Unity 버전 | Catalog / Registry | GameplayTag / IdGenerator |
-|------------|-------------------|---------------------------|
-| **6000.5+** | `[AutoStaticsCleanup]` on `GlobalRegistry<T>`, `*Catalog`, … | 각 타입의 `[AutoStaticsCleanup]` |
-| **6000.5 미만 (Editor)** | 각 모듈이 `FrameworkPlayModeCleanup`에 자체 `Clear()` 등록 | 동일 |
-| **6000.5 미만 (Player)** | `Application.quitting` → `FrameworkPlayModeCleanup.RunAll()` | 동일 |
-
-Domain Reload **켜짐**: 어셈블리 리로드로 static 초기화 (별도 처리 불필요).
-
-테스트에서는 `ItemCatalog.Clear()`, `RecipeCatalog.Clear()`, `LootTableCatalog.Clear()`, `ItemInstanceCatalog.Clear()`, `StatCatalog.Clear()` 중 사용한 항목을 명시적으로 정리합니다.
-
-## InitOptions
-
-Catalog를 먼저 등록한 뒤 Init 호출 시:
-
-```csharp
-inventory.Init(owner, initOptions: FrameworkInitOptions.SkipGlobalCatalogs);
-```
-
-## 모듈 의존
-
-```
-Shared (leaf)
-Inventory, Stat, DeterministicSimulation → Shared
-Equipment → Inventory + Socket
-Ability → GameplayTag
-AnimMontage → (standalone)
-```
-
-## SOLID (요약)
-
-- Domain은 SO/Unity 모름
-- 확장은 Interface (`IItemInstanceFactory`, `IEquipmentEffectApplier`)
-- Catalog는 `GlobalRegistry<T>` 한 패턴
-- Init 순서는 게임 코드(또는 문서)에서 관리 — 프레임워크 Host 없음
+- 매 프레임 호출되는 코드는 재사용 컬렉션을 소유합니다.
+- 에디터 검색과 리플렉션 결과는 캐시하고, 데이터 변경 시에만 무효화합니다.
+- 풀링은 BasicTemplate.PoolSystem을 공통 진입점으로 사용합니다.
+- 결정론 코드에서는 고정 틱, 고정 순서, 명시적 난수 소스를 사용합니다.

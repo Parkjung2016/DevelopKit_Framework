@@ -1,4 +1,4 @@
-namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
+﻿namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
     /// <summary>DT_ 테이블 등에서 읽어온 장비 비주얼 1행입니다.</summary>
     public struct EquipmentVisualRecord
@@ -14,7 +14,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
         bool TryGetByItemId(int itemId, out EquipmentVisualRecord record);
     }
 
-    public sealed class NullEquipmentVisualDataSource : IEquipmentVisualDataSource
+    internal sealed class NullEquipmentVisualDataSource : IEquipmentVisualDataSource
     {
         public static readonly NullEquipmentVisualDataSource Instance = new();
 

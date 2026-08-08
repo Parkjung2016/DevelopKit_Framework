@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -335,17 +335,28 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
         }
 
-        private static AudioClip GetAudioClipFromNotify(AnimNotify notify)
+        private AudioClip GetAudioClipFromNotify(AnimNotify notify)
         {
             if (notify == null)
                 return null;
 
-            FieldInfo field = notify.GetType().GetField("clip", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            FieldInfo field = GetAudioClipField(notify.GetType());
             return field != null && field.FieldType == typeof(AudioClip)
                 ? field.GetValue(notify) as AudioClip
                 : null;
         }
 
+        private FieldInfo GetAudioClipField(System.Type notifyType)
+        {
+            if (audioClipFieldCache.TryGetValue(notifyType, out FieldInfo field))
+                return field;
+
+            field = notifyType.GetField(
+                "clip",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            audioClipFieldCache.Add(notifyType, field);
+            return field;
+        }
         private float[] GetAudioWaveformPeaks(AudioClip clip)
         {
             if (audioWaveformCache.TryGetValue(clip, out float[] peaks))
@@ -513,12 +524,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
         }
 
-        private static AudioClip GetAudioClipFromNotifyState(AnimNotifyState notifyState)
+        private AudioClip GetAudioClipFromNotifyState(AnimNotifyState notifyState)
         {
             if (notifyState == null)
                 return null;
 
-            FieldInfo field = notifyState.GetType().GetField("clip", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            FieldInfo field = GetAudioClipField(notifyState.GetType());
             return field != null && field.FieldType == typeof(AudioClip)
                 ? field.GetValue(notifyState) as AudioClip
                 : null;

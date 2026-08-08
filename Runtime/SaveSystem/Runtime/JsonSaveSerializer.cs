@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Text;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
 {
-    /// <summary>Unity JsonUtility를 사용하는 기본 세이브 직렬화 구현입니다.</summary>
+    /// <summary>Unity JsonUtility를 사용하는 기본 저장 직렬화기입니다.</summary>
     public sealed class JsonSaveSerializer : ISaveSerializer
     {
         public static readonly JsonSaveSerializer Instance = new();

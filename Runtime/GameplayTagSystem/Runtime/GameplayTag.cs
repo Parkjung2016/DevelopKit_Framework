@@ -75,8 +75,6 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             }
         }
 
-        public readonly GameplayTagFlags Flags => Definition.Flags;
-
         /// <summary>태그의 전체 이름입니다. None은 빈 문자열입니다.</summary>
         public readonly string Name => serializedTagName ?? string.Empty;
 
@@ -133,12 +131,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
         public readonly override int GetHashCode()
         {
-            if (IsNone)
-                return StringComparer.Ordinal.GetHashCode(string.Empty);
-
-            return definition != null
-                ? definition.GetHashCode()
-                : StringComparer.Ordinal.GetHashCode(Name);
+            return StringComparer.Ordinal.GetHashCode(Name);
         }
 
         public readonly override string ToString()

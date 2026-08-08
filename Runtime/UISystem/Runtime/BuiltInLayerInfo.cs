@@ -1,4 +1,4 @@
-namespace PJDev.DevelopKit.Framework.UISystem.Runtime
+﻿namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 {
     /// <summary>프레임워크 기본 레이어 한 항목입니다. <see cref="UISystemBuiltIn"/>에서 조회합니다.</summary>
     public readonly struct BuiltInLayerInfo
@@ -26,8 +26,6 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         public int SortOrder { get; }
 
         public string CanvasGroupId { get; }
-
-        public UICanvasGroup CanvasGroup => UICanvasGroupUtility.IdToEnum(CanvasGroupId);
 
         public bool UseScreenStack { get; }
 

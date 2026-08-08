@@ -4,6 +4,7 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
+    /// <summary>재생 시간의 변화를 기준으로 Notify와 NotifyState 콜백을 정확히 한 번씩 전달합니다.</summary>
     public sealed class MontageNotifyDispatcher
     {
         private readonly List<AnimNotifyStatePlacement> activeStates = new();
@@ -13,21 +14,18 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private readonly List<AnimNotifyPlacement> notifyBuffer = new();
         private readonly Dictionary<AnimNotifyPlacement, float> lastNotifyTimes = new();
 
+        /// <summary>Notify가 기본 처리까지 완료된 뒤 발생합니다. Handler가 처리한 Notify에는 호출되지 않습니다.</summary>
         public event Action<AnimNotify, AnimNotifyContext> OnNotify;
 
-        // 이전 API와의 호환을 위해 유지합니다.
-        public event Action<AnimNotify, AnimNotifyContext> NotifyFired
-        {
-            add => OnNotify += value;
-            remove => OnNotify -= value;
-        }
 
+        /// <summary>현재 활성 상태와 중복 실행 기록을 모두 초기화합니다.</summary>
         public void Reset()
         {
             activeStates.Clear();
             lastNotifyTimes.Clear();
         }
 
+        /// <summary>Montage가 중단될 때 실행 중인 모든 NotifyState에 OnEnd를 전달합니다.</summary>
         public void EndActiveStates(GameObject owner, Animator animator, AnimMontageSO montage, float montageTime, float deltaTime = 0f)
         {
             if (owner == null || activeStates.Count == 0)
@@ -51,6 +49,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             Reset();
         }
 
+        /// <summary>이전 재생 시각부터 현재 시각 사이에 발생한 Notify 이벤트를 전달합니다.</summary>
         public void Dispatch(MontagePlaybackState playback, GameObject owner, Animator animator, IAnimNotifyHandler handler)
         {
             if (playback?.Montage == null || owner == null)
@@ -118,6 +117,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             activeStates.AddRange(tickBuffer);
         }
 
+        /// <summary>수동 탐색 위치에 맞춰 활성 NotifyState만 복원하며 Begin, Tick 콜백은 실행하지 않습니다.</summary>
         public void ScrubTo(MontagePlaybackState playback, GameObject owner, Animator animator)
         {
             EndActiveStates(owner, animator, playback?.Montage, playback?.CurrentTime ?? 0f);

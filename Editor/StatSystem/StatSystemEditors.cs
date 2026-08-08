@@ -144,13 +144,13 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
 
         private static void DrawValidation(StatDatabaseSO database)
         {
-            StatSO[] stats = database.Stats;
+            IReadOnlyList<StatSO> stats = database.Stats;
             var names = new HashSet<string>(System.StringComparer.Ordinal);
             int missingCount = 0;
             int invalidNameCount = 0;
             int duplicateCount = 0;
 
-            for (int i = 0; i < stats.Length; i++)
+            for (int i = 0; i < stats.Count; i++)
             {
                 StatSO stat = stats[i];
                 if (stat == null)
@@ -172,7 +172,7 @@ namespace PJDev.DevelopKit.Framework.Editors.StatSystem
             EditorGUILayout.Space(6f);
             EditorGUILayout.LabelField(
                 "Catalog Summary",
-                $"{database.Definitions.Count} valid / {stats.Length} entries");
+                $"{database.Definitions.Count} valid / {stats.Count} entries");
 
             if (missingCount > 0)
                 EditorGUILayout.HelpBox($"{missingCount} missing asset reference(s).", MessageType.Warning);

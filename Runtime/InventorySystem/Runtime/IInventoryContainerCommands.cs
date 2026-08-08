@@ -1,8 +1,6 @@
-namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
+﻿namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
-    /// <summary>
-    /// 인벤토리 컨테이너의 상태를 변경하는 명령 계약입니다.
-    /// </summary>
+    /// <summary>인벤토리 상태를 변경하는 명령입니다.</summary>
     public interface IInventoryContainerCommands
     {
         InventoryChangeResult TryAddItem(int itemId, int count);

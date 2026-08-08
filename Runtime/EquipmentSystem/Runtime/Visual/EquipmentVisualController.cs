@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 using PJDev.DevelopKit.Framework.SocketSystem.Runtime;
@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
-    /// <summary>슬롯별 장비 비주얼의 생성, 교체, 해제를 관리합니다.</summary>
+    /// <summary>장비 슬롯별 비주얼 생성, 교체, 해제를 관리합니다.</summary>
     public sealed class EquipmentVisualController : IDisposable
     {
         private readonly ObjectSocketSystem socketSystem;

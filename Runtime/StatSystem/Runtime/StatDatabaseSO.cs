@@ -14,7 +14,7 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
         private readonly Dictionary<StatId, StatDefinition> definitionsById = new();
         private readonly Dictionary<StatId, StatSO> assetsById = new();
 
-        public StatSO[] Stats => stats;
+        public IReadOnlyList<StatSO> Stats => stats ?? Array.Empty<StatSO>();
         public IReadOnlyList<StatDefinition> Definitions => definitions;
 
         private void OnEnable() => RebuildCache();

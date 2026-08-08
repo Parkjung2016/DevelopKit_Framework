@@ -6,24 +6,28 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
     [DefaultExecutionOrder(-99999)]
     public sealed class ObjectGameplayTagContainer : MonoBehaviour
     {
-        /// <summary>이 오브젝트가 보유한 런타임 태그 컨테이너입니다.</summary>
-        public GameplayTagCountContainer Container => container;
-
-        [SerializeField]
-        private GameplayTagContainer persistentTags;
+        [SerializeField] private GameplayTagContainer persistentTags;
 
         private GameplayTagCountContainer container;
 
+        /// <summary>이 오브젝트가 보유한 런타임 태그 컨테이너입니다.</summary>
+        public GameplayTagCountContainer Container => container ??= CreateContainer();
+
         private void Awake()
         {
-            container = new GameplayTagCountContainer();
-            if (persistentTags != null)
-                container.AddTags(persistentTags);
+            _ = Container;
         }
 
-        public static implicit operator GameplayTagCountContainer(ObjectGameplayTagContainer component)
+        public static implicit operator GameplayTagCountContainer(ObjectGameplayTagContainer component) =>
+            component?.Container;
+
+        private GameplayTagCountContainer CreateContainer()
         {
-            return component?.Container;
+            var result = new GameplayTagCountContainer();
+            if (persistentTags != null)
+                result.AddTags(persistentTags);
+
+            return result;
         }
     }
 }

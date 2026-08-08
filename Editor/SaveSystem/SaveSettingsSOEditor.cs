@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using PJDev.DevelopKit.Framework.SaveSystem.Runtime;
 using UnityEditor;
 using UnityEditor.Callbacks;
@@ -29,9 +29,7 @@ namespace PJDev.DevelopKit.Framework.Editors.SaveSystem
             EditorGUILayout.LabelField("Save Location", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(
                 folderName,
-                new GUIContent(
-                    "Folder Name",
-                    "Application.persistentDataPath 아래에 생성할 폴더 이름입니다."));
+                new GUIContent("Save Folder", "persistentDataPath 아래에 만들 폴더 이름입니다."));
             EditorGUILayout.PropertyField(
                 fileExtension,
                 new GUIContent("File Extension", "저장 파일에 사용할 확장자입니다."));
@@ -40,27 +38,10 @@ namespace PJDev.DevelopKit.Framework.Editors.SaveSystem
             EditorGUILayout.LabelField("Encryption", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(
                 encryptionEnabled,
-                new GUIContent("Enable Encryption", "저장 파일을 암호화합니다."));
+                new GUIContent("Encrypt Save Files", "저장 파일을 암호화합니다."));
 
             if (encryptionEnabled.boolValue)
-            {
-                EditorGUI.BeginChangeCheck();
-                string password = EditorGUILayout.PasswordField(
-                    new GUIContent(
-                        "Encryption Password",
-                        "프로젝트 전용 비밀번호입니다. 배포 후 변경하면 기존 저장 파일을 열 수 없습니다."),
-                    encryptionPassword.stringValue);
-
-                if (EditorGUI.EndChangeCheck())
-                    encryptionPassword.stringValue = password;
-
-                if (string.IsNullOrWhiteSpace(encryptionPassword.stringValue))
-                {
-                    EditorGUILayout.HelpBox(
-                        "암호화를 사용하려면 Encryption Password를 입력해야 합니다.",
-                        MessageType.Warning);
-                }
-            }
+                DrawPasswordField();
 
             serializedObject.ApplyModifiedProperties();
 
@@ -68,8 +49,28 @@ namespace PJDev.DevelopKit.Framework.Editors.SaveSystem
             DrawResolvedDirectory();
 
             EditorGUILayout.Space(8);
-            if (GUILayout.Button("Open Save Slot Browser", GUILayout.Height(24)))
+            if (GUILayout.Button("Open Save Browser", GUILayout.Height(24)))
                 SaveBrowserWindow.Open((SaveSettingsSO)target);
+        }
+
+        private void DrawPasswordField()
+        {
+            EditorGUI.BeginChangeCheck();
+            string password = EditorGUILayout.PasswordField(
+                new GUIContent(
+                    "Encryption Password",
+                    "배포 후 변경하면 기존 암호화 파일을 열 수 없습니다."),
+                encryptionPassword.stringValue);
+
+            if (EditorGUI.EndChangeCheck())
+                encryptionPassword.stringValue = password;
+
+            if (string.IsNullOrWhiteSpace(encryptionPassword.stringValue))
+            {
+                EditorGUILayout.HelpBox(
+                    "암호화를 사용하려면 비밀번호를 입력하세요.",
+                    MessageType.Warning);
+            }
         }
 
         private void DrawResolvedDirectory()

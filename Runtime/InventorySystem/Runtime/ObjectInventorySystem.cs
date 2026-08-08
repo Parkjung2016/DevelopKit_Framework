@@ -26,10 +26,10 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
         private InventoryGroup group;
         private InventoryContainer primaryContainer;
-        private IInventoryOwner owner;
 
         public InventorySetupSO Setup => setup;
         public InventoryDatabaseSetupSO DatabaseSetup => databaseSetup;
+        public bool IsInitialized => group != null;
         public InventoryGroup Group => group;
         public IItemInstanceStore ItemInstanceStore => group?.ItemInstanceStore;
 
@@ -52,13 +52,12 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
         /// <summary>
         /// 설정 에셋을 사용해 인벤토리 컨테이너와 런타임 서비스를 초기화합니다.
         /// </summary>
-        public void Init(
-            IInventoryOwner owner,
+        public void Initialize(
             InventorySetupSO setupAsset = null,
             IItemContainerRouter router = null,
             IItemInstanceFactory instanceFactory = null,
             IItemInstanceIdGenerator instanceIdGenerator = null,
-            FrameworkInitOptions initOptions = null)
+            bool registerGlobalCatalogs = true)
         {
             InventorySetupSO resolvedSetup = setupAsset ?? setup;
             if (resolvedSetup == null)
@@ -67,12 +66,9 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
                 return;
             }
 
-            FrameworkInitOptions resolvedInit = initOptions ?? FrameworkInitOptions.Default;
-
             setup = resolvedSetup;
-            this.owner = owner;
 
-            if (resolvedInit.RegisterGlobalCatalogs)
+            if (registerGlobalCatalogs)
                 databaseSetup?.RegisterGlobals();
 
             RebuildGroup(resolvedSetup.CreateContainerConfigs(), router);
@@ -109,6 +105,12 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
             container = null;
             return false;
+        }
+
+        private void Awake()
+        {
+            if (setup != null)
+                Initialize();
         }
 
         private void OnDestroy() => DisposeGroup();
@@ -407,7 +409,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 
             if (setup != null)
             {
-                Init(owner);
+                Initialize();
                 return;
             }
 

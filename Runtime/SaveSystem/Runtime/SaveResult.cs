@@ -1,15 +1,18 @@
-namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
+﻿namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
 {
     public readonly struct SaveResult
     {
+        private readonly bool hasResult;
+
         private SaveResult(SaveError error, string slotId, string message)
         {
+            hasResult = true;
             Error = error;
             SlotId = slotId;
             Message = message;
         }
 
-        public bool IsSuccess => Error == SaveError.None;
+        public bool IsSuccess => hasResult && Error == SaveError.None;
         public SaveError Error { get; }
         public string SlotId { get; }
         public string Message { get; }
@@ -26,15 +29,18 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
 
     public readonly struct LoadResult<T>
     {
+        private readonly bool hasResult;
+
         private LoadResult(SaveError error, string slotId, T value, string message)
         {
+            hasResult = true;
             Error = error;
             SlotId = slotId;
             Value = value;
             Message = message;
         }
 
-        public bool IsSuccess => Error == SaveError.None;
+        public bool IsSuccess => hasResult && Error == SaveError.None;
         public SaveError Error { get; }
         public string SlotId { get; }
         public T Value { get; }

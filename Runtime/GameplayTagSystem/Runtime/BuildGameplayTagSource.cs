@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
@@ -23,7 +23,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                 while (reader.BaseStream.Position != reader.BaseStream.Length)
                 {
                     string tagName = reader.ReadString();
-                    context.RegisterTag(tagName, string.Empty, GameplayTagFlags.None, this);
+                    context.RegisterTag(tagName, string.Empty, this);
                 }
             }
             catch (Exception e)

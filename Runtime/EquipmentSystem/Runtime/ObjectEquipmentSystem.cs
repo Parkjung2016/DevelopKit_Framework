@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 using UnityEngine;
@@ -9,94 +9,92 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
     [DisallowMultipleComponent]
     public class ObjectEquipmentSystem : MonoBehaviour
     {
+        [SerializeField] private ObjectInventorySystem inventory;
         [SerializeField] private EquipmentSetupSO setup;
 
         private EquipmentSystem equipment;
-        private ObjectInventorySystem inventorySystem;
-        private IEquipmentOwner owner;
 
+        public ObjectInventorySystem Inventory => inventory;
         public EquipmentSetupSO Setup => setup;
         public EquipmentSystem Equipment => equipment;
         public IReadOnlyEquipment ReadOnlyEquipment => equipment;
-        public IEquipmentOwner Owner => owner;
         public bool IsInitialized => equipment != null;
 
         public event Action<EquipmentChangeEventArgs> OnEquipmentChanged;
 
-        public void Init(
-            IEquipmentOwner owner,
-            ObjectInventorySystem inventory,
+        /// <summary>Inventory와 장비 설정을 연결해 런타임 장비 시스템을 준비합니다.</summary>
+        public void Initialize(
+            ObjectInventorySystem inventorySystem = null,
             EquipmentSetupSO setupAsset = null,
             IEquipmentEffectApplier effectApplier = null)
         {
             ReleaseRuntime();
 
-            ObjectInventorySystem candidateInventory = inventory;
-            EquipmentSetupSO candidateSetup = setupAsset ?? setup;
+            ObjectInventorySystem resolvedInventory = inventorySystem ?? inventory;
+            EquipmentSetupSO resolvedSetup = setupAsset ?? setup;
 
-            if (candidateInventory?.Group == null)
+            if (resolvedInventory == null || !resolvedInventory.IsInitialized)
             {
                 CDebug.LogWarning("ObjectEquipmentSystem : initialized ObjectInventorySystem is required.");
                 return;
             }
 
-            if (candidateSetup == null)
+            if (resolvedSetup == null)
             {
                 CDebug.LogWarning("ObjectEquipmentSystem : EquipmentSetupSO is required.");
                 return;
             }
 
-            if (!candidateInventory.Group.TryGetContainer(candidateSetup.ContainerId, out _))
+            if (!resolvedInventory.Group.TryGetContainer(resolvedSetup.ContainerId, out _))
             {
                 CDebug.LogWarning(
-                    $"ObjectEquipmentSystem : equipment container '{candidateSetup.ContainerId}' was not found.");
+                    $"ObjectEquipmentSystem : equipment container '{resolvedSetup.ContainerId}' was not found.");
                 return;
             }
 
-            var candidateEquipment = new EquipmentSystem(
-                candidateInventory.Group,
-                candidateSetup,
+            var service = new EquipmentSystem(
+                resolvedInventory.Group,
+                resolvedSetup,
                 effectApplier);
-            candidateEquipment.OnEquipmentChanged += HandleEquipmentChanged;
+            service.OnEquipmentChanged += HandleEquipmentChanged;
 
-            this.owner = owner;
-            inventorySystem = candidateInventory;
-            setup = candidateSetup;
-            equipment = candidateEquipment;
+            inventory = resolvedInventory;
+            setup = resolvedSetup;
+            equipment = service;
         }
 
         public void Clear() => ReleaseRuntime();
 
         public InventoryChangeResult TryEquipFromInventory(int inventorySlotIndex, int equipSlotIndex)
         {
-            if (!TryGetRuntime(out EquipmentSystem service, out ObjectInventorySystem inventory))
+            if (!TryGetRuntime(out EquipmentSystem service, out ObjectInventorySystem currentInventory))
                 return CreateNotReadyResult(InventoryChangeType.Move);
 
             return Complete(service.TryEquipFromContainer(
-                inventory.ContainerId,
+                currentInventory.ContainerId,
                 inventorySlotIndex,
                 equipSlotIndex));
         }
 
         public InventoryChangeResult TryUnequipToInventory(int equipSlotIndex, int inventorySlotIndex)
         {
-            if (!TryGetRuntime(out EquipmentSystem service, out ObjectInventorySystem inventory))
+            if (!TryGetRuntime(out EquipmentSystem service, out ObjectInventorySystem currentInventory))
                 return CreateNotReadyResult(InventoryChangeType.Move);
 
             return Complete(service.TryUnequipToContainer(
                 equipSlotIndex,
-                inventory.ContainerId,
+                currentInventory.ContainerId,
                 inventorySlotIndex));
         }
 
         public InventoryChangeResult TryUnequipToFirstInventorySlot(int equipSlotIndex)
         {
-            if (!TryGetRuntime(out EquipmentSystem service, out ObjectInventorySystem inventory))
+            if (!TryGetRuntime(out EquipmentSystem service, out ObjectInventorySystem currentInventory))
                 return CreateNotReadyResult(InventoryChangeType.Move);
 
             return Complete(service.TryUnequipToFirstAvailable(
                 equipSlotIndex,
-                inventory.ContainerId));
+                currentInventory.ContainerId));
         }
 
         public InventoryChangeResult TrySwapEquippedSlots(int equipSlotA, int equipSlotB)
@@ -107,21 +105,27 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             return Complete(service.TrySwapEquippedSlots(equipSlotA, equipSlotB));
         }
 
+        private void Start()
+        {
+            if (inventory != null && setup != null && equipment == null)
+                Initialize();
+        }
+
         private InventoryChangeResult Complete(InventoryChangeResult result)
         {
             if (result.Success)
-                inventorySystem.NotifyChangeResult(result);
+                inventory.NotifyChangeResult(result);
 
             return result;
         }
 
         private bool TryGetRuntime(
             out EquipmentSystem service,
-            out ObjectInventorySystem inventory)
+            out ObjectInventorySystem currentInventory)
         {
             service = equipment;
-            inventory = inventorySystem;
-            return service != null && inventory != null;
+            currentInventory = inventory;
+            return service != null && currentInventory != null;
         }
 
         private static InventoryChangeResult CreateNotReadyResult(InventoryChangeType changeType)
@@ -139,8 +143,6 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
                 equipment.OnEquipmentChanged -= HandleEquipmentChanged;
 
             equipment = null;
-            inventorySystem = null;
-            owner = null;
         }
 
         private void OnDestroy() => ReleaseRuntime();

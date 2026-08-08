@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,7 +6,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 {
     public sealed partial class UIManager
     {
-        private sealed class LoadingOperation
+        private struct LoadingOperation
         {
             public string ViewId;
             public string Message;
@@ -21,8 +21,10 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         private readonly Dictionary<string, UILoadingView> loadingViews = new(StringComparer.Ordinal);
         private int nextLoadingOperationId;
 
+        /// <summary>현재 닫히지 않은 Loading 요청 개수입니다.</summary>
         public int ActiveLoadingCount => loadingOperations.Count;
 
+        /// <summary>기본 Loading View를 열고 상태를 갱신하거나 닫을 수 있는 Handle을 반환합니다.</summary>
         public LoadingHandle ShowLoading(
             string message = null,
             bool isIndeterminate = true,
@@ -33,6 +35,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 new LoadingRequest(message, 0f, isIndeterminate, blockInput, cancelRequested),
                 viewId);
 
+        /// <summary>요청 정보와 View ID를 지정해 Loading View를 열고 제어용 Handle을 반환합니다.</summary>
         public LoadingHandle ShowLoading(
             in LoadingRequest request,
             string viewId = UIBuiltInViewIds.Loading)
@@ -74,6 +77,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 return false;
 
             operation.Message = message ?? string.Empty;
+            loadingOperations[id] = operation;
             RefreshLoadingView(operation.ViewId, out _);
             return true;
         }
@@ -85,6 +89,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 
             operation.Progress = Mathf.Clamp01(progress);
             operation.IsIndeterminate = false;
+            loadingOperations[id] = operation;
             RefreshLoadingView(operation.ViewId, out _);
             return true;
         }
@@ -95,6 +100,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
                 return false;
 
             operation.IsIndeterminate = isIndeterminate;
+            loadingOperations[id] = operation;
             RefreshLoadingView(operation.ViewId, out _);
             return true;
         }
@@ -170,6 +176,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             return true;
         }
 
+        // 같은 View를 여러 시스템이 사용하면 가장 최근 요청만 화면에 표시하고, 각 Handle의 수명은 따로 유지합니다.
         private bool TryGetLatestLoadingOperation(
             string viewId,
             out int id,
@@ -190,7 +197,7 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             }
 
             id = 0;
-            operation = null;
+            operation = default;
             return false;
         }
 

@@ -25,18 +25,17 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         private readonly List<GameplayTagRegistrationError> registrationErrors = new();
         private bool definitionsGenerated;
 
-        public bool RegisterTag(string name, string description, GameplayTagFlags flags, IGameplayTagSource source)
+        public bool RegisterTag(string name, string description, IGameplayTagSource source)
         {
             Assert.IsFalse(definitionsGenerated, "태그 정의를 생성한 뒤에는 새 태그를 등록할 수 없습니다.");
             Assert.IsNotNull(source, "태그를 등록하려면 소스가 필요합니다.");
-            return RegisterTagInternal(name, description, flags, source);
+            return RegisterTagInternal(name, description, source);
         }
 
         private bool RegisterTagInternal(
             string name,
             string description,
-            GameplayTagFlags flags,
-            IGameplayTagSource source)
+                        IGameplayTagSource source)
         {
             if (!GameplayTagUtility.IsNameValid(name, out string errorMessage))
             {
@@ -56,7 +55,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                 return false;
             }
 
-            GameplayTagDefinition definition = new(name, description, flags, source);
+            GameplayTagDefinition definition = new(name, description, source);
             tagsByName.Add(name, definition);
             definitions.Add(definition);
             return true;
@@ -84,18 +83,14 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
             {
                 GameplayTagDefinition definition = registeredDefinitions[i];
                 string[] hierarchyNames = GameplayTagUtility.GetHierarchyNames(definition.TagName);
-                GameplayTagFlags inheritedFlags = definition.Flags;
 
                 for (int j = hierarchyNames.Length - 1; j >= 0; j--)
                 {
                     string name = hierarchyNames[j];
-                    if (tagsByName.TryGetValue(name, out GameplayTagDefinition parent))
-                    {
-                        inheritedFlags |= parent.Flags;
+                    if (tagsByName.ContainsKey(name))
                         continue;
-                    }
 
-                    RegisterTagInternal(name, string.Empty, inheritedFlags, definition.Source);
+                    RegisterTagInternal(name, string.Empty, definition.Source);
                 }
             }
         }

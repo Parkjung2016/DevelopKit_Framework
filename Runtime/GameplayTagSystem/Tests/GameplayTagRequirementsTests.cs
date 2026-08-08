@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Tests

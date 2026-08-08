@@ -1,10 +1,8 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace PJDev.DevelopKit.Framework.InventorySystem.Runtime
 {
-    /// <summary>
-    /// 인벤토리 상태를 변경하지 않고 조회할 때 사용하는 계약입니다.
-    /// </summary>
+    /// <summary>인벤토리 상태를 변경하지 않고 조회하는 기능입니다.</summary>
     public interface IReadOnlyInventoryContainer
     {
         string ContainerId { get; }

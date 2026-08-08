@@ -1,6 +1,5 @@
-using System;
+﻿using System;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
@@ -18,7 +17,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     [Serializable]
     public sealed class MontageTimelineEasing
     {
-        [FormerlySerializedAs("mode")]
         [SerializeField] private MontageTimelineEasePreset preset = MontageTimelineEasePreset.EaseInOut;
         [SerializeField, Min(0f)] private float duration = 0.2f;
         [SerializeField] private AnimationCurve customCurve = CreatePresetCurve(MontageTimelineEasePreset.EaseInOut);

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.SocketSystem.Runtime
 {
@@ -7,6 +7,7 @@ namespace PJDev.DevelopKit.Framework.SocketSystem.Runtime
         private ISocketItem item;
 
         public bool HasItem => item != null;
+        public ISocketItem CurrentItem => item;
 
         public void ChangeItem(ISocketItem item, Vector3 localPosition, Quaternion localRotation)
         {

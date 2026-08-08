@@ -1,11 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.Shared.Runtime
 {
-    /// <summary>
-    /// Unity 6000.5 미만(또는 AutoStaticsCleanup 미지원) 환경에서 Play Mode 종료 시 static 정리 콜백을 모읍니다.
-    /// </summary>
+    /// <summary>도메인 재로드를 사용하지 않을 때 플레이 모드 종료 시 실행할 정리 작업을 관리합니다.</summary>
     public static class FrameworkPlayModeCleanup
     {
         private static readonly List<Action> CleanupActions = new();
@@ -22,7 +21,16 @@ namespace PJDev.DevelopKit.Framework.Shared.Runtime
         public static void RunAll()
         {
             for (int i = CleanupActions.Count - 1; i >= 0; i--)
-                CleanupActions[i]();
+            {
+                try
+                {
+                    CleanupActions[i]();
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception);
+                }
+            }
         }
     }
 }

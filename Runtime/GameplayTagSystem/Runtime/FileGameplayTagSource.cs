@@ -131,7 +131,7 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
                 TagInFile tag = tags[i];
                 try
                 {
-                    context.RegisterTag(tag.Name, tag.Comment, GameplayTagFlags.None, this);
+                    context.RegisterTag(tag.Name, tag.Comment, this);
                 }
                 catch (Exception ex)
                 {

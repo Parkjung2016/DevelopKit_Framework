@@ -1,4 +1,4 @@
-using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
+﻿using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
@@ -13,7 +13,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             out EquipmentVisualDefinition visual);
     }
 
-    public sealed class NullEquipmentVisualResolver : IEquipmentVisualResolver
+    internal sealed class NullEquipmentVisualResolver : IEquipmentVisualResolver
     {
         public static readonly NullEquipmentVisualResolver Instance = new();
 

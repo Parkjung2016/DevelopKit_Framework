@@ -171,7 +171,6 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             float startWeight,
             MontagePlaybackEventType completionEventType)
         {
-            dispatcher.Dispatch(playback, gameObject, animator, this);
             if (montage == null || montage.BlendOut <= 0f || playableGraph is not { IsValid: true })
             {
                 FinishMontageLayer();

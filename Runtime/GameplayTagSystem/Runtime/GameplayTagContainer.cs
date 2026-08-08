@@ -112,7 +112,6 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
     [DebuggerDisplay("{DebuggerDisplay,nq}")]
     public sealed class GameplayTagContainer : IGameplayTagContainer, ISerializationCallbackReceiver, IEnumerable<GameplayTag>
     {
-        public static GameplayTagContainer Empty { get; } = new();
 
         /// <inheritdoc />
         public bool IsEmpty

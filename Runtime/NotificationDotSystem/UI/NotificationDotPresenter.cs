@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using PJDev.DevelopKit.BasicTemplate.Runtime.PoolSystem;
 using PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime;
 using UnityEngine;
@@ -277,9 +276,18 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.UI
 
         public void SetTargets(IEnumerable<NotificationDotTarget> values)
         {
-            targets = Array.Empty<NotificationDotTarget>();
-            if (values != null)
-                targets = values.ToArray();
+            if (values == null)
+            {
+                targets = Array.Empty<NotificationDotTarget>();
+            }
+            else if (values is NotificationDotTarget[] array)
+            {
+                targets = (NotificationDotTarget[])array.Clone();
+            }
+            else
+            {
+                targets = new List<NotificationDotTarget>(values).ToArray();
+            }
 
             if (isActiveAndEnabled)
                 Rebind();

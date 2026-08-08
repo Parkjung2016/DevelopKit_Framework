@@ -16,6 +16,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
 
         internal static string NormalizeKey(string key) => NotificationDotSystem.NormalizeKey(key);
 
+        /// <summary>알림 개수나 활성 상태가 바뀔 때 발생합니다.</summary>
         public static event Action<NotificationDotChange> Changed
         {
             add => current.Changed += value;
@@ -77,16 +78,19 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             current.TryGetDefinition(key, out definition);
 
 
+        /// <summary>런타임 알림 정의를 등록합니다. 반환값을 Dispose하면 해당 등록만 해제됩니다.</summary>
         public static IDisposable Register(NotificationDotDefinition definition) =>
             current.Register(definition);
 
 
+        /// <summary>문자열 키 하나의 변경을 구독합니다. 반환값을 Dispose하면 구독이 해제됩니다.</summary>
         public static IDisposable Subscribe(
             string key,
             Action<NotificationDotChange> callback,
             bool notifyImmediately = true) =>
             current.Subscribe(key, callback, notifyImmediately);
 
+        /// <summary>Enum 값 하나의 변경을 구독합니다. 반환값을 Dispose하면 구독이 해제됩니다.</summary>
         public static IDisposable Subscribe<TEnum>(
             TEnum key,
             Action<NotificationDotChange> callback,
@@ -94,13 +98,16 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             where TEnum : struct, Enum =>
             current.Subscribe(key, callback, notifyImmediately);
 
+        /// <summary>지정한 Enum 타입에 속한 모든 알림 변경을 구독합니다.</summary>
         public static IDisposable Subscribe<TEnum>(
             Action<NotificationDotChange> callback,
             bool notifyImmediately = true)
             where TEnum : struct, Enum =>
             current.Subscribe<TEnum>(callback, notifyImmediately);
 
+        /// <summary>여러 변경 알림을 묶습니다. 반환값을 Dispose할 때 최종 변경 알림을 전달합니다.</summary>
         public static IDisposable BeginBatch() => current.BeginBatch();
+        /// <summary>등록된 정의, 값과 구독을 포함한 런타임 상태를 초기화합니다.</summary>
         public static void Reset() => current.Reset();
 
         internal static void GetSnapshot(List<NotificationDotSnapshot> results, bool includeInactive = false) =>
@@ -113,6 +120,7 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
         }
     }
 
+    /// <summary>Attribute의 대상이 종속 알림인지 부모 알림인지 지정합니다.</summary>
     public enum NotificationDotRelation
     {
         Dependency,
@@ -485,13 +493,23 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
         }
         private static void BuildDefinitions(Type enumType, TypeMap map)
         {
+            // Reflection은 타입별 최초 접근에서만 수행하고 완성된 정의는 TypeMap에 보관합니다.
+            NotificationDotAttribute[] enumAttributes =
+                enumType.GetCustomAttributes<NotificationDotAttribute>().ToArray();
+            bool defaultClearOnVisit = false;
+            string defaultViewKey = string.Empty;
+            for (int i = 0; i < enumAttributes.Length; i++)
+            {
+                NotificationDotAttribute attribute = enumAttributes[i];
+                defaultClearOnVisit |= attribute.ClearOnVisit;
+                if (string.IsNullOrWhiteSpace(defaultViewKey)
+                    && !string.IsNullOrWhiteSpace(attribute.ViewKey))
+                {
+                    defaultViewKey = attribute.ViewKey;
+                }
+            }
+
             FieldInfo[] fields = enumType.GetFields(BindingFlags.Public | BindingFlags.Static);
-            bool defaultClearOnVisit =
-                enumType.GetCustomAttributes<NotificationDotAttribute>()
-                    .Any(attribute => attribute.ClearOnVisit);
-            string defaultViewKey =
-                enumType.GetCustomAttributes<NotificationDotAttribute>()
-                    .FirstOrDefault(attribute => !string.IsNullOrWhiteSpace(attribute.ViewKey))?.ViewKey ?? string.Empty;
             var definitions = new Dictionary<object, NotificationDotDefinition>(fields.Length);
             var definitionList = new List<NotificationDotDefinition>(fields.Length);
 
@@ -499,37 +517,39 @@ namespace PJDev.DevelopKit.Framework.NotificationDotSystem.Runtime
             {
                 FieldInfo field = fields[i];
                 object value = field.GetValue(null);
+                NotificationDotAttribute[] attributes =
+                    field.GetCustomAttributes<NotificationDotAttribute>().ToArray();
                 var definition = new NotificationDotDefinition(map.Keys[value]);
 
-                if (defaultClearOnVisit
-                    || field.GetCustomAttributes<NotificationDotAttribute>()
-                        .Any(attribute => attribute.ClearOnVisit))
+                bool clearOnVisit = defaultClearOnVisit;
+                string viewKey = defaultViewKey;
+                for (int j = 0; j < attributes.Length; j++)
                 {
-                    definition.ClearOnVisit();
-                }
+                    NotificationDotAttribute attribute = attributes[j];
+                    clearOnVisit |= attribute.ClearOnVisit;
+                    if (!string.IsNullOrWhiteSpace(attribute.ViewKey))
+                        viewKey = attribute.ViewKey;
 
-                string viewKey = field.GetCustomAttributes<NotificationDotAttribute>()
-                    .FirstOrDefault(attribute => !string.IsNullOrWhiteSpace(attribute.ViewKey))?.ViewKey;
-                definition.UseView(viewKey ?? defaultViewKey);
-
-                foreach (NotificationDotAttribute dependency in
-                         field.GetCustomAttributes<NotificationDotAttribute>())
-                {
-                    if (!dependency.HasDependency)
+                    if (!attribute.HasDependency)
                         continue;
-                    string sourceKey = dependency.DependencyKey;
+
+                    string sourceKey = attribute.DependencyKey;
                     if (string.IsNullOrWhiteSpace(sourceKey))
                     {
                         object sourceValue = Enum.Parse(
-                            dependency.DependencyEnumType,
-                            dependency.DependencyName,
+                            attribute.DependencyEnumType,
+                            attribute.DependencyName,
                             ignoreCase: false);
-                        sourceKey = GetKey(dependency.DependencyEnumType, sourceValue);
+                        sourceKey = GetKey(attribute.DependencyEnumType, sourceValue);
                     }
 
-                    definition.DependsOn(sourceKey, dependency.DependencyMode);
+                    definition.DependsOn(sourceKey, attribute.DependencyMode);
                 }
 
+                if (clearOnVisit)
+                    definition.ClearOnVisit();
+
+                definition.UseView(viewKey);
                 NotificationDotDefinition frozen = definition.FreezeCopy();
                 definitions[value] = frozen;
                 definitionList.Add(frozen);

@@ -61,9 +61,17 @@ namespace PJDev.DevelopKit.Framework.StatSystem.Runtime
             value = baseValue;
         }
 
-        public void AddBaseValue(float amount) => BaseValue += amount;
+        public float AddBaseValue(float amount)
+        {
+            BaseValue += amount;
+            return BaseValue;
+        }
 
-        public void AddBasePercent(float percent) => BaseValue *= 1f + percent * 0.01f;
+        public float AddBasePercent(float percent)
+        {
+            BaseValue *= 1f + percent * 0.01f;
+            return BaseValue;
+        }
 
         public void SetModifier(StatModifierKey key, in StatModifier modifier)
         {

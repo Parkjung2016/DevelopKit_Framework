@@ -1,7 +1,7 @@
-namespace PJDev.DevelopKit.Framework.UISystem.Runtime
+﻿namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 {
     /// <summary>레거시 <see cref="UICanvasGroup"/> enum과 문자열 ID 변환입니다.</summary>
-    public static class UICanvasGroupUtility
+    internal static class UICanvasGroupUtility
     {
         public static string EnumToId(UICanvasGroup group) =>
             group switch

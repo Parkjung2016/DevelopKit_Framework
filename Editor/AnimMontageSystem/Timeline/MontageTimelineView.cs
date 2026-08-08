@@ -250,6 +250,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private readonly List<NotifyClipboardData> copiedNotifies = new();
         private readonly List<NotifyStateClipboardData> copiedNotifyStates = new();
         private readonly Dictionary<AudioClip, float[]> audioWaveformCache = new();
+        private readonly Dictionary<Type, FieldInfo> audioClipFieldCache = new();
         private readonly Label hoverTooltip;
 
         private float pixelsPerSecond = 120f;

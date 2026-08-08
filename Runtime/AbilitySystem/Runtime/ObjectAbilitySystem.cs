@@ -19,7 +19,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
         [SerializeField] private ObjectStatSystem stats = null;
 
         private readonly Dictionary<GameplayTag, AbilitySO> abilities = new();
-        private IAbilitySystemOwner owner;
+        [SerializeField] private UnityEngine.Object owner = null;
         private IInputActionCollection2 inputActions;
         private AbilityInputBridgeSO runtimeInputBridge;
 
@@ -28,10 +28,16 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
 
         public ObjectGameplayTagContainer Tags => tags;
         public ObjectStatSystem Stats => stats;
-        public IAbilitySystemOwner Owner => owner;
+        public UnityEngine.Object Owner => owner;
         public int AbilityCount => abilities.Count;
         public bool IsInitialized { get; private set; }
         
+
+        private void Start()
+        {
+            if (!IsInitialized)
+                Initialize();
+        }
 
         private void OnEnable()
         {
@@ -50,12 +56,12 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
             Shutdown();
         }
 
-        public void Initialize(IAbilitySystemOwner abilityOwner = null)
+        public void Initialize(UnityEngine.Object abilityOwner = null)
         {
             if (IsInitialized)
                 return;
 
-            owner = abilityOwner;
+            owner = abilityOwner != null ? abilityOwner : owner != null ? owner : gameObject;
             tags ??= GetComponent<ObjectGameplayTagContainer>();
             stats ??= GetComponent<ObjectStatSystem>();
             if (stats != null && !stats.IsInitialized)
@@ -122,7 +128,7 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
             ability.Register(this, owner);
 
             if (ability.ActivateWhenGranted)
-                TryActivateInternal(ability, stats.Stats, null);
+                TryActivateInternal(ability, stats?.Stats, null);
 
             return true;
         }
@@ -260,9 +266,9 @@ namespace PJDev.DevelopKit.Framework.AbilitySystem.Runtime
             {
                 return false;
             }
-
-            context = new AbilityContext(this, ability, owner, stats.Stats,
-                targetStatCollection ?? stats.Stats);
+            StatCollection sourceStats = stats?.Stats;
+            context = new AbilityContext(this, ability, owner, sourceStats,
+                targetStatCollection ?? sourceStats);
             return ability.CanStart(context, out _);
         }
 

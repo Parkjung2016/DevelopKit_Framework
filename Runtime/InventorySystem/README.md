@@ -1,4 +1,4 @@
-# InventorySystem
+﻿# InventorySystem
 
 범용 Unity 인벤토리 프레임워크. UI 없이 **컨테이너 로직 / 세이브 / 라우팅 / 제작 / 루트**까지 제공합니다.
 
@@ -41,7 +41,7 @@
 databaseSetup.RegisterGlobals();  // ItemCatalog / RecipeCatalog / LootTableCatalog
 
 // 컨테이너만 InventorySetupSO로 초기화
-inventory.Init(owner, containerSetupSO, instanceFactory: new WeaponInstanceFactory());
+inventory.Initialize(containerSetupSO, instanceFactory: new WeaponInstanceFactory());
 // → ItemInstanceCatalog.Configure(...) 자동 호출
 ```
 
@@ -104,7 +104,7 @@ IItemInstanceFactory factory = ItemInstanceFactoryBuilder.Create()
     .SetFallback()
     .Build();
 
-inventorySystem.Init(owner, setup, factory);
+inventorySystem.Initialize(setup, instanceFactory: factory);
 ```
 
 특정 ItemId만 예외 처리:

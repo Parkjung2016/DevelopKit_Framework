@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 
 namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
 {
-    /// <summary>InventoryGroup에 등록된 장비 컨테이너를 조작합니다.</summary>
+    /// <summary>InventoryGroup에 등록된 장비 컨테이너를 다루는 런타임 서비스입니다.</summary>
     public sealed partial class EquipmentSystem : IEquipment
     {
         private readonly InventoryGroup group;

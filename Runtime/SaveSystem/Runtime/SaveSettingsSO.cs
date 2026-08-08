@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using UnityEngine;
 
@@ -10,15 +10,15 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
         private const string DefaultFolderName = "Saves";
 
         [SerializeField]
-        [Tooltip("저장 파일을 암호화합니다. 활성화하면 Encryption Password가 필요합니다.")]
-        private bool encryptionEnabled = false;
+        [Tooltip("저장 파일을 암호화합니다. 활성화하면 암호화 비밀번호가 필요합니다.")]
+        private bool encryptionEnabled;
 
         [SerializeField]
-        [Tooltip("저장 파일 암호화에 사용할 프로젝트 전용 비밀번호입니다.")]
+        [Tooltip("이 프로젝트의 저장 파일에 사용할 암호화 비밀번호입니다.")]
         private string encryptionPassword = string.Empty;
 
         [SerializeField]
-        [Tooltip("Application.persistentDataPath 아래에 생성할 폴더 이름입니다.")]
+        [Tooltip("Application.persistentDataPath 아래에 생성할 저장 폴더 이름입니다.")]
         private string folderName = DefaultFolderName;
 
         [SerializeField]
@@ -43,10 +43,7 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
                 return new SaveManager(resolvedSerializer, storage);
 
             if (string.IsNullOrWhiteSpace(encryptionPassword))
-            {
-                throw new InvalidOperationException(
-                    "Encryption Password is required when encryption is enabled.");
-            }
+                throw new InvalidOperationException("암호화를 사용하려면 비밀번호를 입력해야 합니다.");
 
             return new SaveManager(
                 resolvedSerializer,
@@ -62,10 +59,7 @@ namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
                 : folderName.Trim();
 
             if (!SaveSlotId.TryNormalize(value, out string normalizedFolderName))
-            {
-                throw new InvalidOperationException(
-                    "Folder Name contains invalid path characters.");
-            }
+                throw new InvalidOperationException("저장 폴더 이름에 사용할 수 없는 문자가 있습니다.");
 
             return normalizedFolderName;
         }

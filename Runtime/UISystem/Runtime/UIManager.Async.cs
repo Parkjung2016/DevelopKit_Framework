@@ -292,12 +292,6 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             }
         }
 
-        /// <summary>지정 Canvas 묶음의 열려 있는 UI를 비동기로 모두 닫습니다.</summary>
-        public UniTask<int> CloseCanvasGroupAsync(
-            UICanvasGroup group,
-            bool immediate = false,
-            CancellationToken cancellationToken = default) =>
-            CloseCanvasGroupAsync(UICanvasGroupUtility.EnumToId(group), immediate, cancellationToken);
 
         /// <summary>T 또는 T 파생 타입의 열려 있는 UI를 비동기로 모두 닫습니다.</summary>
         public async UniTask<int> CloseAllOfTypeAsync<T>(

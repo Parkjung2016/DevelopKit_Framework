@@ -30,7 +30,6 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
 
         public string TagName { get; }
         public string Description { get; }
-        public GameplayTagFlags Flags { get; }
         public string Label { get; }
         public int HierarchyLevel { get; }
         public int RuntimeIndex { get; private set; }
@@ -56,12 +55,10 @@ namespace PJDev.DevelopKit.Framework.GameplayTagSystem.Runtime
         public GameplayTagDefinition(
             string name,
             string description,
-            GameplayTagFlags flags,
-            IGameplayTagSource source)
+                        IGameplayTagSource source)
         {
             TagName = name;
             Description = description;
-            Flags = flags;
             Source = source;
             Label = GameplayTagUtility.GetLabel(name);
             HierarchyLevel = GameplayTagUtility.GetHierarchyLevelFromName(name);

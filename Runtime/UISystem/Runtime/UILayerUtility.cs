@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 {
@@ -16,10 +16,24 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
         public static bool IsInGroup(string layerId, UICanvasGroup group, UILayerRegistry registry) =>
             IsInGroup(layerId, UICanvasGroupUtility.EnumToId(group), registry);
 
-        public static void GetLayerIdsInGroup(string groupId, UILayerRegistry registry, List<string> buffer) =>
-            registry?.GetLayerIdsInGroup(groupId, buffer);
+        public static void GetLayerIdsInGroup(string groupId, UILayerRegistry registry, List<string> buffer)
+        {
+            if (buffer == null)
+                return;
 
-        public static void GetLayerIdsInGroup(UICanvasGroup group, UILayerRegistry registry, List<string> buffer) =>
-            registry?.GetLayerIdsInGroup(group, buffer);
+            if (registry == null)
+            {
+                buffer.Clear();
+                return;
+            }
+
+            registry.GetLayerIdsInGroup(groupId, buffer);
+        }
+
+        public static void GetLayerIdsInGroup(
+            UICanvasGroup group,
+            UILayerRegistry registry,
+            List<string> buffer) =>
+            GetLayerIdsInGroup(UICanvasGroupUtility.EnumToId(group), registry, buffer);
     }
 }

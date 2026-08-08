@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Threading;
@@ -102,6 +102,13 @@ namespace PJDev.DevelopKit.Framework.SaveSystemTests
                 storage,
                 new AesSaveEncryption(
                     new PasswordSaveKeyProvider("unit-test", iterations: 10000)));
+        }
+
+        [Test]
+        public void DefaultResults_AreNotSuccessful()
+        {
+            Assert.IsFalse(default(SaveResult).IsSuccess);
+            Assert.IsFalse(default(LoadResult<TestSaveData>).IsSuccess);
         }
 
         [Test]

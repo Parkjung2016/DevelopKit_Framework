@@ -1,3 +1,4 @@
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,25 +7,28 @@ namespace PJDev.DevelopKit.Framework.SocketSystem.Runtime
     [DefaultExecutionOrder(-10000)]
     public class ObjectSocketSystem : MonoBehaviour
     {
-        private readonly Dictionary<string, ObjectSocket> sockets = new();
+        private readonly Dictionary<string, ObjectSocket> sockets = new(StringComparer.Ordinal);
+        private readonly List<ObjectSocket> socketBuffer = new();
+
+        public int SocketCount => sockets.Count;
 
         private void Awake() => RebuildSocketCache();
 
         public void RebuildSocketCache()
         {
             sockets.Clear();
-            ObjectSocket[] characterSockets = GetComponentsInChildren<ObjectSocket>(true);
+            socketBuffer.Clear();
+            GetComponentsInChildren(true, socketBuffer);
 
-            for (int i = 0; i < characterSockets.Length; i++)
+            for (int i = 0; i < socketBuffer.Count; i++)
             {
-                ObjectSocket socket = characterSockets[i];
+                ObjectSocket socket = socketBuffer[i];
                 string socketKey = socket.name;
-
                 if (string.IsNullOrEmpty(socketKey))
                     continue;
 
                 if (!sockets.TryAdd(socketKey, socket))
-                    Debug.LogWarning($"{socket.name} is already registered!");
+                    Debug.LogWarning($"Duplicate socket key '{socketKey}'.", socket);
             }
         }
 

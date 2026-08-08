@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using PJDev.DevelopKit.Framework.InventorySystem.Runtime;
 using UnityEngine;
 
@@ -17,7 +17,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         }
 
         [Test]
-        public void Init_FromSetup_RegistersAllContainerConfigs()
+        public void Initialize_FromSetup_RegistersAllContainerConfigs()
         {
             InventorySetupSO setup = ScriptableObject.CreateInstance<InventorySetupSO>();
             InventoryConfigSO mainConfig = ScriptableObject.CreateInstance<InventoryConfigSO>();
@@ -33,7 +33,7 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
 
             host = new GameObject("InventorySystemTest");
             var system = host.AddComponent<ObjectInventorySystem>();
-            system.Init(null, setup);
+            system.Initialize(setup);
 
             Assert.IsNotNull(system.Group);
             Assert.AreEqual(2, system.Group.Containers.Count);
@@ -45,14 +45,14 @@ namespace PJDev.DevelopKit.Framework.InventorySystem.Tests
         }
 
         [Test]
-        public void Init_FromSetupWithEmptyConfigs_UsesDefaultMainContainer()
+        public void Initialize_FromSetupWithEmptyConfigs_UsesDefaultMainContainer()
         {
             InventorySetupSO setup = ScriptableObject.CreateInstance<InventorySetupSO>();
             setup.ContainerConfigs = System.Array.Empty<InventoryConfigSO>();
 
             host = new GameObject("InventorySystemTest");
             var system = host.AddComponent<ObjectInventorySystem>();
-            system.Init(null, setup);
+            system.Initialize(setup);
 
             Assert.AreEqual(1, system.Group.Containers.Count);
             Assert.AreEqual("main", system.ContainerId);

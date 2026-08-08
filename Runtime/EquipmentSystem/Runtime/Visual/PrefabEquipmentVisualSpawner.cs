@@ -16,16 +16,16 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
             this.prefabsByKey = prefabsByKey ?? throw new ArgumentNullException(nameof(prefabsByKey));
         }
 
-        public void Spawn(in EquipmentVisualSpawnRequest request, EquipmentVisualSpawnCompletedHandler OnSpawnCompleted)
+        public void Spawn(in EquipmentVisualSpawnRequest request, EquipmentVisualSpawnCompletedHandler onCompleted)
         {
             if (!prefabsByKey.TryGetValue(request.AssetKey, out GameObject prefab) || prefab == null)
             {
-                OnSpawnCompleted?.Invoke(null);
+                onCompleted?.Invoke(null);
                 return;
             }
 
             GameObject instance = PrefabPool.Spawn(prefab);
-            OnSpawnCompleted?.Invoke(SocketItemUtility.FromGameObject(instance));
+            onCompleted?.Invoke(SocketItemUtility.FromGameObject(instance));
         }
 
         public void Release(ISocketItem socketItem)
@@ -35,7 +35,7 @@ namespace PJDev.DevelopKit.Framework.EquipmentSystem.Runtime
                 : null;
 
             if (instance == null || !PrefabPool.Release(instance))
-                SocketItemUtility.ReleaseDestroy(socketItem);
+                SocketItemUtility.Destroy(socketItem);
         }
     }
 }

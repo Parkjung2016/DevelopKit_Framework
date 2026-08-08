@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace PJDev.DevelopKit.Framework.SaveSystem.Runtime
 {

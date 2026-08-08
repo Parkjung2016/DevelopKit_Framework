@@ -109,11 +109,11 @@ host.Initialize(
             .Run();
     }));
 
-objectEquipmentSystem.Init(owner, inventory, equipmentSetup,
+objectEquipmentSystem.Initialize(inventory, equipmentSetup,
     new EquipmentVisualEffectApplier(host.Controller));
 ```
 
-`ObjectEquipmentSystem.Init()`과 `ObjectEquipmentVisualHost.Initialize()`를 다시 호출하면 기존 런타임 연결과 비주얼이 먼저 정리됩니다. 오브젝트 풀로 반환하는 경우에는 두 컴포넌트의 `Clear()`를 호출해 명시적으로 해제할 수 있습니다.
+`ObjectEquipmentSystem.Initialize()`과 `ObjectEquipmentVisualHost.Initialize()`를 다시 호출하면 기존 런타임 연결과 비주얼이 먼저 정리됩니다. 오브젝트 풀로 반환하는 경우에는 두 컴포넌트의 `Clear()`를 호출해 명시적으로 해제할 수 있습니다.
 
 커스텀 비주얼(애니·VFX 등)은 프리팹에 `SocketItemComponent`를 상속한 컴포넌트를 붙이고 Spawner가 그 `ISocketItem`을 반환하면 됩니다.
 
@@ -135,7 +135,7 @@ public void Setup(in EquipmentVisualSpawnRequest request)
 
 1. `InventorySetupSO.ContainerConfigs`에 장비 컨테이너를 등록하거나, `EquipmentSetupSO.CreateContainer()`로 생성한 컨테이너를 `InventoryGroup`에 등록합니다.
 2. 장비 컨테이너는 `EquipmentSlotRule`을 사용해야 슬롯별 카테고리가 적용됩니다.
-3. `ObjectEquipmentSystem.Init(owner, inventorySystem, setup)` 후 `TryEquipFromInventory` 등을 호출합니다.
+3. `ObjectEquipmentSystem.Initialize(inventorySystem, setup)` 후 `TryEquipFromInventory` 등을 호출합니다.
 
 ## Inventory 구조 개선 (동일 패키지)
 

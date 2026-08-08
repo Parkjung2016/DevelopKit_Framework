@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.BasicTemplate.Runtime;
 using UnityEngine;
@@ -208,9 +208,6 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
             return closed;
         }
 
-        /// <summary>지정 Canvas 묶음의 열려 있는 UI를 모두 닫습니다.</summary>
-        public int CloseCanvasGroup(UICanvasGroup group, bool immediate = false) =>
-            CloseCanvasGroup(UICanvasGroupUtility.EnumToId(group), immediate);
 
         /// <summary>T 또는 T 파생 타입의 열려 있는 UI를 모두 닫습니다.</summary>
         public int CloseAllOfType<T>(bool immediate = false) where T : UIViewBase
@@ -739,8 +736,6 @@ namespace PJDev.DevelopKit.Framework.UISystem.Runtime
 #endif
         }
 
-        private void RefreshCanvasRaycaster(UICanvasGroup group) =>
-            RefreshCanvasRaycaster(UICanvasGroupUtility.EnumToId(group));
 
         private void EnsureLayerRegistry()
         {
