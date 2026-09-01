@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
@@ -10,6 +10,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
     {
         private void ApplySegmentStartTime(int segmentIndex, float startTime)
         {
+            if (context.Montage is AnimSequenceSO)
+                return;
+
             startTime = SnapSegmentStartTime(segmentIndex, Mathf.Max(0f, startTime));
 
             Undo.RecordObject(context.Montage, "Move Montage Segment");
@@ -36,18 +39,19 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Undo.RecordObject(montage, "Move Montage Timeline Elements");
             SerializedObject so = new(montage);
 
-            SerializedProperty segments = so.FindProperty("segments");
-            foreach (KeyValuePair<int, float> entry in dragSegmentStartTimes)
+            if (montage is not AnimSequenceSO)
             {
-                if (segments == null || entry.Key < 0 || entry.Key >= segments.arraySize)
-                    continue;
+                SerializedProperty segments = so.FindProperty("segments");
+                foreach (KeyValuePair<int, float> entry in dragSegmentStartTimes)
+                {
+                    if (segments == null || entry.Key < 0 || entry.Key >= segments.arraySize)
+                        continue;
 
-                MontageSegment montageSegment = entry.Key < montage.Segments.Count ? montage.Segments[entry.Key] : null;
-                float duration = montageSegment?.Duration ?? 0f;
-                SerializedProperty segment = segments.GetArrayElementAtIndex(entry.Key);
-                segment.FindPropertyRelative("startTime").floatValue = Snap(Mathf.Max(0f, entry.Value + deltaTime));
-                if (activeKind == TrackKind.Segment && targetTrackId != null)
-                    segment.FindPropertyRelative("trackId").stringValue = targetTrackId;
+                    SerializedProperty segment = segments.GetArrayElementAtIndex(entry.Key);
+                    segment.FindPropertyRelative("startTime").floatValue = Snap(Mathf.Max(0f, entry.Value + deltaTime));
+                    if (activeKind == TrackKind.Segment && targetTrackId != null)
+                        segment.FindPropertyRelative("trackId").stringValue = targetTrackId;
+                }
             }
 
             SerializedProperty notifies = so.FindProperty("notifies");
@@ -80,7 +84,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             so.ApplyModifiedProperties();
             context.MarkDirty();
         }
-
         private float ClampSelectedTimelineMoveDelta(float deltaTime, AnimMontageSO montage)
         {
             if (montage == null)
@@ -122,6 +125,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void ApplySegmentTrimStart(int segmentIndex, float startTime)
         {
             AnimMontageSO montage = context.Montage;
+            if (montage is AnimSequenceSO)
+                return;
             if (montage == null || segmentIndex < 0 || segmentIndex >= montage.Segments.Count)
                 return;
 
@@ -183,6 +188,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void ApplySegmentTrimEnd(int segmentIndex, float endTime)
         {
             AnimMontageSO montage = context.Montage;
+            if (montage is AnimSequenceSO)
+                return;
             if (montage == null || segmentIndex < 0 || segmentIndex >= montage.Segments.Count)
                 return;
 
@@ -253,6 +260,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void ApplySegmentTrack(int segmentIndex, Vector2 local)
         {
             if (context.Montage == null
+                || context.Montage is AnimSequenceSO
                 || segmentIndex < 0
                 || segmentIndex >= context.Montage.Segments.Count
                 || !TryGetTrackRow(local, TrackKind.Segment, out TrackRowLayout row))
@@ -542,7 +550,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void AddEmptyStateAtTime(float time, string trackId)
         {
             AnimMontageSO montage = context.Montage;
-            if (montage == null)
+            if (montage == null || montage is AnimSequenceSO)
                 return;
 
             Undo.RecordObject(montage, "Add Empty Animation State");
@@ -577,6 +585,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (montage == null)
                 return;
 
+            if (montage is AnimSequenceSO sequence)
+            {
+                SetSequenceClip(sequence, clip);
+                return;
+            }
+
             Undo.RecordObject(montage, "Add Montage Segment");
             SerializedObject so = new(montage);
             SerializedProperty prop = so.FindProperty("segments");
@@ -604,6 +618,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void ReplaceSegmentClip(int segmentIndex, AnimationClip clip)
         {
             AnimMontageSO montage = context.Montage;
+            if (montage is AnimSequenceSO sequence)
+            {
+                SetSequenceClip(sequence, clip);
+                return;
+            }
+
             if (!CanReplaceSegmentClip(segmentIndex))
                 return;
 
@@ -619,7 +639,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             context.MarkDirty();
             context.SetSelectedSegment(segmentIndex);
         }
-
         public bool HasSelectedSegment() =>
             context.Montage != null
             && context.SelectedSegmentIndex >= 0
@@ -631,13 +650,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private bool CanReplaceSegmentClip(int segmentIndex)
         {
             AnimMontageSO montage = context.Montage;
+            if (montage is AnimSequenceSO)
+                return segmentIndex == 0;
+
             if (montage == null || segmentIndex < 0 || segmentIndex >= montage.Segments.Count)
                 return false;
 
             MontageSegment segment = montage.Segments[segmentIndex];
             return segment != null && !segment.IsEmptyState;
         }
-
         public bool CanSplitSelectedSegmentAtPlayhead() =>
             HasSelectedSegment() && CanSplitSegmentAtTime(context.SelectedSegmentIndex, context.PlayheadTime);
 
@@ -663,7 +684,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private bool CanSplitSegmentAtTime(int segmentIndex, float time)
         {
             AnimMontageSO montage = context.Montage;
-            if (montage == null || segmentIndex < 0 || segmentIndex >= montage.Segments.Count)
+            if (montage == null || montage is AnimSequenceSO || segmentIndex < 0 || segmentIndex >= montage.Segments.Count)
                 return false;
 
             MontageSegment segment = montage.Segments[segmentIndex];
@@ -736,7 +757,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void ResetSegmentTrim(int segmentIndex)
         {
             AnimMontageSO montage = context.Montage;
-            if (montage == null || segmentIndex < 0 || segmentIndex >= montage.Segments.Count)
+            if (montage == null || montage is AnimSequenceSO || segmentIndex < 0 || segmentIndex >= montage.Segments.Count)
                 return;
 
             MontageSegment montageSegment = montage.Segments[segmentIndex];
@@ -754,6 +775,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             context.SetSelectedSegment(segmentIndex);
         }
 
+        private void SetSequenceClip(AnimSequenceSO sequence, AnimationClip clip)
+        {
+            if (!AnimationSequenceEditorUtility.SetClip(sequence, clip))
+                return;
+
+            context.MarkDirty();
+            context.SetPlayhead(0f);
+            context.SetSelectedSegment(sequence.Segments.Count > 0 ? 0 : -1);
+            MarkDirtyRepaint();
+        }
         private void ReplaceNotify(int notifyIndex, AnimNotify notify)
         {
             AnimMontageSO montage = context.Montage;
@@ -845,7 +876,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             Undo.RecordObject(montage, "Delete Montage Timeline Elements");
             SerializedObject so = new(montage);
-            DeleteArrayElementsWithoutApply(so.FindProperty("segments"), context.SelectedSegmentIndices);
+            if (montage is not AnimSequenceSO)
+                DeleteArrayElementsWithoutApply(so.FindProperty("segments"), context.SelectedSegmentIndices);
             DeleteArrayElementsWithoutApply(so.FindProperty("notifies"), context.SelectedNotifyIndices);
             DeleteArrayElementsWithoutApply(so.FindProperty("notifyStates"), context.SelectedNotifyStateIndices);
             so.ApplyModifiedProperties();

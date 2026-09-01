@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -13,6 +13,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private static readonly GUIContent PauseContent = ResolveIcon("PauseButton", "Animation.Pause", "Pause");
 
         private readonly MontageEditorContext context;
+        private readonly Label titleLabel;
         private readonly ToolbarButton playPauseButton;
         private readonly Image playPauseIcon;
         private readonly ToolbarButton stopButton;
@@ -52,12 +53,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             style.alignItems = Align.Center;
             style.flexShrink = 0;
 
-            var title = new Label("Timeline");
-            title.AddToClassList(AnimMontageEditorStyles.PanelHeaderTitleClass);
-            title.style.flexShrink = 0;
-            title.style.marginRight = 8;
-            Add(title);
-
+            titleLabel = new Label("Animation Timeline");
+            titleLabel.AddToClassList(AnimMontageEditorStyles.PanelHeaderTitleClass);
+            titleLabel.style.flexShrink = 0;
+            titleLabel.style.marginRight = 8;
+            Add(titleLabel);
             Add(CreateDivider());
 
             var playbackGroup = CreateGroup();
@@ -178,6 +178,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void RefreshPlaybackState()
         {
             AnimMontageSO montage = context.Montage;
+            bool isSequence = montage is AnimSequenceSO;
+            titleLabel.text = isSequence ? "Sequence Timeline" : "Montage Timeline";
             ApplyIcon(playPauseButton, playPauseIcon, context.IsPlaying ? PauseContent : PlayContent);
             bool locked = EditorApplication.isPlaying;
             playPauseButton.SetEnabled(montage != null && !locked);
@@ -187,16 +189,19 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             speedField.tooltip = GetSpeedTooltip();
             loopToggle.SetEnabled(!locked);
             speedField.SetEnabled(!locked);
-            rateScaleField.SetEnabled(montage != null && !locked);
-            horizontalRootMotionToggle.SetEnabled(montage != null && !locked);
-            verticalRootMotionToggle.SetEnabled(montage != null && !locked);
-            rotationRootMotionToggle.SetEnabled(montage != null && !locked);
+            rateScaleField.style.display = isSequence ? DisplayStyle.None : DisplayStyle.Flex;
+            horizontalRootMotionToggle.style.display = isSequence ? DisplayStyle.None : DisplayStyle.Flex;
+            verticalRootMotionToggle.style.display = isSequence ? DisplayStyle.None : DisplayStyle.Flex;
+            rotationRootMotionToggle.style.display = isSequence ? DisplayStyle.None : DisplayStyle.Flex;
+            rateScaleField.SetEnabled(montage != null && !locked && !isSequence);
+            horizontalRootMotionToggle.SetEnabled(montage != null && !locked && !isSequence);
+            verticalRootMotionToggle.SetEnabled(montage != null && !locked && !isSequence);
+            rotationRootMotionToggle.SetEnabled(montage != null && !locked && !isSequence);
             rateScaleField.SetValueWithoutNotify(montage != null ? montage.RateScale : 1f);
             horizontalRootMotionToggle.SetValueWithoutNotify(montage != null && montage.ApplyHorizontalRootMotion);
             verticalRootMotionToggle.SetValueWithoutNotify(montage != null && montage.ApplyVerticalRootMotion);
             rotationRootMotionToggle.SetValueWithoutNotify(montage != null && montage.ApplyRotationRootMotion);
         }
-
         private void RefreshSegmentActions()
         {
             bool hasSegment = hasSelectedSegment?.Invoke() == true;
@@ -204,6 +209,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             segmentDivider.style.display = display;
             segmentGroup.style.display = display;
             bool locked = EditorApplication.isPlaying;
+            bool isSequence = context.Montage is AnimSequenceSO;
+            splitSegmentButton.style.display = isSequence ? DisplayStyle.None : DisplayStyle.Flex;
+            resetSegmentTrimButton.style.display = isSequence ? DisplayStyle.None : DisplayStyle.Flex;
             splitSegmentButton.SetEnabled(!locked && hasSegment && canSplitSelectedSegment?.Invoke() == true);
             replaceSegmentButton.SetEnabled(!locked && hasSegment && canReplaceSelectedSegment?.Invoke() == true);
             resetSegmentTrimButton.SetEnabled(!locked && hasSegment);
@@ -218,10 +226,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private string GetSpeedTooltip()
         {
+            if (context.Montage is AnimSequenceSO)
+                return $"Sequence preview speed: {context.PlaybackSpeed:0.###}";
+
             float rateScale = context.Montage != null ? context.Montage.RateScale : 1f;
             return $"Timeline Speed x Montage RateScale = {context.PlaybackSpeed:0.###} x {rateScale:0.###} = {context.EffectivePlaybackSpeed:0.###}";
         }
-
         private Toggle CreateRootMotionToggle(string label, string tooltip, string propertyName, string undoName)
         {
             var toggle = new Toggle(label);

@@ -14,19 +14,20 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private readonly List<AnimNotifyPlacement> notifyBuffer = new();
         private readonly Dictionary<AnimNotifyPlacement, float> lastNotifyTimes = new();
 
-        /// <summary>Notify가 기본 처리까지 완료된 뒤 발생합니다. Handler가 처리한 Notify에는 호출되지 않습니다.</summary>
         public event Action<AnimNotify, AnimNotifyContext> OnNotify;
 
-
-        /// <summary>현재 활성 상태와 중복 실행 기록을 모두 초기화합니다.</summary>
         public void Reset()
         {
             activeStates.Clear();
             lastNotifyTimes.Clear();
         }
 
-        /// <summary>Montage가 중단될 때 실행 중인 모든 NotifyState에 OnEnd를 전달합니다.</summary>
-        public void EndActiveStates(GameObject owner, Animator animator, AnimMontageSO montage, float montageTime, float deltaTime = 0f)
+        public void EndActiveStates(
+            GameObject owner,
+            Animator animator,
+            IAnimationNotifyAsset animation,
+            float animationTime,
+            float deltaTime = 0f)
         {
             if (owner == null || activeStates.Count == 0)
             {
@@ -41,41 +42,63 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
                 if (state == null)
                     continue;
 
-                float endTime = placement.EndTime > 0f ? placement.EndTime : montageTime;
-                var context = new AnimNotifyContext(owner, animator, montage, endTime, deltaTime);
-                state.OnEnd(context);
+                float endTime = placement.EndTime > 0f ? placement.EndTime : animationTime;
+                state.OnEnd(new AnimNotifyContext(owner, animator, animation, endTime, deltaTime));
             }
 
             Reset();
         }
 
-        /// <summary>이전 재생 시각부터 현재 시각 사이에 발생한 Notify 이벤트를 전달합니다.</summary>
-        public void Dispatch(MontagePlaybackState playback, GameObject owner, Animator animator, IAnimNotifyHandler handler)
+        public void Dispatch(
+            MontagePlaybackState playback,
+            GameObject owner,
+            Animator animator,
+            IAnimNotifyHandler handler)
         {
-            if (playback?.Montage == null || owner == null)
+            if (playback?.Montage == null)
                 return;
 
-            AnimMontageSO montage = playback.Montage;
-            float previousTime = playback.PreviousTime;
-            float currentTime = playback.CurrentTime;
+            Dispatch(
+                playback.Montage,
+                playback.PreviousTime,
+                playback.CurrentTime,
+                owner,
+                animator,
+                handler);
+        }
+
+        /// <summary>Animation Sequence 또는 Montage의 지정 시간 구간을 평가합니다.</summary>
+        public void Dispatch(
+            IAnimationNotifyAsset animation,
+            float previousTime,
+            float currentTime,
+            GameObject owner,
+            Animator animator,
+            IAnimNotifyHandler handler = null,
+            float animationWeight = 1f)
+        {
+            if (animation == null || owner == null)
+                return;
+
             float deltaTime = currentTime - previousTime;
+            var context = new AnimNotifyContext(owner, animator, animation, currentTime, deltaTime);
 
-            var context = new AnimNotifyContext(owner, animator, montage, currentTime, deltaTime);
-
-            MontageEvaluator.CollectNotifyEvents(montage, previousTime, currentTime, notifyBuffer);
+            MontageEvaluator.CollectNotifyEvents(animation, previousTime, currentTime, notifyBuffer);
             for (int i = 0; i < notifyBuffer.Count; i++)
             {
                 AnimNotifyPlacement placement = notifyBuffer[i];
                 AnimNotify notify = placement.Notify;
-                if (notify == null)
+                if (notify == null || animationWeight < placement.TriggerWeightThreshold)
                     continue;
 
                 if (lastNotifyTimes.TryGetValue(placement, out float lastTime)
                     && Mathf.Abs(lastTime - placement.Time) < 0.00001f)
+                {
                     continue;
+                }
 
                 lastNotifyTimes[placement] = placement.Time;
-                var notifyContext = new AnimNotifyContext(owner, animator, montage, placement.Time, deltaTime);
+                var notifyContext = new AnimNotifyContext(owner, animator, animation, placement.Time, deltaTime);
                 if (handler != null && handler.TryHandle(notify, notifyContext))
                     continue;
 
@@ -84,7 +107,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             }
 
             MontageEvaluator.CollectNotifyStateTransitions(
-                montage,
+                animation,
                 previousTime,
                 currentTime,
                 beginBuffer,
@@ -94,35 +117,27 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             for (int i = 0; i < endBuffer.Count; i++)
             {
                 AnimNotifyStatePlacement placement = endBuffer[i];
-                AnimNotifyState state = placement.NotifyState;
-                var endContext = new AnimNotifyContext(owner, animator, montage, placement.EndTime, deltaTime);
-                state?.OnEnd(endContext);
+                placement.NotifyState?.OnEnd(
+                    new AnimNotifyContext(owner, animator, animation, placement.EndTime, deltaTime));
             }
 
             for (int i = 0; i < beginBuffer.Count; i++)
             {
                 AnimNotifyStatePlacement placement = beginBuffer[i];
-                AnimNotifyState state = placement.NotifyState;
-                var beginContext = new AnimNotifyContext(owner, animator, montage, placement.StartTime, deltaTime);
-                state?.OnBegin(beginContext);
+                placement.NotifyState?.OnBegin(
+                    new AnimNotifyContext(owner, animator, animation, placement.StartTime, deltaTime));
             }
 
             for (int i = 0; i < tickBuffer.Count; i++)
-            {
-                AnimNotifyState state = tickBuffer[i].NotifyState;
-                state?.OnTick(context, Mathf.Abs(deltaTime));
-            }
+                tickBuffer[i].NotifyState?.OnTick(context, Mathf.Abs(deltaTime));
 
             activeStates.Clear();
             activeStates.AddRange(tickBuffer);
         }
 
-        /// <summary>수동 탐색 위치에 맞춰 활성 NotifyState만 복원하며 Begin, Tick 콜백은 실행하지 않습니다.</summary>
         public void ScrubTo(MontagePlaybackState playback, GameObject owner, Animator animator)
         {
             EndActiveStates(owner, animator, playback?.Montage, playback?.CurrentTime ?? 0f);
-            activeStates.Clear();
-            lastNotifyTimes.Clear();
             if (playback?.Montage == null)
                 return;
 

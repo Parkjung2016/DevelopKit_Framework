@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
@@ -86,6 +86,19 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         public bool ContainsTime(float montageTime) =>
             montageTime >= StartTime && montageTime < EndTime;
+        internal static MontageSegment CreateSequenceSegment(AnimationClip sequenceClip) => new()
+        {
+            sectionName = sequenceClip != null ? sequenceClip.name : "Sequence",
+            trackId = "Default",
+            segmentType = MontageSegmentType.Animation,
+            clip = sequenceClip,
+            startTime = 0f,
+            clipStartTime = 0f,
+            clipEndTime = sequenceClip != null ? sequenceClip.length : 0f,
+            playRate = 1f,
+            blendIn = 0f,
+            blendOut = 0f
+        };
 
         public float ToClipTime(float montageTime)
         {

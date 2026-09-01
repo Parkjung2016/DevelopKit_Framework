@@ -215,7 +215,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             if (IsPlayModePreviewBlocked())
             {
-                DrawEmptyState(rect, "플레이 모드에서는 Montage Preview를 사용할 수 없습니다.");
+                DrawEmptyState(rect, "플레이 모드에서는 Animation Preview를 사용할 수 없습니다.");
                 return;
             }
 

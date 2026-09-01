@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,7 +6,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
     /// <summary>애니메이션 구간, Notify, 트랙과 재생 설정을 담는 Montage 에셋입니다.</summary>
     [CreateAssetMenu(fileName = "Montage_", menuName = "PJDev/Animation/Montage")]
-    public sealed class AnimMontageSO : ScriptableObject
+    public class AnimMontageSO : ScriptableObject, IAnimationNotifyAsset
     {
         [Min(0.01f)] [SerializeField] private float rateScale = 1f;
         [Min(0f)] [SerializeField] private float blendIn;
@@ -25,17 +25,20 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         [NonSerialized] private float cachedLength = -1f;
 
+        public UnityEngine.Object Asset => this;
+        public virtual AnimationAssetType AssetType => AnimationAssetType.Montage;
+
         /// <summary>Montage 전체에 적용되는 재생 속도 배율입니다.</summary>
-        public float RateScale => Mathf.Max(0.01f, rateScale);
+        public virtual float RateScale => Mathf.Max(0.01f, rateScale);
         /// <summary>Animator 상태에서 Montage로 전환하는 시간입니다.</summary>
         public float BlendIn => Mathf.Max(0f, blendIn);
         /// <summary>Montage에서 Animator 상태로 돌아가는 시간입니다.</summary>
         public float BlendOut => Mathf.Max(0f, blendOut);
         /// <summary>위치 또는 회전 Root Motion이 하나라도 활성화되어 있는지 나타냅니다.</summary>
         public bool ApplyRootMotion => applyHorizontalRootMotion || applyVerticalRootMotion || applyRotationRootMotion;
-        public bool ApplyHorizontalRootMotion => applyHorizontalRootMotion;
-        public bool ApplyVerticalRootMotion => applyVerticalRootMotion;
-        public bool ApplyRotationRootMotion => applyRotationRootMotion;
+        public virtual bool ApplyHorizontalRootMotion => applyHorizontalRootMotion;
+        public virtual bool ApplyVerticalRootMotion => applyVerticalRootMotion;
+        public virtual bool ApplyRotationRootMotion => applyRotationRootMotion;
         public IReadOnlyList<MontageSegment> Segments => segments ?? Array.Empty<MontageSegment>();
         public IReadOnlyList<AnimNotifyPlacement> Notifies => notifies ?? Array.Empty<AnimNotifyPlacement>();
         public IReadOnlyList<AnimNotifyStatePlacement> NotifyStates => notifyStates ?? Array.Empty<AnimNotifyStatePlacement>();
@@ -46,7 +49,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public IReadOnlyList<string> TimelineTrackOrder => timelineTrackOrder ?? Array.Empty<string>();
 
         /// <summary>Segment, Notify, NotifyState 중 가장 늦게 끝나는 시각입니다.</summary>
-        public float Length
+        public virtual float Length
         {
             get
             {
@@ -132,11 +135,37 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             return max;
         }
 
-        private void OnEnable() => InvalidateLength();
-        private void InvalidateLength() => cachedLength = -1f;
+        protected virtual void OnEnable() => InvalidateLength();
+        protected void InvalidateLength() => cachedLength = -1f;
+
+        protected void SetSegments(MontageSegment[] value)
+        {
+            segments = value ?? Array.Empty<MontageSegment>();
+            InvalidateLength();
+        }
+
+        protected void ClampNotifyTimeline(float maxTime)
+        {
+            maxTime = Mathf.Max(0f, maxTime);
+            for (int i = 0; notifies != null && i < notifies.Length; i++)
+            {
+                if (notifies[i] != null)
+                    notifies[i].Time = Mathf.Clamp(notifies[i].Time, 0f, maxTime);
+            }
+
+            for (int i = 0; notifyStates != null && i < notifyStates.Length; i++)
+            {
+                AnimNotifyStatePlacement state = notifyStates[i];
+                if (state == null)
+                    continue;
+
+                state.StartTime = Mathf.Clamp(state.StartTime, 0f, maxTime);
+                state.EndTime = Mathf.Clamp(state.EndTime, state.StartTime, maxTime);
+            }
+        }
 
 #if UNITY_EDITOR
-        private void OnValidate()
+        protected virtual void OnValidate()
         {
             rateScale = Mathf.Max(0.01f, rateScale);
             blendIn = Mathf.Max(0f, blendIn);

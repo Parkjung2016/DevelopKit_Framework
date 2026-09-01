@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -8,7 +8,7 @@ using Object = UnityEngine.Object;
 
 namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 {
-    internal sealed class AnimMontageEditorWindow : EditorWindow
+    internal sealed class AnimationEditorWindow : EditorWindow
     {
         private MontageEditorContext context;
         private MontageUnifiedPreviewController previewController;
@@ -33,39 +33,87 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private bool suppressEditorScrubNotify;
         private GameObject editorNotifyFallbackOwner;
 
-        [MenuItem("PJDev/Animation/Montage Editor", priority = -9750)]
+        [MenuItem("PJDev/Animation/Animation Editor", priority = -9750)]
         public static void Open()
         {
-            var window = GetWindow<AnimMontageEditorWindow>();
-            window.titleContent = new GUIContent("Montage Editor");
+            var window = GetWindow<AnimationEditorWindow>();
+            window.titleContent = new GUIContent("Animation Editor");
             window.minSize = new Vector2(1200, 680);
             window.Show();
         }
 
-        public static void Open(AnimMontageSO montage)
+        public static void Open(AnimSequenceSO sequence) =>
+            Open(sequence, null);
+
+        public static void Open(AnimSequenceSO sequence, AnimMontageLibrarySO library) =>
+            OpenAnimationAsset(sequence, library);
+
+        public static void Open(AnimMontageSO montage) =>
+            OpenAnimationAsset(montage, null);
+
+        private static void OpenAnimationAsset(
+            AnimMontageSO montage,
+            AnimMontageLibrarySO preferredLibrary)
         {
-            var window = GetWindow<AnimMontageEditorWindow>();
-            window.titleContent = new GUIContent("Montage Editor");
+            var window = GetWindow<AnimationEditorWindow>();
+            window.titleContent = new GUIContent("Animation Editor");
             window.minSize = new Vector2(1200, 680);
-            window.Show();
+            window.context ??= new MontageEditorContext();
+
+            AnimMontageLibrarySO library = Contains(preferredLibrary, montage)
+                ? preferredLibrary
+                : FindContainingLibrary(montage, window.context.MontageLibrary);
+            window.context.SetMontageLibrary(library);
             window.SetMontageWithoutEditorScrubNotify(montage);
-            if (window.montageField != null)
-                window.montageField.SetValueWithoutNotify(montage);
+            window.montageLibraryField?.SetValueWithoutNotify(library);
+            window.montageField?.SetValueWithoutNotify(montage);
+            window.previewModelField?.SetValueWithoutNotify(library != null ? library.PreviewModel : null);
+            window.previewController?.SetPreviewModel(library != null ? library.PreviewModel : null);
+            window.Show();
+            window.Focus();
         }
 
         public static void Open(AnimMontageLibrarySO library)
         {
-            var window = GetWindow<AnimMontageEditorWindow>();
-            window.titleContent = new GUIContent("Montage Editor");
+            var window = GetWindow<AnimationEditorWindow>();
+            window.titleContent = new GUIContent("Animation Editor");
             window.minSize = new Vector2(1200, 680);
-            window.Show();
             window.context ??= new MontageEditorContext();
             window.context.SetMontageLibrary(library);
-            if (window.montageLibraryField != null)
-                window.montageLibraryField.SetValueWithoutNotify(library);
-            if (window.previewModelField != null)
-                window.previewModelField.SetValueWithoutNotify(library != null ? library.PreviewModel : null);
+            window.montageLibraryField?.SetValueWithoutNotify(library);
+            window.previewModelField?.SetValueWithoutNotify(library != null ? library.PreviewModel : null);
+            window.previewController?.SetPreviewModel(library != null ? library.PreviewModel : null);
+            window.Show();
+            window.Focus();
         }
+
+        private static AnimMontageLibrarySO FindContainingLibrary(
+            AnimMontageSO montage,
+            AnimMontageLibrarySO preferredLibrary)
+        {
+            if (montage == null)
+                return null;
+            if (Contains(preferredLibrary, montage))
+                return preferredLibrary;
+
+            string[] guids = AssetDatabase.FindAssets($"t:{nameof(AnimMontageLibrarySO)}");
+            for (int i = 0; i < guids.Length; i++)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                AnimMontageLibrarySO library =
+                    AssetDatabase.LoadAssetAtPath<AnimMontageLibrarySO>(path);
+                if (Contains(library, montage))
+                    return library;
+            }
+
+            return null;
+        }
+
+        private static bool Contains(AnimMontageLibrarySO library, AnimMontageSO montage) =>
+            library != null && montage != null && (montage is AnimSequenceSO sequence
+                ? library.Contains(sequence)
+                : library.Contains(montage));
+
         private void OnEnable()
         {
             context ??= new MontageEditorContext();
@@ -177,7 +225,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             MontageEditorLayoutHelper.ConfigureSplit(browserSplit, "am-split-browser");
             root.Add(browserSplit);
 
-            var browserPanel = new MontageAssetBrowserPanel(context, CreateMontageAsset, CreateMontageLibraryAsset);
+            var browserPanel = new MontageAssetBrowserPanel(context, CreateSequenceAsset, CreateMontageAsset, CreateMontageLibraryAsset);
             MontageEditorLayoutHelper.ConfigurePane(browserPanel);
             RegisterPlaybackShortcutHandler(browserPanel);
             browserSplit.Add(browserPanel);
@@ -257,11 +305,19 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             var createMenu = new ToolbarMenu { text = "Create" };
             createMenu.style.flexShrink = 0;
-            createMenu.menu.AppendAction("Montage", _ => CreateMontageAsset());
-            createMenu.menu.AppendAction("Montage Library", _ => CreateMontageLibraryAsset());
+            createMenu.menu.AppendAction("Animation Sequence", _ => CreateSequenceAsset());
+            createMenu.menu.AppendAction("Animation Montage", _ => CreateMontageAsset());
+            createMenu.menu.AppendAction("Animation Library", _ => CreateMontageLibraryAsset());
             assetGroup.Add(createMenu);
+            var stateMachineButton = new ToolbarButton(OpenAnimatorStateMachine)
+            {
+                text = "State Machine",
+                tooltip = "Open the State Machine used by this Animation Library"
+            };
+            stateMachineButton.style.flexShrink = 0;
+            assetGroup.Add(stateMachineButton);
 
-            montageLibraryField = new ObjectField("Montage Library")
+            montageLibraryField = new ObjectField("Animation Library")
             {
                 objectType = typeof(AnimMontageLibrarySO),
                 allowSceneObjects = false
@@ -307,6 +363,51 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             root.Add(toolbar);
         }
 
+        private void OpenAnimatorStateMachine()
+        {
+            AnimMontageLibrarySO library = context?.MontageLibrary;
+            if (library == null)
+            {
+                EditorUtility.DisplayDialog(
+                    "Animation Library Required",
+                    "먼저 Animation Library를 선택하세요.",
+                    "OK");
+                return;
+            }
+
+            AnimStateMachineSO stateMachine =
+                AnimationStateMachineEditorUtility.GetStateMachine(library)
+                ?? AnimationStateMachineEditorUtility.CreateWithSavePanel(library);
+            if (stateMachine == null)
+                return;
+
+            AnimationStateMachineEditorUtility.SyncSequenceStates(library);
+            AnimationStateMachineEditorUtility.Open(stateMachine, library);
+        }
+        private void CreateSequenceAsset()
+        {
+            string path = ChooseAssetCreationPath(
+                "Create Animation Sequence",
+                "Sequence_New",
+                "Choose where to create the sequence asset.");
+            if (string.IsNullOrEmpty(path))
+                return;
+
+            var sequence = CreateInstance<AnimSequenceSO>();
+            if (Selection.activeObject is AnimationClip selectedClip)
+                sequence.SetClip(selectedClip);
+
+            AssetDatabase.CreateAsset(sequence, path);
+            AddSequenceToCurrentLibrary(sequence);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            EditorGUIUtility.PingObject(sequence);
+            Selection.activeObject = sequence;
+            montageField?.SetValueWithoutNotify(sequence);
+            SetMontageWithoutEditorScrubNotify(sequence);
+            UpdateStatus();
+            RefreshPlayheadViewWithoutEditorScrubNotify();
+        }
         private void CreateMontageAsset()
         {
             string path = ChooseAssetCreationPath(
@@ -332,9 +433,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void CreateMontageLibraryAsset()
         {
             string path = ChooseAssetCreationPath(
-                "Create Montage Library",
-                "MontageLibrary_New",
-                "Choose where to create the montage library asset.");
+                "Create Animation Library",
+                "AnimationLibrary_New",
+                "Choose where to create the animation library asset.");
             if (string.IsNullOrEmpty(path))
                 return;
 
@@ -377,6 +478,21 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return AssetDatabase.GenerateUniqueAssetPath(path);
         }
 
+        private void AddSequenceToCurrentLibrary(AnimSequenceSO sequence)
+        {
+            AnimMontageLibrarySO library = context?.MontageLibrary;
+            if (library == null || sequence == null || library.Contains(sequence))
+                return;
+
+            Undo.RecordObject(library, "Add Sequence To Library");
+            SerializedObject so = new(library);
+            SerializedProperty sequences = so.FindProperty("sequences");
+            int index = sequences.arraySize;
+            sequences.InsertArrayElementAtIndex(index);
+            sequences.GetArrayElementAtIndex(index).objectReferenceValue = sequence;
+            so.ApplyModifiedProperties();
+            EditorUtility.SetDirty(library);
+        }
         private void AddMontageToCurrentLibrary(AnimMontageSO montage)
         {
             AnimMontageLibrarySO library = context?.MontageLibrary;
@@ -899,19 +1015,25 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             AnimMontageSO montage = context.Montage;
             if (montage == null)
             {
-                statusLabel.text = "Select or create a montage asset.";
+                statusLabel.text = "Select or create an Animation Sequence or Montage.";
                 transportBar?.Refresh();
                 return;
             }
 
             montage.TryGetSegmentAtTime(context.PlayheadTime, out MontageSegment segment, out _);
-            string section = segment != null ? segment.SectionName : "-";
             string clip = segment?.Clip != null ? segment.Clip.name : "-";
             string playState = context.IsPlaying ? "Playing" : "Paused";
-            statusLabel.text =
-                $"{playState} | Section: {section} | Clip: {clip} | Notifies: {montage.Notifies.Count} | States: {montage.NotifyStates.Count}";
-        }
+            if (montage is AnimSequenceSO)
+            {
+                statusLabel.text =
+                    $"{playState} | Sequence: {montage.name} | Clip: {clip} | Notifies: {montage.Notifies.Count} | States: {montage.NotifyStates.Count}";
+                return;
+            }
 
+            string section = segment != null ? segment.SectionName : "-";
+            statusLabel.text =
+                $"{playState} | Montage: {montage.name} | Section: {section} | Clip: {clip} | Notifies: {montage.Notifies.Count} | States: {montage.NotifyStates.Count}";
+        }
         private void SyncToolbarFields()
         {
             if (montageLibraryField != null && montageLibraryField.value != context.MontageLibrary)

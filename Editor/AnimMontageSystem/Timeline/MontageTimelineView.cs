@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
@@ -360,6 +360,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return;
 
             float time = Snap(XToTime(local.x));
+            bool isSequence = montage is AnimSequenceSO;
             GenericMenu menu = new();
             bool hasRow = TryGetTrackRow(local, out TrackRowLayout row);
 
@@ -367,9 +368,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 if (CanReplaceSegmentClip(segmentIndex))
                 {
-                    menu.AddItem(new GUIContent("Segment/Replace Clip..."), false, () => OpenCreatePicker(PendingCreateKind.ReplaceSegmentClip, time, "Default", segmentIndex));
+                    menu.AddItem(new GUIContent("Segment/Replace Clip..."), false,
+                        () => OpenCreatePicker(PendingCreateKind.ReplaceSegmentClip, time, "Default", segmentIndex));
                     if (Selection.activeObject is AnimationClip replacementClip && IsCompatibleAnimationClip(replacementClip))
-                        menu.AddItem(new GUIContent("Segment/Replace Clip From Project Selection"), false, () => ReplaceSegmentClip(segmentIndex, replacementClip));
+                        menu.AddItem(new GUIContent("Segment/Replace Clip From Project Selection"), false,
+                            () => ReplaceSegmentClip(segmentIndex, replacementClip));
                     else
                         menu.AddDisabledItem(new GUIContent("Segment/Replace Clip From Project Selection"));
                 }
@@ -378,52 +381,79 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     menu.AddDisabledItem(new GUIContent("Segment/Replace Clip..."));
                     menu.AddDisabledItem(new GUIContent("Segment/Replace Clip From Project Selection"));
                 }
+
                 if (CanSplitSegmentAtTime(segmentIndex, time))
                     menu.AddItem(new GUIContent("Segment/Split At Cursor"), false, () => SplitSegmentAtTime(segmentIndex, time));
                 else
                     menu.AddDisabledItem(new GUIContent("Segment/Split At Cursor"));
-                menu.AddItem(new GUIContent("Segment/Reset Trim"), false, () => ResetSegmentTrim(segmentIndex));
-                AddElementColorMenuItems(menu, TrackKind.Segment, segmentIndex);
-                menu.AddItem(new GUIContent("Segment/Delete"), false, () => DeleteArrayElement("segments", segmentIndex, "Delete Montage Segment"));
+
+                if (isSequence)
+                {
+                    menu.AddDisabledItem(new GUIContent("Segment/Reset Trim"));
+                    menu.AddDisabledItem(new GUIContent("Segment/Delete"));
+                }
+                else
+                {
+                    menu.AddItem(new GUIContent("Segment/Reset Trim"), false, () => ResetSegmentTrim(segmentIndex));
+                    AddElementColorMenuItems(menu, TrackKind.Segment, segmentIndex);
+                    menu.AddItem(new GUIContent("Segment/Delete"), false,
+                        () => DeleteArrayElement("segments", segmentIndex, "Delete Montage Segment"));
+                }
                 menu.AddItem(new GUIContent("Segment/Select"), false, () => context.SetSelectedSegment(segmentIndex));
                 menu.AddSeparator("");
             }
 
             if (TryHitNotify(local, out int notifyIndex))
             {
-                menu.AddItem(new GUIContent("Notify/Replace Notify..."), false, () => OpenCreatePicker(PendingCreateKind.ReplaceNotify, time, "Default", notifyIndex));
+                menu.AddItem(new GUIContent("Notify/Replace Notify..."), false,
+                    () => OpenCreatePicker(PendingCreateKind.ReplaceNotify, time, "Default", notifyIndex));
                 AddElementColorMenuItems(menu, TrackKind.Notify, notifyIndex);
-                menu.AddItem(new GUIContent("Notify/Delete"), false, () => DeleteArrayElement("notifies", notifyIndex, "Delete Anim Notify"));
+                menu.AddItem(new GUIContent("Notify/Delete"), false,
+                    () => DeleteArrayElement("notifies", notifyIndex, "Delete Anim Notify"));
                 menu.AddSeparator("");
             }
 
             if (TryHitNotifyState(local, out int notifyStateIndex, out _))
             {
-                menu.AddItem(new GUIContent("Notify State/Replace Notify State..."), false, () => OpenCreatePicker(PendingCreateKind.ReplaceNotifyState, time, "Default", notifyStateIndex));
+                menu.AddItem(new GUIContent("Notify State/Replace Notify State..."), false,
+                    () => OpenCreatePicker(PendingCreateKind.ReplaceNotifyState, time, "Default", notifyStateIndex));
                 AddElementColorMenuItems(menu, TrackKind.NotifyState, notifyStateIndex);
-                menu.AddItem(new GUIContent("Notify State/Delete"), false, () => DeleteArrayElement("notifyStates", notifyStateIndex, "Delete Anim Notify State"));
+                menu.AddItem(new GUIContent("Notify State/Delete"), false,
+                    () => DeleteArrayElement("notifyStates", notifyStateIndex, "Delete Anim Notify State"));
                 menu.AddSeparator("");
             }
 
             if (hasRow && row.Kind == TrackKind.Segment)
             {
                 string trackId = row.TrackId;
-                menu.AddItem(new GUIContent("Create/Animation Segment..."), false, () => OpenCreatePicker(PendingCreateKind.Segment, time, trackId));
-                menu.AddItem(new GUIContent("Create/Empty State"), false, () => AddEmptyStateAtTime(time, trackId));
+                menu.AddItem(new GUIContent(isSequence ? "Sequence/Set Clip..." : "Create/Animation Segment..."), false,
+                    () => OpenCreatePicker(
+                        isSequence ? PendingCreateKind.ReplaceSegmentClip : PendingCreateKind.Segment,
+                        time,
+                        trackId,
+                        isSequence ? 0 : -1));
+                if (!isSequence)
+                    menu.AddItem(new GUIContent("Create/Empty State"), false, () => AddEmptyStateAtTime(time, trackId));
+
+                string selectionLabel = isSequence
+                    ? "Sequence/Use Project Selection"
+                    : "Create/Segment From Project Selection";
                 if (Selection.activeObject is AnimationClip selectedClip && IsCompatibleAnimationClip(selectedClip))
-                    menu.AddItem(new GUIContent("Create/Segment From Project Selection"), false, () => AddSegmentAtTime(time, selectedClip, trackId));
+                    menu.AddItem(new GUIContent(selectionLabel), false, () => AddSegmentAtTime(time, selectedClip, trackId));
                 else
-                    menu.AddDisabledItem(new GUIContent("Create/Segment From Project Selection"));
+                    menu.AddDisabledItem(new GUIContent(selectionLabel));
             }
             else if (hasRow && row.Kind == TrackKind.Notify)
             {
                 string trackId = row.TrackId;
-                menu.AddItem(new GUIContent("Create/Notify..."), false, () => OpenCreatePicker(PendingCreateKind.Notify, time, trackId));
+                menu.AddItem(new GUIContent("Create/Notify..."), false,
+                    () => OpenCreatePicker(PendingCreateKind.Notify, time, trackId));
             }
             else if (hasRow && row.Kind == TrackKind.NotifyState)
             {
                 string trackId = row.TrackId;
-                menu.AddItem(new GUIContent("Create/Notify State..."), false, () => OpenCreatePicker(PendingCreateKind.NotifyState, time, trackId));
+                menu.AddItem(new GUIContent("Create/Notify State..."), false,
+                    () => OpenCreatePicker(PendingCreateKind.NotifyState, time, trackId));
             }
             else
             {
@@ -431,15 +461,21 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
 
             menu.AddSeparator("");
-            menu.AddItem(new GUIContent("Track/Add Animation Track"), false, () => AddTrack("animationTracks", "Animation"));
+            if (isSequence)
+                menu.AddDisabledItem(new GUIContent("Track/Add Animation Track"));
+            else
+                menu.AddItem(new GUIContent("Track/Add Animation Track"), false,
+                    () => AddTrack("animationTracks", "Animation"));
             menu.AddItem(new GUIContent("Track/Add Notify Track"), false, () => AddTrack("notifyTracks", "Notify"));
-            menu.AddItem(new GUIContent("Track/Add Notify State Track"), false, () => AddTrack("notifyStateTracks", "Notify State"));
+            menu.AddItem(new GUIContent("Track/Add Notify State Track"), false,
+                () => AddTrack("notifyStateTracks", "Notify State"));
 
             if (hasRow && !string.IsNullOrEmpty(row.TrackId) && row.TrackId != "Default")
             {
                 string propertyName = GetTrackPropertyName(row.Kind);
                 string trackId = row.TrackId;
-                menu.AddItem(new GUIContent("Track/Delete Current Track"), false, () => DeleteTrack(row.Kind, propertyName, trackId));
+                menu.AddItem(new GUIContent("Track/Delete Current Track"), false,
+                    () => DeleteTrack(row.Kind, propertyName, trackId));
             }
             else
             {
@@ -448,7 +484,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             menu.ShowAsContext();
         }
-
         private bool TryCreateElementByDoubleClick(Vector2 local)
         {
             if (!TryGetTrackRow(local, out TrackRowLayout row))
@@ -461,6 +496,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 case TrackKind.Segment:
                     if (Selection.activeObject is AnimationClip selectedClip && IsCompatibleAnimationClip(selectedClip))
                         AddSegmentAtTime(time, selectedClip, trackId);
+                    else if (context.Montage is AnimSequenceSO)
+                        OpenCreatePicker(PendingCreateKind.ReplaceSegmentClip, time, trackId, 0);
                     else
                         OpenCreatePicker(PendingCreateKind.Segment, time, trackId);
                     return true;
@@ -504,8 +541,11 @@ default:
                     continue;
 
                 AddSegmentAtTime(time, clip, row.TrackId);
-                time = Snap(time + Mathf.Max(MinSegmentDuration, clip.length));
                 added = true;
+                if (context.Montage is AnimSequenceSO)
+                    break;
+
+                time = Snap(time + Mathf.Max(MinSegmentDuration, clip.length));
             }
 
             return added;

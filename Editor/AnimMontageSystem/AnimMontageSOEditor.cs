@@ -23,8 +23,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 ("Tracks", GetTrackCount(montage).ToString()));
 
             EditorGUILayout.Space(8);
-            if (GUILayout.Button("Open Montage Editor", GUILayout.Height(28)))
-                AnimMontageEditorWindow.Open(montage);
+            if (GUILayout.Button("Open Animation Editor", GUILayout.Height(28)))
+                AnimationEditorWindow.Open(montage);
 
             EditorGUILayout.Space(6);
             using (new EditorGUI.DisabledScope(EditorApplication.isPlaying))
@@ -74,6 +74,36 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
     }
 
 
+    [CustomEditor(typeof(AnimSequenceSO))]
+    public sealed class AnimSequenceSOEditor : UnityEditor.Editor
+    {
+        public override void OnInspectorGUI()
+        {
+            var sequence = (AnimSequenceSO)target;
+            AnimMontageSOEditor.DrawHeader("Animation Sequence", sequence.name);
+
+            EditorGUI.BeginChangeCheck();
+            AnimationClip clip = (AnimationClip)EditorGUILayout.ObjectField(
+                "Animation Clip",
+                sequence.Clip,
+                typeof(AnimationClip),
+                false);
+            if (EditorGUI.EndChangeCheck())
+                AnimationSequenceEditorUtility.SetClip(sequence, clip);
+
+            AnimMontageSOEditor.DrawMetricRow(
+                ("Length", $"{sequence.Length:0.###}s"),
+                ("Notifies", sequence.Notifies.Count.ToString()),
+                ("States", sequence.NotifyStates.Count.ToString()));
+
+            EditorGUILayout.Space(8);
+            if (GUILayout.Button("Open Animation Editor", GUILayout.Height(28)))
+                AnimationEditorWindow.Open(sequence);
+
+            if (EditorApplication.isPlaying)
+                EditorGUILayout.HelpBox("Play Mode에서는 Animation 에셋 편집을 잠급니다.", MessageType.Info);
+        }
+    }
     internal static class AnimMontageAssetOpenHandler
     {
         [OnOpenAsset]
@@ -82,11 +112,17 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Object asset = EditorUtility.EntityIdToObject(entityId);
             switch (asset)
             {
+                case AnimSequenceSO sequence:
+                    AnimationEditorWindow.Open(sequence);
+                    return true;
                 case AnimMontageSO montage:
-                    AnimMontageEditorWindow.Open(montage);
+                    AnimationEditorWindow.Open(montage);
                     return true;
                 case AnimMontageLibrarySO library:
-                    AnimMontageEditorWindow.Open(library);
+                    AnimationEditorWindow.Open(library);
+                    return true;
+                case AnimStateMachineSO stateMachine:
+                    AnimationStateMachineEditorUtility.Open(stateMachine);
                     return true;
                 default:
                     return false;
@@ -99,17 +135,48 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         public override void OnInspectorGUI()
         {
             var library = (AnimMontageLibrarySO)target;
-            AnimMontageSOEditor.DrawHeader("Montage Library", library.name);
+            AnimMontageSOEditor.DrawHeader("Animation Library", library.name);
             AnimMontageSOEditor.DrawMetricRow(
+                ("Sequences", library.Sequences.Count.ToString()),
                 ("Montages", library.Montages.Count.ToString()),
                 ("Preview", library.PreviewModel != null ? library.PreviewModel.name : "None"));
 
             EditorGUILayout.Space(8);
-            if (GUILayout.Button("Open Montage Editor", GUILayout.Height(28)))
-                AnimMontageEditorWindow.Open(library);
+            AnimStateMachineSO stateMachine = AnimationStateMachineEditorUtility.GetStateMachine(library);
+            EditorGUI.BeginChangeCheck();
+            stateMachine = (AnimStateMachineSO)EditorGUILayout.ObjectField(
+                "State Machine",
+                stateMachine,
+                typeof(AnimStateMachineSO),
+                false);
+            if (EditorGUI.EndChangeCheck())
+                AnimationStateMachineEditorUtility.SetStateMachine(library, stateMachine);
+
+            stateMachine = AnimationStateMachineEditorUtility.GetStateMachine(library);
+            if (stateMachine == null)
+            {
+                if (GUILayout.Button("Create State Machine", GUILayout.Height(24)))
+                    AnimationStateMachineEditorUtility.CreateWithSavePanel(library);
+            }
+            else
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    if (GUILayout.Button("Sync Sequence States", GUILayout.Height(24)))
+                        AnimationStateMachineEditorUtility.SyncSequenceStates(library);
+                    if (GUILayout.Button("Open State Machine", GUILayout.Height(24)))
+                        AnimationStateMachineEditorUtility.Open(stateMachine, library);
+                }
+            }
+
+            EditorGUILayout.Space(8);
+            if (GUILayout.Button("Open Animation Editor", GUILayout.Height(28)))
+                AnimationEditorWindow.Open(library);
 
             EditorGUILayout.Space(6);
-            EditorGUILayout.HelpBox("Montage Library 구성은 Montage Editor에서 관리합니다.", MessageType.Info);
+            EditorGUILayout.HelpBox(
+                "Sequence를 State로 직접 연결하고 Transition과 조건을 전용 그래프에서 편집합니다.",
+                MessageType.Info);
         }
     }
 }

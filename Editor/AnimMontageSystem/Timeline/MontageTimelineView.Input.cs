@@ -198,6 +198,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     return;
                 }
 
+                if (context.Montage is AnimSequenceSO)
+                {
+                    evt.StopPropagation();
+                    return;
+                }
+
                 BeginDrag(segmentDrag, evt.pointerId);
                 dragAnchorTime = XToTime(local.x);
                 dragAnchorValue = GetSegmentDragValue(segmentDrag, dragSegmentIndex);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
@@ -52,7 +52,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (library != null)
             {
                 PreviewModel = library.PreviewModel;
-                if (Montage != null && !library.Contains(Montage))
+                bool containsCurrent = Montage is AnimSequenceSO sequence
+                    ? library.Contains(sequence)
+                    : library.Contains(Montage);
+                if (Montage != null && !containsCurrent)
                 {
                     SetMontage(null);
                     SelectedObject = library;

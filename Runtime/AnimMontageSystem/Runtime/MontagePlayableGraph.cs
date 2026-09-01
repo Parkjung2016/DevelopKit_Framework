@@ -25,14 +25,22 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private PlayableGraph graph;
         private AnimationPlayableOutput output;
         private AnimationLayerMixerPlayable layerMixer;
+        private AnimationMixerPlayable stateMachineMixer;
+        private AnimationClipPlayable stateCurrentPlayable;
+        private AnimationClipPlayable stateNextPlayable;
         private AnimatorControllerPlayable controllerPlayable;
         private AnimationMixerPlayable montageMixer;
         private RuntimeAnimatorController boundController;
+        private AnimationClip boundStateCurrentClip;
+        private AnimationClip boundStateNextClip;
+        private AnimationStateMachinePlayer stateMachinePlayer;
         private AnimatorControllerParameter[] controllerParameters = Array.Empty<AnimatorControllerParameter>();
         private int montageMixerInputCount;
         private float montageWeight;
         private bool hasMontagePose;
         private bool requiresMontageTimeSync;
+        private bool stateMachineBaseConnected;
+        private float outputWeight;
 
         public MontagePlayableGraph(Animator animator)
         {
@@ -54,7 +62,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         {
             if (graph.IsValid())
             {
-                EnsureControllerPlayable();
+                EnsureBasePlayable();
                 return;
             }
 
@@ -67,7 +75,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             layerMixer = AnimationLayerMixerPlayable.Create(graph, 2);
             layerMixer.SetLayerAdditive(1, false);
             output.SetSourcePlayable(layerMixer);
-            EnsureControllerPlayable();
+            output.SetWeight(outputWeight);
+            EnsureBasePlayable();
             ApplyLayerWeights();
             graph.Play();
         }
@@ -160,8 +169,15 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (!graph.IsValid())
                 return;
 
-            EnsureControllerPlayable();
+            EnsureBasePlayable();
             ApplyLayerWeights();
+        }
+
+        public void SetOutputWeight(float weight)
+        {
+            outputWeight = Mathf.Clamp01(weight);
+            if (output.IsOutputValid())
+                output.SetWeight(outputWeight);
         }
 
         public void Evaluate(float deltaTime)
@@ -169,7 +185,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             if (!graph.IsValid())
                 return;
 
-            EnsureControllerPlayable();
+            EnsureBasePlayable();
             SyncControllerParameters();
             graph.Evaluate(Mathf.Max(0f, deltaTime));
         }
@@ -192,14 +208,22 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             graph = default;
             output = default;
             layerMixer = default;
+            stateMachineMixer = default;
+            stateCurrentPlayable = default;
+            stateNextPlayable = default;
             controllerPlayable = default;
             montageMixer = default;
             boundController = null;
+            boundStateCurrentClip = null;
+            boundStateNextClip = null;
+            stateMachinePlayer = null;
             controllerParameters = Array.Empty<AnimatorControllerParameter>();
             montageMixerInputCount = 0;
             montageWeight = 0f;
             hasMontagePose = false;
             requiresMontageTimeSync = false;
+            stateMachineBaseConnected = false;
+            outputWeight = 0f;
             samples.Clear();
             clipPlayables.Clear();
             clipPlayableSegmentIndices.Clear();
@@ -237,6 +261,90 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             return true;
         }
 
+        private void EnsureBasePlayable()
+        {
+            stateMachinePlayer ??= animator != null
+                ? animator.GetComponentInParent<AnimationStateMachinePlayer>(true)
+                : null;
+            if (stateMachinePlayer != null && stateMachinePlayer.Animator == animator)
+            {
+                if (stateMachinePlayer.TryGetPose(out AnimationStateMachinePose pose))
+                    UpdateStateMachineBase(pose);
+                if (stateMachineMixer.IsValid())
+                {
+                    ConnectStateMachineBase();
+                    return;
+                }
+            }
+
+            stateMachinePlayer = null;
+            stateMachineBaseConnected = false;
+            EnsureControllerPlayable();
+        }
+
+        private void UpdateStateMachineBase(AnimationStateMachinePose pose)
+        {
+            if (!stateMachineMixer.IsValid())
+                stateMachineMixer = AnimationMixerPlayable.Create(graph, 2);
+
+            UpdateStateClip(ref stateCurrentPlayable, ref boundStateCurrentClip,
+                pose.CurrentClip, pose.CurrentTime, 0);
+            UpdateStateClip(ref stateNextPlayable, ref boundStateNextClip,
+                pose.NextClip, pose.NextTime, 1);
+            stateMachineMixer.SetInputWeight(0,
+                stateCurrentPlayable.IsValid() ? pose.CurrentWeight : 0f);
+            stateMachineMixer.SetInputWeight(1,
+                stateNextPlayable.IsValid() ? pose.NextWeight : 0f);
+        }
+
+        private void UpdateStateClip(
+            ref AnimationClipPlayable playable,
+            ref AnimationClip boundClip,
+            AnimationClip clip,
+            double time,
+            int input)
+        {
+            if (clip == null)
+            {
+                if (playable.IsValid())
+                {
+                    stateMachineMixer.DisconnectInput(input);
+                    playable.Destroy();
+                }
+                playable = default;
+                boundClip = null;
+                return;
+            }
+
+            if (!playable.IsValid() || boundClip != clip)
+            {
+                if (playable.IsValid())
+                {
+                    stateMachineMixer.DisconnectInput(input);
+                    playable.Destroy();
+                }
+                playable = AnimationClipPlayable.Create(graph, clip);
+                playable.SetApplyFootIK(true);
+                playable.SetApplyPlayableIK(true);
+                playable.SetSpeed(0d);
+                graph.Connect(playable, 0, stateMachineMixer, input);
+                boundClip = clip;
+            }
+
+            playable.SetTime(time);
+            playable.SetDone(false);
+        }
+
+        private void ConnectStateMachineBase()
+        {
+            if (stateMachineBaseConnected)
+                return;
+            graph.Disconnect(layerMixer, 0);
+            graph.Connect(stateMachineMixer, 0, layerMixer, 0);
+            stateMachineBaseConnected = true;
+            ApplyLayerWeights();
+        }
+
         private void EnsureControllerPlayable()
         {
             if (!graph.IsValid() || animator == null)
@@ -244,7 +352,10 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
             RuntimeAnimatorController controller = animator.runtimeAnimatorController;
             if (controller == boundController && controllerPlayable.IsValid())
+            {
+                ConnectControllerBase();
                 return;
+            }
 
             if (controllerPlayable.IsValid())
             {
@@ -265,8 +376,17 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
             controllerPlayable = AnimatorControllerPlayable.Create(graph, controller);
             SyncControllerPlayableStateFromAnimator();
-            graph.Connect(controllerPlayable, 0, layerMixer, 0);
+            ConnectControllerBase();
             ApplyLayerWeights();
+        }
+
+        private void ConnectControllerBase()
+        {
+            if (!controllerPlayable.IsValid())
+                return;
+            graph.Disconnect(layerMixer, 0);
+            graph.Connect(controllerPlayable, 0, layerMixer, 0);
+            stateMachineBaseConnected = false;
         }
 
         private void ApplyLayerWeights()
@@ -277,7 +397,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             float effectiveMontageWeight = montageMixer.IsValid() && hasMontagePose
                 ? montageWeight
                 : 0f;
-            layerMixer.SetInputWeight(0, controllerPlayable.IsValid() ? 1f : 0f);
+            bool hasBasePose = stateMachineBaseConnected && stateMachineMixer.IsValid()
+                               || !stateMachineBaseConnected && controllerPlayable.IsValid();
+            layerMixer.SetInputWeight(0, hasBasePose ? 1f : 0f);
             layerMixer.SetInputWeight(1, effectiveMontageWeight);
         }
 

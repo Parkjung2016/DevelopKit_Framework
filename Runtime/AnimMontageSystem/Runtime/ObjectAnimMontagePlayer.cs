@@ -5,6 +5,7 @@ using UnityEngine;
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 {
     [AddComponentMenu("PJDev/Framework/Object Anim Montage Player")]
+    [DefaultExecutionOrder(-50)]
     public sealed class ObjectAnimMontagePlayer : MonoBehaviour, IAnimMontagePlayer, IAnimNotifyHandler
     {
         [SerializeField] private Animator animator;
@@ -20,6 +21,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         private MontagePlayableGraph playableGraph;
         private MontageRootMotionDriver rootMotionDriver;
+        private AnimationStateMachinePlayer stateMachinePlayer;
         private MontageTransformDriver transformDriver;
         private bool notifyForwardingBound;
         private bool rootMotionActiveThisFrame;
@@ -71,6 +73,8 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
             EnsureGraph();
             EvaluateGraph(0f);
+            SetMontageOutputActive(playback.IsPlaying || playback.IsPaused
+                                                      || blendController.IsFadingOut);
         }
 
         private bool EnsureInitialized()
@@ -85,6 +89,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
             playableGraph ??= new MontagePlayableGraph(animator);
             playableGraph.Bind(animator);
+            FindStateMachinePlayer();
             SyncRootMotionDriver();
             if (!notifyForwardingBound)
             {
@@ -226,13 +231,17 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         private void LateUpdate()
         {
-            if (playableGraph is not { IsValid: true } || playback.Montage == null || (!playback.IsPlaying && !playback.IsPaused))
+            if (playableGraph is not { IsValid: true }
+                || (!playback.IsPlaying && !playback.IsPaused && !blendController.IsFadingOut))
                 return;
             EvaluateGraph(0f);
         }
 
+        private void OnDisable() => SetMontageOutputActive(false);
+
         private void OnDestroy()
         {
+            SetMontageOutputActive(false);
             DestroyGraph();
             rootMotionSampler.Dispose();
         }
@@ -272,6 +281,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             blendController.ClearFadeOut();
             transformDriver?.Reset();
             EnsureGraph();
+            SetMontageOutputActive(true);
             playback.Begin(montage, startTime);
             if (UsesRootMotion(montage))
                 rootMotionSampler.Reset(animator);
@@ -373,6 +383,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
             SetMontageLayerWeight(0f);
             if (playableGraph is { IsValid: true })
                 EvaluateGraph(0f);
+            SetMontageOutputActive(false);
 
             blendController.ClearFadeOut();
             rootMotionSampler.Stop();
@@ -380,6 +391,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
 
         private void DestroyGraph()
         {
+            SetMontageOutputActive(false);
             playableGraph?.Dispose();
             blendController.ClearFadeOut();
             rootMotionSampler.Stop();
@@ -432,6 +444,30 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private void SetMontageLayerWeight(float weight)
         {
             playableGraph?.SetMontageWeight(weight);
+        }
+
+        private void SetMontageOutputActive(bool active)
+        {
+            playableGraph?.SetOutputWeight(active ? 1f : 0f);
+            FindStateMachinePlayer();
+            stateMachinePlayer?.SetOutputWeight(active ? 0f : 1f);
+        }
+
+        private void FindStateMachinePlayer()
+        {
+            if (animator == null)
+            {
+                stateMachinePlayer = null;
+                return;
+            }
+            if (stateMachinePlayer != null && stateMachinePlayer.Animator == animator)
+                return;
+
+            AnimationStateMachinePlayer candidate =
+                animator.GetComponentInParent<AnimationStateMachinePlayer>(true);
+            stateMachinePlayer = candidate != null && candidate.Animator == animator
+                ? candidate
+                : null;
         }
     }
 }

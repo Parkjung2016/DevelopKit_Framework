@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
@@ -8,21 +7,27 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public AnimNotifyContext(
             GameObject owner,
             Animator animator,
-            AnimMontageSO montage,
-            float montageTime,
+            IAnimationNotifyAsset animationAsset,
+            float animationTime,
             float deltaTime)
         {
             Owner = owner;
             Animator = animator;
-            Montage = montage;
-            MontageTime = montageTime;
+            AnimationAsset = animationAsset;
+            AnimationTime = animationTime;
             DeltaTime = deltaTime;
         }
 
         public GameObject Owner { get; }
         public Animator Animator { get; }
-        public AnimMontageSO Montage { get; }
-        public float MontageTime { get; }
+        public IAnimationNotifyAsset AnimationAsset { get; }
+        public Object Asset => AnimationAsset?.Asset;
+        public AnimMontageSO Montage => AnimationAsset?.AssetType == AnimationAssetType.Montage
+            ? AnimationAsset as AnimMontageSO
+            : null;
+        public AnimSequenceSO Sequence => AnimationAsset as AnimSequenceSO;
+        public float AnimationTime { get; }
+
         public float DeltaTime { get; }
     }
 }

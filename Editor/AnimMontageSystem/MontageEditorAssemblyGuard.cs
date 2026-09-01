@@ -1,4 +1,4 @@
-using UnityEditor;
+﻿using UnityEditor;
 using UnityEngine;
 
 namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
@@ -18,7 +18,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             MontageSceneViewNavigation.Shutdown();
 
             Object preferredSelection = null;
-            AnimMontageEditorWindow[] windows = Resources.FindObjectsOfTypeAll<AnimMontageEditorWindow>();
+            AnimationEditorWindow[] windows = Resources.FindObjectsOfTypeAll<AnimationEditorWindow>();
             for (int i = 0; i < windows.Length; i++)
             {
                 if (windows[i] == null)

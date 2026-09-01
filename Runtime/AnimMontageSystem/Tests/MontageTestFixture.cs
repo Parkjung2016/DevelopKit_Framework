@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
@@ -25,6 +25,18 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Tests
             return montage;
         }
 
+        public AnimSequenceSO CreateSequence(
+            AnimationClip clip,
+            AnimNotifyPlacement[] notifies = null,
+            AnimNotifyStatePlacement[] notifyStates = null)
+        {
+            AnimSequenceSO sequence = ScriptableObject.CreateInstance<AnimSequenceSO>();
+            createdObjects.Add(sequence);
+            sequence.SetClip(clip);
+            SetField(sequence, "notifies", notifies ?? Array.Empty<AnimNotifyPlacement>());
+            SetField(sequence, "notifyStates", notifyStates ?? Array.Empty<AnimNotifyStatePlacement>());
+            return sequence;
+        }
         public GameObject CreateGameObject(string name = "Montage Test Owner")
         {
             var gameObject = new GameObject(name);
@@ -74,13 +86,21 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Tests
 
         public static void SetField(object target, string fieldName, object value)
         {
-            FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-            if (field == null)
-                throw new MissingFieldException(target.GetType().FullName, fieldName);
+            Type type = target.GetType();
+            while (type != null)
+            {
+                FieldInfo field = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+                if (field != null)
+                {
+                    field.SetValue(target, value);
+                    return;
+                }
 
-            field.SetValue(target, value);
+                type = type.BaseType;
+            }
+
+            throw new MissingFieldException(target.GetType().FullName, fieldName);
         }
-
         public void Dispose()
         {
             for (int i = createdObjects.Count - 1; i >= 0; i--)

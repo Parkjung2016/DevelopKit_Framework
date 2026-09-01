@@ -11,6 +11,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
     internal sealed class MontageAssetBrowserPanel : VisualElement
     {
         private readonly MontageEditorContext context;
+        private readonly Action createSequence;
         private readonly Action createMontage;
         private readonly Action createLibrary;
         private readonly Dictionary<MontageBrowserTab, Button> tabButtons = new();
@@ -20,9 +21,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private MontageBrowserTab activeTab = MontageBrowserTab.Libraries;
         private Type selectedNotifyType;
 
-        public MontageAssetBrowserPanel(MontageEditorContext context, Action createMontage, Action createLibrary)
+        public MontageAssetBrowserPanel(MontageEditorContext context, Action createSequence, Action createMontage, Action createLibrary)
         {
             this.context = context;
+            this.createSequence = createSequence;
             this.createMontage = createMontage;
             this.createLibrary = createLibrary;
             style.flexShrink = 0;
@@ -40,6 +42,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             var tabs = new Toolbar();
             tabs.style.flexShrink = 0;
             tabs.Add(CreateTabButton("Libraries", MontageBrowserTab.Libraries));
+            tabs.Add(CreateTabButton("Sequences", MontageBrowserTab.Sequences));
             tabs.Add(CreateTabButton("Montages", MontageBrowserTab.Montages));
             Add(tabs);
 
@@ -90,6 +93,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 case MontageBrowserTab.Libraries:
                     PopulateAssets<AnimMontageLibrarySO>(filter);
                     break;
+                case MontageBrowserTab.Sequences:
+                    PopulateSequences(filter);
+                    break;
                 case MontageBrowserTab.Montages:
                     PopulateMontages(filter);
                     break;
@@ -103,6 +109,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             {
                 case MontageBrowserTab.Libraries:
                     actionBar.Add(CreateActionButton("New Library", createLibrary));
+                    break;
+                case MontageBrowserTab.Sequences:
+                    Button sequenceButton = CreateActionButton("New Sequence", createSequence);
+                    sequenceButton.SetEnabled(context.MontageLibrary != null);
+                    actionBar.Add(sequenceButton);
                     break;
                 case MontageBrowserTab.Montages:
                     Button button = CreateActionButton("New Montage", createMontage);
@@ -161,11 +172,39 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
         }
 
+        private void PopulateSequences(string filter)
+        {
+            if (context.MontageLibrary == null)
+            {
+                AddEmptyState("Select an Animation Library.");
+                return;
+            }
+
+            IReadOnlyList<AnimSequenceSO> sequences = context.MontageLibrary.Sequences;
+            for (int i = 0; i < sequences.Count; i++)
+            {
+                AnimSequenceSO sequence = sequences[i];
+                if (sequence == null)
+                    continue;
+
+                if (!string.IsNullOrEmpty(filter)
+                    && sequence.name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+
+                string clipName = sequence.Clip != null ? sequence.Clip.name : "No Clip";
+                scrollView.Add(CreateRow($"{sequence.name}  ·  {clipName}", sequence, () =>
+                {
+                    Focus();
+                    selectedNotifyType = null;
+                    context.SetMontage(sequence);
+                }));
+            }
+        }
         private void PopulateMontages(string filter)
         {
             if (context.MontageLibrary == null)
             {
-                AddEmptyState("Select a Montage Library.");
+                AddEmptyState("Select an Animation Library.");
                 return;
             }
 
@@ -323,7 +362,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             return activeTab switch
             {
                 MontageBrowserTab.Libraries => context.MontageLibrary,
-                MontageBrowserTab.Montages => context.Montage,
+                MontageBrowserTab.Sequences => context.Montage as AnimSequenceSO,
+                MontageBrowserTab.Montages => context.Montage is AnimSequenceSO ? null : context.Montage,
                 _ => null
             };
         }
@@ -333,7 +373,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (asset == null)
                 return;
 
-            string title = asset is AnimMontageLibrarySO ? "Rename Montage Library" : "Rename Montage";
+            string title = asset switch
+            {
+                AnimMontageLibrarySO => "Rename Animation Library",
+                AnimSequenceSO => "Rename Animation Sequence",
+                _ => "Rename Animation Montage"
+            };
             RenameAssetPopup.Show(asset, title, newName =>
             {
                 string path = AssetDatabase.GetAssetPath(asset);
@@ -365,7 +410,12 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             if (string.IsNullOrEmpty(path))
                 return;
 
-            string assetKind = asset is AnimMontageLibrarySO ? "Montage Library" : "Montage";
+            string assetKind = asset switch
+            {
+                AnimMontageLibrarySO => "Animation Library",
+                AnimSequenceSO => "Animation Sequence",
+                _ => "Animation Montage"
+            };
             if (!EditorUtility.DisplayDialog(
                     $"Delete {assetKind}",
                     $"Delete '{asset.name}'?\n\n{path}",
@@ -377,15 +427,15 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             bool deletingCurrentMontage = asset is AnimMontageSO montage && context.Montage == montage;
             bool deletingCurrentLibrary = asset is AnimMontageLibrarySO library && context.MontageLibrary == library;
-            bool deletingMontageAsset = asset is AnimMontageSO;
+            bool deletingAnimationAsset = asset is AnimMontageSO;
             if (!AssetDatabase.DeleteAsset(path))
             {
                 EditorUtility.DisplayDialog($"Delete {assetKind}", "Failed to delete asset.", "OK");
                 return;
             }
 
-            if (deletingMontageAsset)
-                MontageLibraryReferenceCleaner.RemoveMissingMontageReferences();
+            if (deletingAnimationAsset)
+                MontageLibraryReferenceCleaner.RemoveMissingAnimationReferences();
 
             AssetDatabase.SaveAssets();
             if (deletingCurrentMontage)
@@ -466,6 +516,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private enum MontageBrowserTab
         {
             Libraries,
+            Sequences,
             Montages
         }
     }

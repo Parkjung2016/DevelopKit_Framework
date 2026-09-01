@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
@@ -78,7 +78,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             filteredAssetsDirty = true;
 
             DisposeSearchContext();
-            SearchFlags flags = SearchFlags.Default | SearchFlags.FirstBatchAsync;
+            SearchFlags flags = SearchFlags.Default;
             searchContext = SearchService.CreateContext("asset", $"t:{objectType.Name}", flags);
             EditorApplication.update -= LoadAssetBatch;
             EditorApplication.update += LoadAssetBatch;

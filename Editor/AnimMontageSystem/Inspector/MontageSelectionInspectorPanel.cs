@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -423,6 +424,26 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return false;
 
             MontageSegment segment = montage.Segments[index];
+            if (montage is AnimSequenceSO)
+            {
+                root.Add(new Label("Animation Sequence")
+                {
+                    style = { unityFontStyleAndWeight = FontStyle.Bold, marginBottom = 6f }
+                });
+                AddSequenceClipField(root, (AnimSequenceSO)montage);
+                root.Add(new Label("Sequence의 Clip 구간은 고정됩니다. Notify와 Notify State만 타임라인에서 편집할 수 있습니다.")
+                {
+                    style =
+                    {
+                        marginTop = 6f,
+                        whiteSpace = WhiteSpace.Normal,
+                        color = new Color(0.78f, 0.82f, 0.9f, 0.9f)
+                    }
+                });
+                root.Bind(boundObject);
+                return true;
+            }
+
             if (segment?.IsEmptyState == true)
             {
                 return BuildArrayElementInspector(
@@ -471,7 +492,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 return false;
 
             boundObject = new SerializedObject(library);
-            root.Add(new Label("Montage Library")
+            root.Add(new Label("Animation Library")
             {
                 style =
                 {
@@ -493,9 +514,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 root.Add(previewField);
             }
 
-            AddProperty(root, "montages");
+            AddStateMachineControls(root, library);
 
-            root.Add(new Label($"Montages: {library.Montages.Count}")
+            AddProperty(root, "sequences", "Sequences");
+            AddProperty(root, "montages", "Montages");
+            root.Add(new Label($"Sequences: {library.Sequences.Count} | Montages: {library.Montages.Count}")
             {
                 style =
                 {
@@ -508,15 +531,110 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             root.Bind(boundObject);
             return true;
         }
+        private void AddStateMachineControls(VisualElement root, AnimMontageLibrarySO library)
+        {
+            var card = new VisualElement
+            {
+                style =
+                {
+                    paddingTop = 8,
+                    paddingBottom = 8,
+                    paddingLeft = 8,
+                    paddingRight = 8,
+                    marginTop = 8,
+                    marginBottom = 8,
+                    backgroundColor = new Color(0.16f, 0.16f, 0.18f, 0.96f)
+                }
+            };
+            card.Add(new Label("Animation State Machine")
+            {
+                style = { unityFontStyleAndWeight = FontStyle.Bold, marginBottom = 6f }
+            });
 
-        private bool TryBuildMontageInspector(VisualElement root)
+            AnimStateMachineSO stateMachine = AnimationStateMachineEditorUtility.GetStateMachine(library);
+            var stateMachineField = new ObjectField("State Machine")
+            {
+                objectType = typeof(AnimStateMachineSO),
+                allowSceneObjects = false,
+                value = stateMachine
+            };
+            stateMachineField.RegisterValueChangedCallback(evt =>
+            {
+                AnimationStateMachineEditorUtility.SetStateMachine(library, evt.newValue as AnimStateMachineSO);
+                context.NotifyExternalChange();
+                schedule.Execute(Rebuild);
+            });
+            card.Add(stateMachineField);
+
+            if (stateMachine == null)
+            {
+                var createButton = new Button(() =>
+                {
+                    AnimStateMachineSO created = AnimationStateMachineEditorUtility.CreateWithSavePanel(library);
+                    if (created == null)
+                        return;
+
+                    context.NotifyExternalChange();
+                    schedule.Execute(Rebuild);
+                })
+                {
+                    text = "Create State Machine"
+                };
+                createButton.style.marginTop = 6f;
+                card.Add(createButton);
+            }
+            else
+            {
+                var actions = new VisualElement
+                {
+                    style =
+                    {
+                        flexDirection = FlexDirection.Row,
+                        marginTop = 6f
+                    }
+                };
+                var syncButton = new Button(() =>
+                {
+                    int changed = AnimationStateMachineEditorUtility.SyncSequenceStates(library);
+                    context.NotifyExternalChange();
+                    Debug.Log($"[Animation Editor] Sequence State {changed}개를 추가했습니다.");
+                })
+                {
+                    text = "Sync Sequence States"
+                };
+                syncButton.style.flexGrow = 1f;
+                actions.Add(syncButton);
+
+                var openButton = new Button(() => AnimationStateMachineEditorUtility.Open(stateMachine, library))
+                {
+                    text = "Open State Machine"
+                };
+                openButton.style.flexGrow = 1f;
+                actions.Add(openButton);
+                card.Add(actions);
+            }
+
+            card.Add(new Label("Sequence를 State로 직접 연결하고 Transition과 조건을 전용 그래프에서 편집합니다.")
+            {
+                style =
+                {
+                    marginTop = 6f,
+                    whiteSpace = WhiteSpace.Normal,
+                    color = new Color(0.74f, 0.79f, 0.88f, 0.9f)
+                }
+            });
+            root.Add(card);
+        }        private bool TryBuildMontageInspector(VisualElement root)
         {
             AnimMontageSO montage = context.Montage;
             if (montage == null)
                 return false;
 
             boundObject = new SerializedObject(montage);
-            root.Add(new Label("Montage")
+            if (montage is AnimSequenceSO sequence)
+                return TryBuildSequenceInspector(root, sequence);
+
+            root.Add(new Label("Animation Montage")
             {
                 style =
                 {
@@ -543,9 +661,63 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             root.Bind(boundObject);
             return true;
         }
+        private bool TryBuildSequenceInspector(VisualElement root, AnimSequenceSO sequence)
+        {
+            root.Add(new Label("Animation Sequence")
+            {
+                style =
+                {
+                    unityFontStyleAndWeight = FontStyle.Bold,
+                    marginBottom = 6f
+                }
+            });
 
+            AddSequenceClipField(root, sequence);
+            var stateButton = new Button(() => OpenSequenceState(sequence))
+            {
+                text = "Open Sequence State"
+            };
+            stateButton.SetEnabled(sequence.Clip != null && context.MontageLibrary != null);
+            stateButton.style.marginTop = 6f;
+            root.Add(stateButton);
+            string clipName = sequence.Clip != null ? sequence.Clip.name : "None";
+            root.Add(new Label(
+                $"Clip: {clipName} | Length: {sequence.Length:0.###}s | Notifies: {sequence.Notifies.Count} | States: {sequence.NotifyStates.Count}")
+            {
+                style =
+                {
+                    marginTop = 8f,
+                    whiteSpace = WhiteSpace.Normal,
+                    color = new Color(0.78f, 0.82f, 0.9f, 0.82f)
+                }
+            });
+            root.Add(new Label("State Machine은 이 Sequence를 직접 참조합니다.")
+            {
+                style =
+                {
+                    marginTop = 6f,
+                    whiteSpace = WhiteSpace.Normal,
+                    color = new Color(0.72f, 0.76f, 0.84f, 0.86f)
+                }
+            });
 
-        private void AddMontageSettingsCard(VisualElement root, string title, params string[] propertyNames)
+            root.Bind(boundObject);
+            return true;
+        }
+        private void OpenSequenceState(AnimSequenceSO sequence)
+        {
+            AnimMontageLibrarySO library = context.MontageLibrary;
+            if (library == null || sequence == null)
+                return;
+
+            AnimStateMachineSO stateMachine = AnimationStateMachineEditorUtility.GetStateMachine(library)
+                ?? AnimationStateMachineEditorUtility.CreateWithSavePanel(library);
+            if (stateMachine == null)
+                return;
+
+            AnimationStateMachineEditorUtility.AddSequenceState(library, sequence);
+            AnimationStateMachineEditorUtility.Open(stateMachine, library);
+        }        private void AddMontageSettingsCard(VisualElement root, string title, params string[] propertyNames)
         {
             var card = new VisualElement
             {
@@ -587,13 +759,43 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
             root.Add(card);
         }
-        private void AddProperty(VisualElement root, string propertyName)
+        private void AddSequenceClipField(VisualElement root, AnimSequenceSO sequence)
+        {
+            var field = new ObjectField("Animation Clip")
+            {
+                objectType = typeof(AnimationClip),
+                allowSceneObjects = false,
+                value = sequence.Clip
+            };
+            field.SetEnabled(!EditorApplication.isPlaying);
+            field.RegisterValueChangedCallback(evt =>
+            {
+                AnimationClip clip = evt.newValue as AnimationClip;
+                if (clip != null && !MontageAnimationClipCompatibility.IsCompatible(context.PreviewModel, clip))
+                {
+                    field.SetValueWithoutNotify(sequence.Clip);
+                    EditorUtility.DisplayDialog(
+                        "Incompatible Animation Clip",
+                        "현재 Preview Model과 호환되는 Animation Clip을 선택하세요.",
+                        "OK");
+                    return;
+                }
+
+                if (!AnimationSequenceEditorUtility.SetClip(sequence, clip))
+                    return;
+
+                context.SetPlayhead(0f);
+                context.NotifyExternalChange();
+                schedule.Execute(Rebuild);
+            });
+            root.Add(field);
+        }
+        private void AddProperty(VisualElement root, string propertyName, string label = null)
         {
             SerializedProperty property = boundObject.FindProperty(propertyName);
             if (property != null)
-                root.Add(new PropertyField(property));
+                root.Add(label == null ? new PropertyField(property) : new PropertyField(property, label));
         }
-
         private bool BuildArrayElementInspector(VisualElement root, string title, string arrayPropertyName, int index, params string[] propertyNames)
         {
             SerializedProperty array = boundObject.FindProperty(arrayPropertyName);
@@ -630,7 +832,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             }
         };
 
-        private static Label CreatePlayModeReadonlyNotice() => new("Play Mode: Montage asset editing is locked.")
+        private static Label CreatePlayModeReadonlyNotice() => new("Play Mode: Animation asset editing is locked.")
         {
             style =
             {
