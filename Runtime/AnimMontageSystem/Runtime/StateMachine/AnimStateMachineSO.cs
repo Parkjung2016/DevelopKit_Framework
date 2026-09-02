@@ -373,7 +373,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     public sealed class AnimStateConduit : AnimStateNode
     {
         internal AnimStateConduit(Vector2 graphPosition, string parentId)
-            : base("Decision", graphPosition, parentId)
+            : base("Conduit", graphPosition, parentId)
         {
         }
     }
@@ -387,7 +387,7 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         public IReadOnlyList<string> SourceNodeIds => sourceNodeIds;
 
         internal AnimStateAlias(Vector2 graphPosition, string parentId)
-            : base("Transition Group", graphPosition, parentId)
+            : base("Alias", graphPosition, parentId)
         {
         }
 

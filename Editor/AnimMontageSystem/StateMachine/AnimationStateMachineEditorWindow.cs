@@ -1188,9 +1188,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             AnimSequenceState state when state.Sequence.Clip == null =>
                 "Animation Clip is not assigned to the Sequence.",
             AnimStateConduit conduit when CountOutgoing(conduit.Id) == 0 =>
-                "Decision has no outgoing Transition.",
+                "Conduit has no outgoing Transition.",
             AnimStateAlias alias when alias.SourceNodeIds.Count == 0 =>
-                "Transition Group has no shared State.",
+                "Alias has no shared State.",
             AnimStateMachineNode machine when CountChildren(machine.Id) == 0 =>
                 "State Machine is empty.",
             _ => string.Empty
@@ -2221,7 +2221,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 DrawSimpleNodeInspector(conduit,
                     "실행 흐름이 이 노드에 들어오면 조건을 만족한 첫 번째 Transition으로 즉시 이동합니다.", true);
             else if (node is AnimStateAlias alias)
-                DrawTransitionGroupInspector(alias);
+                DrawAliasInspector(alias);
             else if (node is AnimStateMachineNode machine)
                 DrawStateMachineInspector(machine);
             else if (transition != null)
@@ -2274,11 +2274,11 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             DrawNodeActions(node, canBeDefault);
         }
 
-        private void DrawTransitionGroupInspector(AnimStateAlias group)
+        private void DrawAliasInspector(AnimStateAlias alias)
         {
-            DrawNodeName(group);
+            DrawNodeName(alias);
             EditorGUILayout.Space(6f);
-            EditorGUILayout.LabelField("Apply Transitions To", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField("Alias States", EditorStyles.miniBoldLabel);
             bool hasSource = false;
             for (int i = 0; i < stateMachine.States.Count; i++)
             {
@@ -2286,7 +2286,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 if (source.ParentStateMachineId != currentStateMachineId)
                     continue;
                 hasSource = true;
-                DrawTransitionGroupSource(group, source);
+                DrawAliasSource(alias, source);
             }
             for (int i = 0; i < stateMachine.StateMachines.Count; i++)
             {
@@ -2294,27 +2294,27 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 if (source.ParentStateMachineId != currentStateMachineId)
                     continue;
                 hasSource = true;
-                DrawTransitionGroupSource(group, source);
+                DrawAliasSource(alias, source);
             }
             if (!hasSource)
-                EditorGUILayout.HelpBox("Transition을 공유할 State 또는 State Machine이 없습니다.", MessageType.Warning);
+                EditorGUILayout.HelpBox("Alias에 포함할 State 또는 State Machine이 없습니다.", MessageType.Warning);
             EditorGUILayout.HelpBox(
                 "선택한 State들은 이 그룹에서 나가는 Transition을 함께 검사합니다. "
                 + "실행 흐름이 이 노드를 직접 통과하지는 않습니다.", MessageType.Info);
-            DrawNodeActions(group, false);
+            DrawNodeActions(alias, false);
         }
 
-        private void DrawTransitionGroupSource(AnimStateAlias group, AnimStateNode source)
+        private void DrawAliasSource(AnimStateAlias alias, AnimStateNode source)
         {
-            bool current = group.Contains(source.Id);
+            bool current = alias.Contains(source.Id);
             bool next = EditorGUILayout.ToggleLeft(source.Name, current);
             if (next == current)
                 return;
-            Undo.RecordObject(stateMachine, "Edit Transition Group");
+            Undo.RecordObject(stateMachine, "Edit Alias");
             if (next)
-                group.AddSource(source.Id);
+                alias.AddSource(source.Id);
             else
-                group.RemoveSource(source.Id);
+                alias.RemoveSource(source.Id);
             Save();
         }
 
@@ -4383,9 +4383,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             menu.AddItem(new GUIContent("Sequence State..."), false, () => ShowSequencePicker(graphPosition));
             menu.AddItem(new GUIContent("Empty State"), false, () => AddState(null, graphPosition));
             menu.AddSeparator("");
-            menu.AddItem(new GUIContent("Flow/Decision", "조건에 따라 다음 실행 State를 고릅니다."),
+            menu.AddItem(new GUIContent("Flow/Conduit", "조건에 따라 다음 실행 State를 고릅니다."),
                 false, () => AddConduit(graphPosition));
-            menu.AddItem(new GUIContent("Rules/Transition Group", "여러 State가 같은 Transition을 공유합니다."),
+            menu.AddItem(new GUIContent("Rules/Alias", "여러 State가 같은 Transition을 공유합니다."),
                 false, () => AddAlias(graphPosition));
             menu.AddItem(new GUIContent("State Machine"), false, () => AddStateMachine(graphPosition));
             menu.ShowAsContext();
@@ -4422,13 +4422,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private void AddConduit(Vector2 graphPosition)
         {
-            Undo.RecordObject(stateMachine, "Add Decision");
+            Undo.RecordObject(stateMachine, "Add Conduit");
             SelectAddedNode(stateMachine.AddConduit(graphPosition, currentStateMachineId));
         }
 
         private void AddAlias(Vector2 graphPosition)
         {
-            Undo.RecordObject(stateMachine, "Add Transition Group");
+            Undo.RecordObject(stateMachine, "Add Alias");
             SelectAddedNode(stateMachine.AddAlias(graphPosition, currentStateMachineId));
         }
 
@@ -5132,16 +5132,16 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 
         private static string GetNodeDisplayName(AnimStateNode node) => node switch
         {
-            AnimStateConduit when node.Name is "Conduit" or "Branch" => "Decision",
-            AnimStateAlias when node.Name is "State Alias" or "State Group" => "Transition Group",
+            AnimStateConduit when node.Name is "Decision" or "Branch" => "Conduit",
+            AnimStateAlias when node.Name is "State Alias" or "State Group" or "Transition Group" => "Alias",
             _ => node.Name
         };
 
         private static string GetNodeTypeName(AnimStateNode node) => node switch
         {
             AnimSequenceState => "State",
-            AnimStateConduit => "Decision",
-            AnimStateAlias => "Transition Group",
+            AnimStateConduit => "Conduit",
+            AnimStateAlias => "Alias",
             AnimStateMachineNode => "State Machine",
             _ => "Node"
         };
