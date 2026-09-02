@@ -19,12 +19,14 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
     }
     public enum AnimStateConditionMode
     {
-        If,
-        IfNot,
-        Greater,
-        Less,
-        Equals,
-        NotEqual
+        If = 0,
+        IfNot = 1,
+        Greater = 2,
+        Less = 3,
+        Equals = 4,
+        NotEqual = 5,
+        GreaterOrEqual = 6,
+        LessOrEqual = 7
     }
 
     public enum AnimStateRuleOperator

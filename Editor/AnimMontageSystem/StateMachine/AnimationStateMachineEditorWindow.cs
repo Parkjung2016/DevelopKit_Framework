@@ -164,7 +164,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         public static void Open(AnimStateMachineSO value, AnimMontageLibrarySO ownerLibrary = null)
         {
             AnimationStateMachineEditorWindow window = GetWindow<AnimationStateMachineEditorWindow>();
-            window.titleContent = new GUIContent("Animation State Machine");
+            window.titleContent = new GUIContent(value != null
+                ? $"State Machine - {value.name}"
+                : "Animation State Machine");
             window.minSize = new Vector2(620f, 420f);
             window.stateMachine = value;
             window.library = ownerLibrary;
@@ -196,6 +198,8 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Undo.undoRedoPerformed += OnEditorDataChanged;
             EditorApplication.projectChanged += OnEditorDataChanged;
             EditorApplication.update += OnEditorUpdate;
+            Selection.selectionChanged += OnHierarchySelectionChanged;
+            EditorApplication.delayCall += OnHierarchySelectionChanged;
         }
 
         private void OnDisable()
@@ -203,8 +207,32 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             Undo.undoRedoPerformed -= OnEditorDataChanged;
             EditorApplication.projectChanged -= OnEditorDataChanged;
             EditorApplication.update -= OnEditorUpdate;
+            Selection.selectionChanged -= OnHierarchySelectionChanged;
+            EditorApplication.delayCall -= OnHierarchySelectionChanged;
             CancelAllInteractions();
         }
+
+        private void OnHierarchySelectionChanged()
+        {
+            GameObject selectedObject = Selection.activeGameObject;
+            if (selectedObject == null || !selectedObject.scene.IsValid())
+                return;
+
+            AnimationStateMachinePlayer player =
+                selectedObject.GetComponent<AnimationStateMachinePlayer>();
+            player ??= selectedObject.GetComponentInParent<AnimationStateMachinePlayer>(true);
+            player ??= selectedObject.GetComponentInChildren<AnimationStateMachinePlayer>(true);
+            if (player?.StateMachine == null)
+                return;
+
+            if (EditorApplication.isPlaying)
+                SetDebugPlayer(player);
+            else
+                SwitchStateMachine(player.StateMachine);
+
+            Repaint();
+        }
+
 
         private void OnEditorUpdate()
         {
@@ -761,7 +789,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         {
             GUILayout.BeginArea(new Rect(0f, 0f, position.width, ToolbarHeight), EditorStyles.toolbar);
             GUILayout.BeginHorizontal();
-            bool compactToolbar = position.width < 760f;
+            bool compactToolbar = position.width < 980f;
             DrawHistoryButtons();
             float assetWidth = compactToolbar
                 ? 120f
@@ -772,20 +800,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 false,
                 GUILayout.Width(assetWidth));
             if (selected != stateMachine)
-            {
-                stateMachine = selected;
-                debugPlayer = null;
-                nextDebugSearchTime = 0d;
-                ClearSelection();
-                ClearRuleSelection();
-                editingTransitionId = null;
-                currentStateMachineId = string.Empty;
-                pan = new Vector2(20f, 20f);
-                graphZoom = 1f;
-                ResetNavigationHistory();
-                FrameStates();
-                SaveCurrentNavigationView();
-            }
+                SwitchStateMachine(selected);
 
             if (EditorApplication.isPlaying)
             {
@@ -807,14 +822,7 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                         GUILayout.Width(compactToolbar ? 30f : 66f)))
                     ShowAddStateMenu(ScreenToGraph(graphViewportSize * 0.5f) - NodeSize * 0.5f);
             }
-            if (!string.IsNullOrEmpty(currentStateMachineId))
-            {
-                AnimStateMachineNode current = stateMachine.FindStateMachine(currentStateMachineId);
-                if (GUILayout.Button(new GUIContent("Up", "부모 State Machine으로 이동"), EditorStyles.toolbarButton, GUILayout.Width(28f)))
-                    EnterStateMachine(current?.ParentStateMachineId);
-                GUILayout.Label(new GUIContent(current?.Name ?? "Root", current?.Name),
-                    EditorStyles.miniLabel, GUILayout.MaxWidth(compactToolbar ? 60f : 100f));
-            }
+            DrawStateMachineBreadcrumb(compactToolbar);
             if (GUILayout.Button(new GUIContent(compactToolbar ? "F" : "Frame", "Frame selection (F)"),
                     EditorStyles.toolbarButton, GUILayout.Width(compactToolbar ? 28f : 48f)))
                 FrameSelectionOrAll();
@@ -847,6 +855,77 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             GUILayout.EndArea();
         }
 
+        private void DrawStateMachineBreadcrumb(bool compact)
+        {
+            AnimStateMachineNode current = stateMachine?.FindStateMachine(currentStateMachineId);
+            if (compact)
+            {
+                if (current == null)
+                {
+                    GUILayout.Label("Root", EditorStyles.miniLabel, GUILayout.Width(34f));
+                    return;
+                }
+
+                if (GUILayout.Button(new GUIContent("Up", "부모 State Machine으로 이동"),
+                        EditorStyles.toolbarButton, GUILayout.Width(28f)))
+                    EnterStateMachine(current.ParentStateMachineId);
+                GUILayout.Label(new GUIContent(current.Name, current.Name),
+                    EditorStyles.miniLabel, GUILayout.MaxWidth(72f));
+                return;
+            }
+
+            breadcrumbStateMachines.Clear();
+            for (AnimStateMachineNode machine = current; machine != null;
+                 machine = stateMachine.FindStateMachine(machine.ParentStateMachineId))
+                breadcrumbStateMachines.Add(machine);
+            breadcrumbStateMachines.Reverse();
+
+            if (GUILayout.Button(new GUIContent("Root", "Root State Machine으로 이동"),
+                    EditorStyles.toolbarButton, GUILayout.Width(40f)))
+                EnterStateMachine(string.Empty);
+
+            int first = Mathf.Max(0, breadcrumbStateMachines.Count - 2);
+            if (first > 0)
+                GUILayout.Label("/ ...", EditorStyles.miniLabel, GUILayout.Width(28f));
+            for (int i = first; i < breadcrumbStateMachines.Count; i++)
+            {
+                AnimStateMachineNode machine = breadcrumbStateMachines[i];
+                GUILayout.Label("/", EditorStyles.miniLabel, GUILayout.Width(8f));
+                float width = Mathf.Clamp(
+                    EditorStyles.toolbarButton.CalcSize(new GUIContent(machine.Name)).x + 8f,
+                    44f, 100f);
+                if (GUILayout.Button(new GUIContent(machine.Name, machine.Name),
+                        EditorStyles.toolbarButton, GUILayout.Width(width)))
+                    EnterStateMachine(machine.Id);
+            }
+        }
+
+        private void SwitchStateMachine(AnimStateMachineSO selected)
+        {
+            if (stateMachine == selected)
+                return;
+
+            stateMachine = selected;
+            if (library != null && library.StateMachine != stateMachine)
+                library = null;
+            debugPlayer = null;
+            nextDebugSearchTime = 0d;
+            ClearSelection();
+            ClearRuleSelection();
+            editingTransitionId = null;
+            currentStateMachineId = string.Empty;
+            pan = new Vector2(20f, 20f);
+            graphZoom = 1f;
+            validationDirty = true;
+            ResetNavigationHistory();
+            FrameStates();
+            SaveCurrentNavigationView();
+            titleContent = new GUIContent(stateMachine != null
+                ? $"State Machine - {stateMachine.name}"
+                : "Animation State Machine");
+        }
+
+
         private void DrawLiveDebugToolbar(bool compact)
         {
             GUILayout.Label(new GUIContent("LIVE", "Play Mode State Machine debugger"),
@@ -875,6 +954,9 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         private void SetDebugPlayer(AnimationStateMachinePlayer player)
         {
             debugPlayer = player;
+            titleContent = new GUIContent(player?.StateMachine != null
+                ? $"State Machine - {player.StateMachine.name}"
+                : "Animation State Machine");
             if (player?.StateMachine == null || player.StateMachine == stateMachine)
                 return;
 
@@ -3455,13 +3537,39 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
         {
             if (condition == null)
                 return "Missing Condition";
+
+            string target;
             if (condition.Source == AnimStateConditionSource.Parameter)
-                return string.IsNullOrEmpty(condition.Parameter) ? "Parameter not selected" : condition.Parameter;
-            if (string.IsNullOrEmpty(condition.OwnerType))
-                return "Owner type not selected";
-            string member = GetOwnerMemberDisplayName(condition.OwnerMember);
-            Type type = Type.GetType(condition.OwnerType, false);
-            return $"{type?.Name ?? "Missing Type"}.{member}";
+            {
+                target = string.IsNullOrEmpty(condition.Parameter)
+                    ? "Parameter not selected"
+                    : condition.Parameter;
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(condition.OwnerType))
+                    return "Owner type not selected";
+                string member = GetOwnerMemberDisplayName(condition.OwnerMember);
+                Type type = Type.GetType(condition.OwnerType, false);
+                target = $"{type?.Name ?? "Missing Type"}.{member}";
+            }
+
+            if (condition.ValueType is AnimStateParameterType.Bool or AnimStateParameterType.Trigger)
+                return $"{target} is {(condition.Mode == AnimStateConditionMode.IfNot ? "False" : "True")}";
+
+            string comparison = condition.Mode switch
+            {
+                AnimStateConditionMode.Greater => ">",
+                AnimStateConditionMode.GreaterOrEqual => ">=",
+                AnimStateConditionMode.Less => "<",
+                AnimStateConditionMode.LessOrEqual => "<=",
+                AnimStateConditionMode.NotEqual => "!=",
+                _ => "=="
+            };
+            string value = condition.ValueType == AnimStateParameterType.Int
+                ? Mathf.RoundToInt(condition.Threshold).ToString()
+                : condition.Threshold.ToString("0.###");
+            return $"{target} {comparison} {value}";
         }
 
         private void DrawRuleCondition(AnimStateTransition transition, int index, AnimStateCondition condition)
@@ -3510,8 +3618,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             AnimStateParameter parameter = FindParameter(names[nextIndex]);
             AnimStateConditionMode nextMode = DrawConditionMode(parameter, condition.Mode);
             float nextThreshold = condition.Threshold;
-            if (parameter != null && parameter.Type is AnimStateParameterType.Float or AnimStateParameterType.Int)
+            if (parameter?.Type == AnimStateParameterType.Float)
                 nextThreshold = EditorGUILayout.FloatField("Value", nextThreshold);
+            else if (parameter?.Type == AnimStateParameterType.Int)
+                nextThreshold = EditorGUILayout.IntField("Value", Mathf.RoundToInt(nextThreshold));
 
             if (condition.Parameter == names[nextIndex] && condition.Mode == nextMode
                 && Mathf.Approximately(condition.Threshold, nextThreshold))
@@ -3556,8 +3666,10 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
             AnimStateParameter pseudoParameter = new() { Type = condition.ValueType };
             AnimStateConditionMode nextMode = DrawConditionMode(pseudoParameter, condition.Mode);
             float nextThreshold = condition.Threshold;
-            if (condition.ValueType is AnimStateParameterType.Float or AnimStateParameterType.Int)
+            if (condition.ValueType == AnimStateParameterType.Float)
                 nextThreshold = EditorGUILayout.FloatField("Value", nextThreshold);
+            else if (condition.ValueType == AnimStateParameterType.Int)
+                nextThreshold = EditorGUILayout.IntField("Value", Mathf.RoundToInt(nextThreshold));
             if (nextMode == condition.Mode && Mathf.Approximately(nextThreshold, condition.Threshold))
                 return;
 
@@ -3981,11 +4093,13 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                     : AnimStateConditionMode.IfNot;
             }
 
-            string[] numberLabels = { "Greater", "Less", "Equals", "Not Equal" };
+            string[] numberLabels = { ">", ">=", "<", "<=", "==", "!=" };
             AnimStateConditionMode[] numberModes =
             {
                 AnimStateConditionMode.Greater,
+                AnimStateConditionMode.GreaterOrEqual,
                 AnimStateConditionMode.Less,
+                AnimStateConditionMode.LessOrEqual,
                 AnimStateConditionMode.Equals,
                 AnimStateConditionMode.NotEqual
             };

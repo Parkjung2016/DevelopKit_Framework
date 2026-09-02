@@ -608,7 +608,9 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime
         private static bool Compare(float value, float threshold, AnimStateConditionMode mode) => mode switch
         {
             AnimStateConditionMode.Greater => value > threshold,
+            AnimStateConditionMode.GreaterOrEqual => value >= threshold,
             AnimStateConditionMode.Less => value < threshold,
+            AnimStateConditionMode.LessOrEqual => value <= threshold,
             AnimStateConditionMode.NotEqual => !Mathf.Approximately(value, threshold),
             _ => Mathf.Approximately(value, threshold)
         };

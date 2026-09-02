@@ -1,109 +1,183 @@
 using PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime;
 using UnityEditor;
 using UnityEditor.Callbacks;
+using UnityEditor.UIElements;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
 {
     [CustomEditor(typeof(AnimMontageSO))]
     public sealed class AnimMontageSOEditor : UnityEditor.Editor
     {
-        public override void OnInspectorGUI()
+        public override VisualElement CreateInspectorGUI()
         {
             var montage = (AnimMontageSO)target;
-            DrawHeader("Animation Montage", montage.name);
-            DrawMetricRow(
+            VisualElement root = StateMachineInspectorUI.CreateRoot();
+            root.Add(StateMachineInspectorUI.CreateHeader("Animation Montage", montage.name));
+            root.Add(StateMachineInspectorUI.CreateMetrics(
                 ("Length", $"{montage.Length:0.###}s"),
                 ("Segments", montage.Segments.Count.ToString()),
                 ("Notifies", montage.Notifies.Count.ToString()),
-                ("States", montage.NotifyStates.Count.ToString()));
-            DrawMetricRow(
+                ("States", montage.NotifyStates.Count.ToString())));
+            root.Add(StateMachineInspectorUI.CreateMetrics(
                 ("Rate", montage.RateScale.ToString("0.###")),
-                ("Root", montage.ApplyRootMotion ? "On" : "Off"),
-                ("Tracks", GetTrackCount(montage).ToString()));
+                ("Root Motion", montage.ApplyRootMotion ? "On" : "Off"),
+                ("Tracks", GetTrackCount(montage).ToString())));
 
-            EditorGUILayout.Space(8);
-            if (GUILayout.Button("Open Animation Editor", GUILayout.Height(28)))
-                AnimationEditorWindow.Open(montage);
+            Button openButton = StateMachineInspectorUI.CreateButton(
+                "Open Animation Editor", () => AnimationEditorWindow.Open(montage), true);
+            openButton.style.height = 30f;
+            root.Add(openButton);
 
-            EditorGUILayout.Space(6);
-            using (new EditorGUI.DisabledScope(EditorApplication.isPlaying))
+            Button rebuildButton = StateMachineInspectorUI.CreateButton("Rebuild Segment Times", () =>
             {
-                if (GUILayout.Button("Rebuild Segment Times", GUILayout.Height(24)))
-                {
-                    Undo.RecordObject(target, "Rebuild Segment Times");
-                    montage.RebuildSegmentStartTimes();
-                    EditorUtility.SetDirty(target);
-                }
-            }
+                Undo.RecordObject(montage, "Rebuild Segment Times");
+                montage.RebuildSegmentStartTimes();
+                EditorUtility.SetDirty(montage);
+            });
+            root.Add(rebuildButton);
 
-            if (EditorApplication.isPlaying)
-                EditorGUILayout.HelpBox("Play Mode에서는 Montage 에셋 편집을 잠급니다.", MessageType.Info);
+            var playModeMessage = new HelpBox(
+                "Play Mode에서는 Montage 에셋을 편집할 수 없습니다.", HelpBoxMessageType.Info);
+            root.Add(playModeMessage);
+            root.schedule.Execute(() =>
+            {
+                rebuildButton.SetEnabled(!EditorApplication.isPlaying);
+                playModeMessage.style.display = EditorApplication.isPlaying
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+            }).Every(250);
+            playModeMessage.style.display = EditorApplication.isPlaying
+                ? DisplayStyle.Flex
+                : DisplayStyle.None;
+            return root;
         }
 
         private static int GetTrackCount(AnimMontageSO montage) =>
             montage.AnimationTracks.Count + montage.NotifyTracks.Count + montage.NotifyStateTracks.Count;
-
-        internal static void DrawHeader(string title, string assetName)
-        {
-            EditorGUILayout.Space(4);
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
-            {
-                EditorGUILayout.LabelField(title, EditorStyles.boldLabel);
-                EditorGUILayout.LabelField(assetName, EditorStyles.miniLabel);
-            }
-        }
-
-        internal static void DrawMetricRow(params (string Label, string Value)[] metrics)
-        {
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                for (int i = 0; i < metrics.Length; i++)
-                    DrawMetric(metrics[i].Label, metrics[i].Value);
-            }
-        }
-
-        private static void DrawMetric(string label, string value)
-        {
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.MinWidth(64)))
-            {
-                EditorGUILayout.LabelField(label, EditorStyles.miniLabel);
-                EditorGUILayout.LabelField(value, EditorStyles.boldLabel);
-            }
-        }
     }
-
 
     [CustomEditor(typeof(AnimSequenceSO))]
     public sealed class AnimSequenceSOEditor : UnityEditor.Editor
     {
-        public override void OnInspectorGUI()
+        public override VisualElement CreateInspectorGUI()
         {
             var sequence = (AnimSequenceSO)target;
-            AnimMontageSOEditor.DrawHeader("Animation Sequence", sequence.name);
+            VisualElement root = StateMachineInspectorUI.CreateRoot();
+            root.Add(StateMachineInspectorUI.CreateHeader("Animation Sequence", sequence.name));
 
-            EditorGUI.BeginChangeCheck();
-            AnimationClip clip = (AnimationClip)EditorGUILayout.ObjectField(
-                "Animation Clip",
-                sequence.Clip,
-                typeof(AnimationClip),
-                false);
-            if (EditorGUI.EndChangeCheck())
-                AnimationSequenceEditorUtility.SetClip(sequence, clip);
-
-            AnimMontageSOEditor.DrawMetricRow(
+            var clipField = new ObjectField("Animation Clip")
+            {
+                objectType = typeof(AnimationClip),
+                allowSceneObjects = false,
+                value = sequence.Clip
+            };
+            clipField.RegisterValueChangedCallback(evt =>
+            {
+                if (evt.newValue != sequence.Clip)
+                    AnimationSequenceEditorUtility.SetClip(sequence, evt.newValue as AnimationClip);
+            });
+            root.Add(clipField);
+            root.Add(StateMachineInspectorUI.CreateMetrics(
                 ("Length", $"{sequence.Length:0.###}s"),
                 ("Notifies", sequence.Notifies.Count.ToString()),
-                ("States", sequence.NotifyStates.Count.ToString()));
+                ("States", sequence.NotifyStates.Count.ToString())));
 
-            EditorGUILayout.Space(8);
-            if (GUILayout.Button("Open Animation Editor", GUILayout.Height(28)))
-                AnimationEditorWindow.Open(sequence);
+            Button openButton = StateMachineInspectorUI.CreateButton(
+                "Open Animation Editor", () => AnimationEditorWindow.Open(sequence), true);
+            openButton.style.height = 30f;
+            root.Add(openButton);
 
-            if (EditorApplication.isPlaying)
-                EditorGUILayout.HelpBox("Play Mode에서는 Animation 에셋 편집을 잠급니다.", MessageType.Info);
+            var playModeMessage = new HelpBox(
+                "Play Mode에서는 Animation 에셋을 편집할 수 없습니다.", HelpBoxMessageType.Info);
+            root.Add(playModeMessage);
+            root.schedule.Execute(() =>
+            {
+                clipField.SetEnabled(!EditorApplication.isPlaying);
+                playModeMessage.style.display = EditorApplication.isPlaying
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+            }).Every(250);
+            playModeMessage.style.display = EditorApplication.isPlaying
+                ? DisplayStyle.Flex
+                : DisplayStyle.None;
+            return root;
         }
     }
+
+    [CustomEditor(typeof(AnimMontageLibrarySO))]
+    public sealed class AnimMontageLibrarySOEditor : UnityEditor.Editor
+    {
+        public override VisualElement CreateInspectorGUI()
+        {
+            var library = (AnimMontageLibrarySO)target;
+            VisualElement root = StateMachineInspectorUI.CreateRoot();
+            root.Add(StateMachineInspectorUI.CreateHeader("Animation Library", library.name));
+            root.Add(StateMachineInspectorUI.CreateMetrics(
+                ("Sequences", library.Sequences.Count.ToString()),
+                ("Montages", library.Montages.Count.ToString()),
+                ("Preview", library.PreviewModel != null ? library.PreviewModel.name : "None")));
+
+            root.Add(StateMachineInspectorUI.CreateSection("State Machine"));
+            var stateMachineField = new ObjectField("Asset")
+            {
+                objectType = typeof(AnimStateMachineSO),
+                allowSceneObjects = false,
+                value = AnimationStateMachineEditorUtility.GetStateMachine(library)
+            };
+            root.Add(stateMachineField);
+
+            Button createButton = StateMachineInspectorUI.CreateButton(
+                "Create State Machine", () =>
+                {
+                    AnimStateMachineSO created = AnimationStateMachineEditorUtility.CreateWithSavePanel(library);
+                    if (created != null)
+                        stateMachineField.SetValueWithoutNotify(created);
+                }, true);
+            Button syncButton = StateMachineInspectorUI.CreateButton(
+                "Sync Sequence States", () => AnimationStateMachineEditorUtility.SyncSequenceStates(library));
+            Button openStateMachineButton = StateMachineInspectorUI.CreateButton(
+                "Open State Machine", () => AnimationStateMachineEditorUtility.Open(
+                    AnimationStateMachineEditorUtility.GetStateMachine(library), library), true);
+            VisualElement stateMachineActions = StateMachineInspectorUI.CreateActionRow(
+                createButton, syncButton, openStateMachineButton);
+            root.Add(stateMachineActions);
+
+            stateMachineField.RegisterValueChangedCallback(evt =>
+            {
+                AnimationStateMachineEditorUtility.SetStateMachine(library, evt.newValue as AnimStateMachineSO);
+                RefreshActions();
+            });
+
+            root.Add(StateMachineInspectorUI.CreateSection("Editor"));
+            Button openEditorButton = StateMachineInspectorUI.CreateButton(
+                "Open Animation Editor", () => AnimationEditorWindow.Open(library), true);
+            openEditorButton.style.height = 30f;
+            root.Add(openEditorButton);
+            root.Add(new HelpBox(
+                "Sequence는 State Machine의 State로 연결할 수 있으며, Transition과 Rule은 전용 편집기에서 설정합니다.",
+                HelpBoxMessageType.Info));
+
+            void RefreshActions()
+            {
+                AnimStateMachineSO machine = AnimationStateMachineEditorUtility.GetStateMachine(library);
+                bool hasMachine = machine != null;
+                createButton.style.display = hasMachine ? DisplayStyle.None : DisplayStyle.Flex;
+                syncButton.style.display = hasMachine ? DisplayStyle.Flex : DisplayStyle.None;
+                openStateMachineButton.style.display = hasMachine ? DisplayStyle.Flex : DisplayStyle.None;
+                bool canEdit = !EditorApplication.isPlaying;
+                stateMachineField.SetEnabled(canEdit);
+                createButton.SetEnabled(canEdit);
+                syncButton.SetEnabled(canEdit);
+            }
+
+            root.schedule.Execute(RefreshActions).Every(250);
+            RefreshActions();
+            return root;
+        }
+    }
+
     internal static class AnimMontageAssetOpenHandler
     {
         [OnOpenAsset]
@@ -127,56 +201,6 @@ namespace PJDev.DevelopKit.Framework.Editors.AnimMontageSystem
                 default:
                     return false;
             }
-        }
-    }
-    [CustomEditor(typeof(AnimMontageLibrarySO))]
-    public sealed class AnimMontageLibrarySOEditor : UnityEditor.Editor
-    {
-        public override void OnInspectorGUI()
-        {
-            var library = (AnimMontageLibrarySO)target;
-            AnimMontageSOEditor.DrawHeader("Animation Library", library.name);
-            AnimMontageSOEditor.DrawMetricRow(
-                ("Sequences", library.Sequences.Count.ToString()),
-                ("Montages", library.Montages.Count.ToString()),
-                ("Preview", library.PreviewModel != null ? library.PreviewModel.name : "None"));
-
-            EditorGUILayout.Space(8);
-            AnimStateMachineSO stateMachine = AnimationStateMachineEditorUtility.GetStateMachine(library);
-            EditorGUI.BeginChangeCheck();
-            stateMachine = (AnimStateMachineSO)EditorGUILayout.ObjectField(
-                "State Machine",
-                stateMachine,
-                typeof(AnimStateMachineSO),
-                false);
-            if (EditorGUI.EndChangeCheck())
-                AnimationStateMachineEditorUtility.SetStateMachine(library, stateMachine);
-
-            stateMachine = AnimationStateMachineEditorUtility.GetStateMachine(library);
-            if (stateMachine == null)
-            {
-                if (GUILayout.Button("Create State Machine", GUILayout.Height(24)))
-                    AnimationStateMachineEditorUtility.CreateWithSavePanel(library);
-            }
-            else
-            {
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    if (GUILayout.Button("Sync Sequence States", GUILayout.Height(24)))
-                        AnimationStateMachineEditorUtility.SyncSequenceStates(library);
-                    if (GUILayout.Button("Open State Machine", GUILayout.Height(24)))
-                        AnimationStateMachineEditorUtility.Open(stateMachine, library);
-                }
-            }
-
-            EditorGUILayout.Space(8);
-            if (GUILayout.Button("Open Animation Editor", GUILayout.Height(28)))
-                AnimationEditorWindow.Open(library);
-
-            EditorGUILayout.Space(6);
-            EditorGUILayout.HelpBox(
-                "Sequence를 State로 직접 연결하고 Transition과 조건을 전용 그래프에서 편집합니다.",
-                MessageType.Info);
         }
     }
 }

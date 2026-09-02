@@ -122,6 +122,46 @@ namespace PJDev.DevelopKit.Framework.AnimMontageSystem.Runtime.Tests
             Assert.That(stateMachine.FindNode(nested.Id), Is.Null);
         }
 
+        [TestCase(AnimStateConditionMode.Greater, 10f, 10f, false)]
+        [TestCase(AnimStateConditionMode.GreaterOrEqual, 10f, 10f, true)]
+        [TestCase(AnimStateConditionMode.Less, 10f, 10f, false)]
+        [TestCase(AnimStateConditionMode.LessOrEqual, 10f, 10f, true)]
+        [TestCase(AnimStateConditionMode.Equals, 10f, 10f, true)]
+        [TestCase(AnimStateConditionMode.NotEqual, 10f, 10f, false)]
+        public void NumericCondition_UsesSelectedComparison(
+            AnimStateConditionMode mode, float value, float threshold, bool expected)
+        {
+            AnimSequenceState idleState = stateMachine.AddState(idle, Vector2.zero);
+            AnimSequenceState runState = stateMachine.AddState(run, Vector2.right);
+            stateMachine.AddParameter("Speed", AnimStateParameterType.Float);
+            AnimStateTransition transition = stateMachine.AddTransition(idleState.Id, runState.Id);
+            transition.AddCondition(new AnimStateCondition
+            {
+                Parameter = "Speed",
+                ValueType = AnimStateParameterType.Float,
+                Mode = mode,
+                Threshold = threshold
+            });
+
+            GameObject owner = new("State Machine Comparison Test");
+            owner.SetActive(false);
+            Animator animator = owner.AddComponent<Animator>();
+            AnimationStateMachinePlayer player = owner.AddComponent<AnimationStateMachinePlayer>();
+            SetPrivateField(player, "animator", animator);
+            SetPrivateField(player, "stateMachine", stateMachine);
+            owner.SetActive(true);
+
+            try
+            {
+                player.SetFloat("Speed", value);
+                Assert.That(EvaluateRule(player, transition), Is.EqualTo(expected));
+            }
+            finally
+            {
+                Object.DestroyImmediate(owner);
+            }
+        }
+
         [Test]
         public void BooleanRule_EvaluatesNestedAndOrNot()
         {
